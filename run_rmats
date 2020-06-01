@@ -1,0 +1,39 @@
+#!/bin/bash
+
+function set_script_dir() {
+  local REL_SCRIPT_DIR="$(dirname ${BASH_SOURCE[0]})" || return 1
+  cd "${REL_SCRIPT_DIR}" || return 1
+  SCRIPT_DIR="$(pwd)" || return 1
+}
+
+# build_rmats can create a conda environment. Use it if it exists.
+function activate_conda_env() {
+  CONDA_ACTIVATED=0
+  local CONDA_ENV_PATH="${SCRIPT_DIR}/conda_envs/rmats"
+  if [[ -d "${CONDA_ENV_PATH}" ]]; then
+    conda activate "${CONDA_ENV_PATH}" || return 1
+    CONDA_ACTIVATED=1
+  fi
+}
+
+function run_rmats() {
+  python "${SCRIPT_DIR}/rmats.py" "$@"
+}
+
+function main() {
+  set_script_dir || return 1
+  source "${SCRIPT_DIR}/setup_environment.sh" || return 1
+
+  activate_conda_env || return 1
+
+  run_rmats "$@"
+  local RET_CODE="$?"
+
+  if [[ "${CONDA_ACTIVATED}" -eq 1 ]]; then
+    conda deactivate || return 1
+  fi
+
+  return "${RET_CODE}"
+}
+
+main "$@"

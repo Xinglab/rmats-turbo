@@ -1,0 +1,62 @@
+# Mac
+**/.DS_Store
+
+Tutorial_API_BamTools-1.0.pdf
+rmats/.ycm_extra_conf.py
+rmats/asevent_core_backup.pyx
+rmats/bamtools/build/
+rmats/bamtools/lib/
+rmats/bamtools/bin/
+rmats/bamtools/include/
+rmats/data/
+rmats/build/
+rmats/output/
+*.tar
+
+# graph
+*.gml
+
+# gcc
+*.o
+*.so
+
+# py
+*.pyc
+
+# vim
+*.swp
+
+# gsl documentation and bin
+gsl-ref.ps
+x.lbfgsb*
+
+# output
+*.zip
+*.png
+*.ipynb
+*.html
+*.ai
+.Rproj.user
+bam_test/
+
+DockerImage-rMATS-turbo-0.1.md
+DockerImage-rMATS-turbo-0.1.pdf
+rmats-turbo-0.1.tar.encrypted
+
+s1.txt
+s2.txt
+
+# conda
+/conda_envs/
+
+# build
+/bamtools/build/
+/bamtools/include/
+/bamtools/bin/
+/bamtools/lib/
+/rMATS_pipeline/rmatspipeline/rmatspipeline.cpp
+/rMATS_C/rMATSexe
+/PAIRADISE/
+
+# tests
+/tests/test_config.py

@@ -1,0 +1,98 @@
+#!/bin/bash
+
+function show_usage() {
+  echo "$0 [--conda] [--no-paired-model]" 1>&2
+  echo
+  echo '--conda: create a conda environment for Python and R dependencies' 1>&2
+  echo '--no-paired-model: do not install dependencies for the paired model' 1>&2
+}
+
+function parse_arguments() {
+  local CONDA_FLAG='--conda'
+  local NO_PAIRED_FLAG='--no-paired-model'
+  USE_CONDA=0
+  USE_PAIRED=1
+  if [[ "$#" -eq 1 ]]; then
+    if [[ "$1" == "${CONDA_FLAG}" ]]; then
+      USE_CONDA=1
+    elif [[ "$1" == "${NO_PAIRED_FLAG}" ]]; then
+      USE_PAIRED=0
+    else
+      show_usage
+      return 1
+    fi
+  elif [[ "$#" -eq 2 ]]; then
+    if [[ ("$1" == "${CONDA_FLAG}" && "$2" == "${NO_PAIRED_FLAG}")\
+            || ("$1" == "${NO_PAIRED_FLAG}" && "$2" == "${CONDA_FLAG}") ]]; then
+      USE_CONDA=1
+      USE_PAIRED=0
+    else
+      show_usage
+      return 1
+    fi
+  elif [[ "$#" -ne 0 ]]; then
+    show_usage
+    return 1
+  fi
+}
+
+function set_script_dir() {
+  local REL_SCRIPT_DIR="$(dirname ${BASH_SOURCE[0]})" || return 1
+  cd "${REL_SCRIPT_DIR}" || return 1
+  SCRIPT_DIR="$(pwd)" || return 1
+}
+
+function create_and_activate_conda_env() {
+  local CONDA_ENV_PATH="${SCRIPT_DIR}/conda_envs/rmats"
+
+  conda create --prefix "${CONDA_ENV_PATH}" python=3.6 || return 1
+  conda activate "${CONDA_ENV_PATH}" || return 1
+}
+
+function install_python_dependencies() {
+  local REQUIREMENTS="${SCRIPT_DIR}/python_requirements.txt"
+  conda install --file "${REQUIREMENTS}" || return 1
+}
+
+function build_rmats() {
+  GSL_LDFLAGS="$(gsl-config --libs)" || return 1
+  GSL_CFLAGS="$(gsl-config --cflags)" || return 1
+  export GSL_LDFLAGS || return 1
+  export GSL_CFLAGS || return 1
+  make || return 1
+}
+
+function install_pairadise() {
+  if [[ "${USE_CONDA}" -eq 1 ]]; then
+    conda install -c conda-forge r-base==3.6.2 || return 1
+  fi
+
+  if [[ ! -d PAIRADISE ]]; then
+    git clone https://github.com/Xinglab/PAIRADISE.git || return 1
+  fi
+
+  Rscript install_r_deps.R || return 1
+}
+
+function main() {
+  set_script_dir || return 1
+  parse_arguments "$@" || return 1
+  source "${SCRIPT_DIR}/setup_environment.sh" || return 1
+
+  if [[ "${USE_CONDA}" -eq 1 ]]; then
+    create_and_activate_conda_env || return 1
+    install_python_dependencies || return 1
+  fi
+
+  build_rmats || return 1
+
+  if [[ "${USE_PAIRED}" -eq 1 ]]; then
+    install_pairadise || return 1
+  fi
+
+  if [[ "${USE_CONDA}" -eq 1 ]]; then
+    conda deactivate || return 1
+  fi
+}
+
+main "$@"

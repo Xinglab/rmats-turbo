@@ -1,0 +1,6 @@
+#ifndef TRANS_CMULTIPROCESSING
+#define TRANS_CMULTIPROCESSING
+
+
+
+#endif

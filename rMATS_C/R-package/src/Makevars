@@ -1,0 +1,8 @@
+# package root
+PKGROOT=./
+# _*_ mode: Makefile; _*_
+PKG_CFLAGS= $(SHLIB_OPENMP_CFLAGS) -Wall -O2 -msse2 -funroll-loops -fopenmp -std=c99
+PKG_LIBS= $(SHLIB_OPENMP_CFLAGS) -lm -lgfortran -lgsl -lgslcblas -lgomp
+PKG_FFLAGS= -c
+OBJECTS= routines.o util.o myfunc.o cthreadpool.o likelihood_test_R.o rMATS_wrapper.o
+

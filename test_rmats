@@ -1,0 +1,52 @@
+#!/bin/bash
+
+function set_script_dir() {
+  local REL_SCRIPT_DIR="$(dirname ${BASH_SOURCE[0]})" || return 1
+  cd "${REL_SCRIPT_DIR}" || return 1
+  SCRIPT_DIR="$(pwd)" || return 1
+}
+
+function write_test_config() {
+  local TEST_BASE_DIR="${SCRIPT_DIR}/tests"
+  local TEST_CONFIG="${TEST_BASE_DIR}/test_config.py"
+  local RUN_RMATS="${SCRIPT_DIR}/run_rmats"
+  local CP_WITH_PREFIX="${SCRIPT_DIR}/cp_with_prefix.py"
+
+  echo "TEST_BASE_DIR = '${TEST_BASE_DIR}'" > "${TEST_CONFIG}" || return 1
+  echo "RMATS_COMMAND = '${RUN_RMATS}'" >> "${TEST_CONFIG}" || return 1
+  echo "CP_WITH_PREFIX = '${CP_WITH_PREFIX}'" >> "${TEST_CONFIG}" || return 1
+}
+
+function create_and_activate_conda_env() {
+  local CONDA_ENV_PATH="${SCRIPT_DIR}/conda_envs/test_rmats"
+
+  conda create --prefix "${CONDA_ENV_PATH}" python=3.8 || return 1
+  conda activate "${CONDA_ENV_PATH}" || return 1
+}
+
+function install_dependencies() {
+  conda install -c bioconda samtools=1.9 || return 1
+}
+
+function main() {
+  set_script_dir || return 1
+  source "${SCRIPT_DIR}/setup_environment.sh" || return 1
+
+  write_test_config || return 1
+  create_and_activate_conda_env || return 1
+  install_dependencies || return 1
+
+  export PYTHONPATH="${SCRIPT_DIR}" || return 1
+
+  if [[ "$#" -eq 0 ]]; then
+    python "${SCRIPT_DIR}/tests/runner.py" || return 1
+  else
+    # run a specific test file if passed as an argument:
+    # ./test_rmats tests/variable_read_length/tests.py
+    python "$1" || return 1
+  fi
+
+  conda deactivate || return 1
+}
+
+main "$@"

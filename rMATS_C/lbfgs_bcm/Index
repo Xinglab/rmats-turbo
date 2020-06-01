@@ -1,0 +1,17 @@
+file    lbfgs_bcm
+for     bound constrained optimization problems
+alg     limited memory BFGS method
+by      Ciyou Zhu in collaboration with  R.H. Byrd, P. Lu-Chen and J. Nocedal
+contact ciyou@eecs.nwu.edu or nocedal@eecs.nwu.edu
+ref     R. H. Byrd, P. Lu, J. Nocedal and C. Zhu, ``A limited
+        memory algorithm for bound constrained optimization'',
+        SIAM J. Scientific Computing 16 (1995), no. 5.
+        C. Zhu, R.H. Byrd, P. Lu, J. Nocedal, ``L-BFGS-B: a limited
+        memory FORTRAN code for solving bound constrained optimization
+        problems'', Tech. Report, EECS Department,
+        Northwestern University, 1994.
+        (Postscript files of these papers are available via anonymous
+        ftp to eecs.nwu.edu in the directory pub/lbfgs/lbfgs_bcm.)
+size    224kB
+prec    double
+
