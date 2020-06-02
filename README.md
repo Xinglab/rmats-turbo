@@ -1,5 +1,10 @@
 # rMATS turbo v4.1.0
 
+[![Latest Release](https://img.shields.io/github/release/Xinglab/rmats-turbo.svg?label=Latest%20Release)](https://github.com/Xinglab/rmats-turbo/releases/latest)
+[![Total GitHub Downloads](https://img.shields.io/github/downloads/Xinglab/rmats-turbo/total.svg?label=Total%20GitHub%20Downloads)](https://github.com/Xinglab/rmats-turbo/releases)
+[![Total Bioconda Installs](https://img.shields.io/conda/dn/bioconda/rmats.svg?label=Total%20Bioconda%20Installs)](https://anaconda.org/bioconda/rmats)
+[![Total SourceForge Downloads](https://img.shields.io/sourceforge/dt/rnaseq-mats.svg?label=Total%20SourceForge%20Downloads)](http://rnaseq-mats.sourceforge.net)
+
 ## About
 
 rMATS turbo is the C/Cython version of rMATS (refer to http://rnaseq-mats.sourceforge.net). The major difference between rMATS turbo and rMATS is speed and space usage. rMATS turbo is 100 times faster and the output file is 1000 times smaller than rMATS. These advantages make analysis and storage of a large scale dataset easy and convenient.
@@ -301,7 +306,7 @@ optional arguments:
 
 ## Output
 
-Each alternative splicing event type has a corresponding set of output files. In the filename templates below `[AS_Event]` is replaced by one of [SE (skipped exon), MXE (mutually exclusive exons), A3SS (alternative 3' splice site), A5SS (alternative 5' splice site), RI (retained intron)] for the event specific filename. 
+Each alternative splicing event type has a corresponding set of output files. In the filename templates below `[AS_Event]` is replaced by one of [SE (skipped exon), MXE (mutually exclusive exons), A3SS (alternative 3' splice site), A5SS (alternative 5' splice site), RI (retained intron)] for the event specific filename.
 
 ![rmats-turbo](docs/rmats_diagram.png)
 
