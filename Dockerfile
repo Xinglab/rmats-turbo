@@ -1,4 +1,4 @@
-#rmats dockerfile without paradise
+#rmats dockerfile without pairadise
 # usage: python /usr/bin/rmats.py -h
 FROM conda/miniconda3
 LABEL maintainer="sridhar sridhar@wustl.edu"
@@ -61,7 +61,8 @@ RUN wget https://github.com/Xinglab/rmats-turbo/releases/download/v4.1.0/rmats_t
     cd rmats-turbo && \
     cp -r * /usr/bin && \
     chmod +x /usr/bin/build_rmats && \
-    /usr/bin/build_rmats --no-paired-model
+    /usr/bin/build_rmats --no-paired-model && \
+    chmod +x /usr/bin/rmats.py
 
 
 
