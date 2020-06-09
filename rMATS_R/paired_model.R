@@ -8,9 +8,7 @@ output_file_name <- args[3]
 
 data_frame <- read.table(file=input_file_name, sep="\t", header=TRUE)
 
-# pairadise supports up to 8 threads
 number_of_threads <- as.integer(number_of_threads_str)
-number_of_threads <- min(number_of_threads, 8)
 
 # pairadise has an error for an input data set with only 1 event.
 # This is because an intermediate result in the calculation ends up as
