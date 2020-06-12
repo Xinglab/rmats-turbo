@@ -4,6 +4,7 @@
 [![Total GitHub Downloads](https://img.shields.io/github/downloads/Xinglab/rmats-turbo/total.svg?label=Total%20GitHub%20Downloads)](https://github.com/Xinglab/rmats-turbo/releases)
 [![Total Bioconda Installs](https://img.shields.io/conda/dn/bioconda/rmats.svg?label=Total%20Bioconda%20Installs)](https://anaconda.org/bioconda/rmats)
 [![Total SourceForge Downloads](https://img.shields.io/sourceforge/dt/rnaseq-mats.svg?label=Total%20SourceForge%20Downloads)](http://rnaseq-mats.sourceforge.net)
+[![Total Docker Pulls](https://img.shields.io/docker/pulls/xinglab/rmats.svg?label=Total%20Docker%20Pulls)](https://hub.docker.com/r/xinglab/rmats)
 
 ## About
 
