@@ -12,13 +12,22 @@ def parse_args():
         description='summarize the rMATS results from the output files')
     parser.add_argument('output_dir',
                         help='path to the directory containing rMATS output')
-    parser.add_argument('--use-fdr',
-                        action='store_true',
-                        help='check FDR against the cutoff instead of PValue')
-    parser.add_argument('--cutoff',
-                        type=float,
-                        help='the cutoff value for determining significance',
-                        default=0.05)
+    parser.add_argument(
+        '--use-raw-p',
+        action='store_true',
+        help='check --p-cutoff against the raw PValue instead of against FDR')
+    parser.add_argument(
+        '--p-cutoff',
+        type=float,
+        help='cutoff value used for FDR (or PValue for --use-raw-p)'
+        ' for determining significance. Default: %(default)s',
+        default=0.05)
+    parser.add_argument(
+        '--inc-level-diff-cutoff',
+        type=float,
+        help='cutoff value used for the absolute value of IncLevelDifference'
+        ' for determining significance. Default: %(default)s',
+        default=0)
     return parser.parse_args()
 
 
@@ -41,8 +50,10 @@ def count_events(file_path, args):
             p_value = parse_float(row['PValue'])
             fdr = parse_float(row['FDR'])
             inc_level_diff = parse_float(row['IncLevelDifference'])
-            check_value = fdr if args.use_fdr else p_value
-            if math.isnan(check_value) or check_value > args.cutoff:
+            check_p_value = p_value if args.use_raw_p else fdr
+            if (math.isnan(check_p_value) or math.isnan(inc_level_diff)
+                    or check_p_value > args.p_cutoff
+                    or abs(inc_level_diff) < args.inc_level_diff_cutoff):
                 continue
 
             sig += 1
