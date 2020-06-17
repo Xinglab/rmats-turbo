@@ -28,7 +28,30 @@ def parse_args():
         help='cutoff value used for the absolute value of IncLevelDifference'
         ' for determining significance. Default: %(default)s',
         default=0)
+
+    output_file_group = parser.add_mutually_exclusive_group()
+    output_file_group.add_argument(
+        '--summary-path',
+        help='path to write the generated summary to instead of stdout')
+    output_file_group.add_argument(
+        '--summary-prefix',
+        help='prefix of path to write the generated summary to instead of'
+        ' stdout. The cutoff values and ".txt" will be appended to the prefix'
+        ' to obtain the actual path to write to')
     return parser.parse_args()
+
+
+def get_output_file_path(args):
+    if args.summary_path:
+        return args.summary_path
+
+    if args.summary_prefix:
+        p_cutoff_col = 'PValue' if args.use_raw_p else 'FDR'
+        return '{}_{}_{}_IncLevelDifference_{}.txt'.format(
+            args.summary_prefix, p_cutoff_col, args.p_cutoff,
+            args.inc_level_diff_cutoff)
+
+    return None
 
 
 def parse_float(s):
@@ -70,7 +93,7 @@ def count_events(file_path, args):
     }
 
 
-def summarize(args):
+def summarize(args, output_file_handle):
     headers = [
         'EventType', 'TotalEvents', 'SignificantEventsJC',
         'SigEventsJCSample1HigherInclusion',
@@ -79,7 +102,7 @@ def summarize(args):
         'SigEventsJCECSample2HigherInclusion'
     ]
 
-    print('\t'.join(headers))
+    print('\t'.join(headers), file=output_file_handle)
     for event in ['SE', 'A5SS', 'A3SS', 'MXE', 'RI']:
         jc_path = os.path.join(args.output_dir, '{}.MATS.JC.txt'.format(event))
         jcec_path = os.path.join(args.output_dir,
@@ -101,12 +124,17 @@ def summarize(args):
             jcec_event_counts['sig_sample_1_higher'],
             jcec_event_counts['sig_sample_2_higher']
         ]
-        print('\t'.join([str(v) for v in values]))
+        print('\t'.join([str(v) for v in values]), file=output_file_handle)
 
 
 def main():
     args = parse_args()
-    summarize(args)
+    output_file_path = get_output_file_path(args)
+    if output_file_path:
+        with open(output_file_path, 'wt') as output_file_handle:
+            summarize(args, output_file_handle)
+    else:
+        summarize(args, sys.stdout)
 
 
 if __name__ == '__main__':
