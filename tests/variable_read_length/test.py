@@ -153,15 +153,6 @@ class VariableReadLengthBaseTest(tests.base_test.BaseTest):
         self._write_bams(sample_2_bams, sample_2_bams_path)
         return sample_2_bams
 
-    def _check_no_error_results(self):
-        self.assertEqual(self._rmats_return_code, 0)
-
-        command_stderr_file_name = self._get_stderr_file_name()
-        with open(command_stderr_file_name, 'rt') as err_f_h:
-            err_lines = err_f_h.readlines()
-
-        self.assertEqual(err_lines, list())
-
     def _get_sorted_from_gtf_se_rows(self):
         from_gtf_se_path = os.path.join(self._out_dir, 'fromGTF.SE.txt')
         from_gtf_se_header, from_gtf_se_rows, error = output_parser.parse_from_gtf(
@@ -446,6 +437,26 @@ class Length2VariableTest(VariableReadLengthBaseTest):
         self.assertEqual(se_mats_jcec_row_2['SJC_SAMPLE_2'], '0,1')
         self.assertEqual(se_mats_jcec_row_2['IncFormLen'], '159')
         self.assertEqual(se_mats_jcec_row_2['SkipFormLen'], '59')
+
+
+class NoLengthTest(VariableReadLengthBaseTest):
+    def _sub_test_name(self):
+        return 'no_length'
+
+    def test(self):
+        self._run_test()
+
+    def _check_results(self):
+        self.assertNotEqual(self._rmats_return_code, 0)
+
+        command_stderr_file_name = self._get_stderr_file_name()
+        with open(command_stderr_file_name, 'rt') as err_f_h:
+            err_lines = err_f_h.readlines()
+
+        tests.util.assert_some_line_has(self, err_lines,
+                                        '--readLength is required')
+        tests.util.assert_some_line_has(self, err_lines,
+                                        '--variable-read-length')
 
 
 if __name__ == '__main__':
