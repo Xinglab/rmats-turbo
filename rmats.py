@@ -292,7 +292,7 @@ def filter_countfile(fn):
 
 
 def process_counts(istat, tstat, counttype, ase, cstat, od, tmp, stat,
-                   paired_stats):
+                   paired_stats, python_executable, root_dir):
     """TODO: Docstring for process_counts.
     :returns: TODO
 
@@ -320,23 +320,12 @@ def process_counts(istat, tstat, counttype, ase, cstat, od, tmp, stat,
     ostat_fdr = ostat % ('FDR')
     ostat_paired = ostat % ('paired')
 
-    root_dir = os.path.abspath(os.path.dirname(__file__))
     rmats_c = os.path.join(root_dir, 'rMATS_C/rMATSexe')
     paired_model = os.path.join(root_dir, 'rMATS_R/paired_model.R')
     pas_out = os.path.join(root_dir, 'rMATS_P/paste.py')
     inc_lvl = os.path.join(root_dir, 'rMATS_P/inclusion_level.py')
     fdr_cal = os.path.join(root_dir, 'rMATS_P/FDR.py')
     join_2f = os.path.join(root_dir, 'rMATS_P/joinFiles.py')
-
-    # Try to get the absolute path of the executable for the running
-    # Python interpreter.
-    python_executable = sys.executable
-    if not python_executable:
-        # Fallback
-        print('Absolute path for current Python interpreter not found.'
-              ' Using "python" without a full path to run scripts in rMATS_P/',
-              file=sys.stderr)
-        python_executable = 'python'
 
     # Calculate inclusion levels
     subprocess.call([python_executable, pas_out, '-i', istat, '--o1', ostat_id, '--o2', ostat_inp,], stdout=FNULL)
@@ -388,6 +377,28 @@ def append_columns_with_defaults(in_file_name, out_file_name, column_names, defa
                     out_file.write(default_values_addition)
 
 
+def get_python_executable():
+    # Try to get the absolute path of the executable for the running
+    # Python interpreter.
+    python_executable = sys.executable
+    if not python_executable:
+        # Fallback
+        print('Absolute path for current Python interpreter not found.'
+              ' Using "python" without a full path to run scripts',
+              file=sys.stderr)
+        python_executable = 'python'
+
+    return python_executable
+
+
+def generate_summary(python_executable, out_dir, root_dir):
+    summary_script = os.path.join(root_dir, 'rMATS_P', 'summary.py')
+    summary_out_file_path = os.path.join(out_dir, 'summary.txt')
+    with open(summary_out_file_path, 'wb') as f_handle:
+        subprocess.call([python_executable, summary_script, out_dir],
+                        stdout=f_handle)
+
+
 def main():
     """TODO: Docstring for main.
     :returns: TODO
@@ -411,17 +422,19 @@ def main():
     jc_it = os.path.join(args.od, 'JC.raw.input.%s.txt')
     jcec_it = os.path.join(args.od, 'JCEC.raw.input.%s.txt')
 
+    python_executable = get_python_executable()
+    root_dir = os.path.abspath(os.path.dirname(__file__))
+
     print('Processing count files.')
-    process_counts(jc_it % ('SE'), args.tstat, 'JC', 'SE', args.cstat, args.od, args.tmp, args.stat, args.paired_stats)
-    process_counts(jcec_it % ('SE'), args.tstat, 'JCEC', 'SE', args.cstat, args.od, args.tmp, args.stat, args.paired_stats)
-    process_counts(jc_it % ('MXE'), args.tstat, 'JC', 'MXE', args.cstat, args.od, args.tmp, args.stat, args.paired_stats)
-    process_counts(jcec_it % ('MXE'), args.tstat, 'JCEC', 'MXE', args.cstat, args.od, args.tmp, args.stat, args.paired_stats)
-    process_counts(jc_it % ('A3SS'), args.tstat, 'JC', 'A3SS', args.cstat, args.od, args.tmp, args.stat, args.paired_stats)
-    process_counts(jcec_it % ('A3SS'), args.tstat, 'JCEC', 'A3SS', args.cstat, args.od, args.tmp, args.stat, args.paired_stats)
-    process_counts(jc_it % ('A5SS'), args.tstat, 'JC', 'A5SS', args.cstat, args.od, args.tmp, args.stat, args.paired_stats)
-    process_counts(jcec_it % ('A5SS'), args.tstat, 'JCEC', 'A5SS', args.cstat, args.od, args.tmp, args.stat, args.paired_stats)
-    process_counts(jc_it % ('RI'), args.tstat, 'JC', 'RI', args.cstat, args.od, args.tmp, args.stat, args.paired_stats)
-    process_counts(jcec_it % ('RI'), args.tstat, 'JCEC', 'RI', args.cstat, args.od, args.tmp, args.stat, args.paired_stats)
+    for event_type in ['SE', 'MXE', 'A3SS', 'A5SS', 'RI']:
+        process_counts(jc_it % (event_type), args.tstat, 'JC', event_type,
+                       args.cstat, args.od, args.tmp, args.stat,
+                       args.paired_stats, python_executable, root_dir)
+        process_counts(jcec_it % (event_type), args.tstat, 'JCEC', event_type,
+                       args.cstat, args.od, args.tmp, args.stat,
+                       args.paired_stats, python_executable, root_dir)
+
+    generate_summary(python_executable, args.od, root_dir)
     print('Done processing count files.')
 
     return
