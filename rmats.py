@@ -110,7 +110,7 @@ def get_args():
                         choices=['fr-unstranded', 'fr-firststrand',
                                  'fr-secondstrand',],
                         help='Library type. Use fr-firststrand or fr-secondstrand for strand-specific data. Default: %(default)s', dest='dt')
-    parser.add_argument('--readLength', action='store', type=int, default=0,
+    parser.add_argument('--readLength', action='store', type=int,
                         help='The length of each read', dest='readLength')
     parser.add_argument('--variable-read-length', action='store_true',
                         help='Allow reads with lengths that differ from --readLength to be processed. --readLength will still be used to determine IncFormLen and SkipFormLen',
@@ -152,6 +152,11 @@ def get_args():
         sys.exit('ERROR: GTF file, output folder and temporary folder required. Please check --gtf, --od and --tmp.')
     if (args.s1 != '' or args.s2 != '') and args.bIndex == '':
         sys.exit('ERROR: STAR binary indexes required. Please check --bi.')
+    if args.readLength is None:
+        sys.exit('ERROR: --readLength is required. An average or median'
+                 ' --readLength can be used in combination with'
+                 ' --variable-read-length when the reads do not have the'
+                 ' same length.')
 
     if len(args.b1) > 0:
         with open(args.b1, 'r') as fp:
