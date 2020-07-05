@@ -64,7 +64,7 @@ def doSTARMapping(args): ## do STAR mapping
                 cmd += ' --outFileNamePrefix ' + map_folder + '/ --readFilesIn ';
                 cmd += ' '.join(pair)
                 if pair[0].endswith('.gz'):
-                    cmd += '--readFilesCommand zcat';
+                    cmd += ' --readFilesCommand zcat';
                 status,output = getstatusoutput(cmd)
                 print("mapping sample_%d, %s is done with status %s" % (i, ' '.join(pair), status))
                 if (int(status)!=0): ## it did not go well
