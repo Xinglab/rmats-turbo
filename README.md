@@ -87,7 +87,7 @@ If rMATS was built with `./build_rmats --conda` then it should be run with:
 
 #### Starting with FASTQ files
 
-Suppose there are 2 sample groups with 2 sets of paired read (R1, R2) FASTQ files per group.
+Suppose there are 2 sample groups with 2 sets of paired read (R1, R2) FASTQ files per group. (`fastq.gz` files can also be used)
 
 - group 1 FASTQs
   * `/path/to/1_1.R1.fastq`
@@ -222,6 +222,8 @@ The `--paired-stats` flag can then be given so that the paired statistical model
 ### Tips
 
 - The statistical comparison between the two input sample groups can be skipped with `--statoff`. It is also possible to use a single sample group (only `--b1` or `--s1`) when using `--statoff`.
+- The number of replicates can differ between sample 1 and sample 2 (example: 3 BAMs in `--b1` and 1 BAM in `--b2`)
+- `fastq.gz` files can be used with `--s1`, `--s2`. They will be automatically detected based on the `.gz` extension and decompressed
 - A cluster environment can be utilized to run many prep steps concurrently and when the prep steps are finished a single post step can be run.
 - When splitting the computation using `--task {prep, post}`, rMATS will consider all `.rmats` files in the `--tmp` directory when running the post step. The `.rmats` files from multiple prep steps can be copied to a shared location for running the post step. Replacing `--task post` in the command line that is going to be used for the post step with `--task inte` will perform an integrity check to verify that the BAM filenames in `--b1` and `--b2` match 1-to-1 with the BAM filenames recorded in the `.rmats` files in `--tmp`.
 - The `.rmats` filenames from concurrently run prep steps may conflict. The script [cp_with_prefix.py](cp_with_prefix.py) is provided to disambiguate the `.rmats` filenames when copying to a shared directory.
