@@ -15,6 +15,7 @@ RUN apt-get update \
        python-dev \
        python-numpy \
        r-base \
+       r-cran-nloptr \
        zlib1g-dev \
     && rm -rf /var/lib/apt/lists/* \
     # Use a build dir to be removed after artifacts are extracted
