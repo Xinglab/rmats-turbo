@@ -2894,7 +2894,21 @@ cdef save_job(str bams, const string& od, const int& readLength,
 
 @boundscheck(False)
 @wraparound(False)
-cdef size_t _load_job(str rmatsf, list vbams, list flags, const int& rl, 
+cdef int try_get_index(list values, object value, cbool* found):
+    cdef int idx = 0
+    try:
+        idx = values.index(value)
+    except ValueError:
+        found[0] = False
+        return 0
+
+    found[0] = True
+    return idx
+
+
+@boundscheck(False)
+@wraparound(False)
+cdef size_t _load_job(str rmatsf, list vbams, list prep_counts_by_bam, const int& rl,
                       vector[unordered_map[string,vector[Triad]]]& novel_juncs,
                       vector[unordered_map[string,cmap[Tetrad,pair[int,int]]]]& exons,
                       vector[unordered_map[string,cmap[vector[pair[long,long]],int]]]& juncs,
@@ -2907,6 +2921,7 @@ cdef size_t _load_job(str rmatsf, list vbams, list flags, const int& rl,
         vector[pair[long,long]] vp
         str line, gene_id
         list bams, ele, eles, aligns, coords
+        cbool index_found
 
     vlen = len(vbams)
     if novel_juncs.size() != vlen:
@@ -2926,20 +2941,27 @@ cdef size_t _load_job(str rmatsf, list vbams, list flags, const int& rl,
             print '         Please check %s' % (rmatsf)
 
         for i in range(len(bams)):
-            idx = vbams.index(bams[i])
+            idx = try_get_index(vbams, bams[i], &index_found)
+            if not index_found:
+            # It's ok to have data for bams besides vbams
+                continue
+
             novel_juncs[idx].clear()
             exons[idx].clear()
             juncs[idx].clear()
-            flags[idx] += 1
+            prep_counts_by_bam[idx] += 1
 
         # processing novel junctions
         for i in range(len(bams)):
             num = int(fp.readline())
-            idx = vbams.index(bams[i])
+            idx = try_get_index(vbams, bams[i], &index_found)
+
             for j in range(num):
                 line = fp.readline().strip()
 
-                if mode == read_mode:
+                # Still need to read past the lines for this bam
+                # even if not index_found
+                if mode == read_mode or not index_found:
                     continue
 
                 eles = line.split(';')
@@ -2956,9 +2978,13 @@ cdef size_t _load_job(str rmatsf, list vbams, list flags, const int& rl,
         # processing exonic reads
         for i in range(len(bams)):
             num = int(fp.readline())
-            idx = vbams.index(bams[i])
+            idx = try_get_index(vbams, bams[i], &index_found)
             for j in range(num):
                 line = fp.readline().strip()
+
+                if not index_found:
+                    continue
+
                 eles = line.split(';')
                 gene_id = eles[0]
 
@@ -2971,9 +2997,14 @@ cdef size_t _load_job(str rmatsf, list vbams, list flags, const int& rl,
         # processing junction reads
         for i in range(len(bams)):
             num = int(fp.readline())
-            idx = vbams.index(bams[i])
+            idx = try_get_index(vbams, bams[i], &index_found)
+
             for j in range(num):
                 line = fp.readline().strip()
+
+                if not index_found:
+                    continue
+
                 eles = line.split(';')
                 gene_id = eles[0]
 
@@ -2997,20 +3028,38 @@ cdef load_sg(str bams, const string& tmp, const int& rl,
     cdef:
         int num = 0, num_file = 0
         list vbams = bams.split(','), all_files
-        list flags
+        list prep_counts_by_bam
         vector[unordered_map[string,cmap[Tetrad,pair[int,int]]]] exons
         vector[unordered_map[string,cmap[vector[pair[long,long]],int]]] juncs
 
     num = len(vbams)
-    flags = [0 for i in range(num)]
+    prep_counts_by_bam = [0 for i in range(num)]
 
     all_files = [join(root, name) for root, dirs, files in walk(tmp)
                  for name in files if name.endswith('.rmats')]
     for name in all_files:
-        _load_job(name, vbams, flags, rl, novel_juncs, exons, juncs, sg_mode)
-    flags = [ele != 1 for ele in flags]
-    if any(flags):
-        print 'WARNING: there are redundant temporary files.'
+        _load_job(name, vbams, prep_counts_by_bam, rl, novel_juncs, exons, juncs, sg_mode)
+
+    any_error = False
+    for i, prep_count in enumerate(prep_counts_by_bam):
+        if prep_count == 0:
+            bam_name = vbams[i]
+            bam_count = vbams.count(bam_name)
+            if bam_count != 1:
+                sys.stderr.write('{} given {} times in input\n'.format(
+                    bam_name, bam_count))
+            else:
+                sys.stderr.write('{} not found in .rmats files\n'.format(
+                    vbams[i]))
+
+            any_error = True
+        elif prep_count > 1:
+            sys.stderr.write('{} found {} times in .rmats files\n'.format(
+                vbams[i], prep_count))
+            any_error = True
+
+    if any_error:
+        sys.exit(1)
 
 
 @boundscheck(False)
@@ -3021,15 +3070,15 @@ cdef vector[size_t] load_read(str bams, str fn, const int& rl,
     cdef:
         int num = 0, num_file = 0
         list vbams = bams.split(',')
-        list flags
+        list prep_counts_by_bam
         vector[unordered_map[string,vector[Triad]]] novel_juncs
         vector[size_t] residx
 
     num = len(vbams)
-    flags = [0 for i in range(num)]
+    prep_counts_by_bam = [0 for i in range(num)]
 
-    _load_job(fn, vbams, flags, rl, novel_juncs, exons, juncs, read_mode)
-    residx = [i for i in range(num) if flags[i] == 1]
+    _load_job(fn, vbams, prep_counts_by_bam, rl, novel_juncs, exons, juncs, read_mode)
+    residx = [i for i in range(num) if prep_counts_by_bam[i] == 1]
 
     return residx
 

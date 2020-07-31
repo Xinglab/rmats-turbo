@@ -24,9 +24,21 @@ class Test(tests.base_test.BaseTest):
         self._prep_1_tmp_dir = os.path.join(self._test_dir, 'tmp_prep_1')
         self._prep_2_tmp_dir = os.path.join(self._test_dir, 'tmp_prep_2')
         self._post_tmp_dir = os.path.join(self._test_dir, 'tmp_post')
+
+        self._dup_input_bam_tmp_dir = os.path.join(self._test_dir,
+                                                   'tmp_dup_input_bam')
+        self._dup_prep_bam_tmp_dir = os.path.join(self._test_dir,
+                                                  'tmp_dup_prep_bam')
+        self._miss_input_bam_tmp_dir = os.path.join(self._test_dir,
+                                                    'tmp_miss_input_bam')
+        self._miss_prep_bam_tmp_dir = os.path.join(self._test_dir,
+                                                   'tmp_miss_prep_bam')
+
         tests.util.recreate_dirs([
             self._generated_input_dir, self._out_dir, self._prep_1_tmp_dir,
             self._prep_2_tmp_dir, self._post_tmp_dir,
+            self._dup_input_bam_tmp_dir, self._dup_prep_bam_tmp_dir,
+            self._miss_input_bam_tmp_dir, self._miss_prep_bam_tmp_dir,
             self._command_output_dir()
         ])
 
@@ -49,14 +61,24 @@ class Test(tests.base_test.BaseTest):
         self._gtf_path = os.path.join(self._generated_input_dir, 'test.gtf')
         self._gtf = self._create_gtf(self._gtf_path)
         self._sub_steps = [
-            'prep_1', 'inte_1_fail', 'inte_1_pass', 'prep_2', 'inte_2_fail',
-            'inte_2_pass', 'post'
+            'prep_1',
+            'inte_1_fail',
+            'inte_1_pass',
+            'prep_2',
+            'inte_2_fail',
+            'inte_2_pass',
+            'post',
+            'duplicate_input_bam',
+            'duplicate_prep_bam',
+            'missing_input_bam',
+            'missing_prep_bam',
         ]
         self._sub_step = None
 
     def test(self):
         for sub_step in self._sub_steps:
             self._sub_step = sub_step
+            self._setup_sub_step()
             self._run_test()
 
     def _command_output_dir(self):
@@ -145,8 +167,92 @@ class Test(tests.base_test.BaseTest):
                 '--task',
                 'post',
             ])
+        elif self._sub_step == 'duplicate_input_bam':
+            arguments.extend([
+                '--tmp',
+                self._dup_input_bam_tmp_dir,
+                '--b1',
+                self._dup_input_bam_path,
+                '--task',
+                'post',
+                '--statoff',
+            ])
+        elif self._sub_step == 'duplicate_prep_bam':
+            arguments.extend([
+                '--tmp',
+                self._dup_prep_bam_tmp_dir,
+                '--b1',
+                self._dup_prep_bam_path,
+                '--task',
+                'post',
+                '--statoff',
+            ])
+        elif self._sub_step == 'missing_input_bam':
+            arguments.extend([
+                '--tmp',
+                self._miss_input_bam_tmp_dir,
+                '--b1',
+                self._miss_input_bam_path,
+                '--task',
+                'post',
+                '--statoff',
+            ])
+        elif self._sub_step == 'missing_prep_bam':
+            arguments.extend([
+                '--tmp',
+                self._miss_prep_bam_tmp_dir,
+                '--b1',
+                self._miss_prep_bam_path,
+                '--task',
+                'post',
+                '--statoff',
+            ])
 
         return arguments
+
+    def _setup_sub_step(self):
+        if self._sub_step == 'duplicate_input_bam':
+            self._setup_dup_input_bam()
+        elif self._sub_step == 'duplicate_prep_bam':
+            self._setup_dup_prep_bam()
+        elif self._sub_step == 'missing_input_bam':
+            self._setup_miss_input_bam()
+        elif self._sub_step == 'missing_prep_bam':
+            self._setup_miss_prep_bam()
+
+    def _setup_dup_input_bam(self):
+        self._dup_input_bam_path = os.path.join(self._generated_input_dir,
+                                                'dup_input.txt')
+        bams = self._sample_1_bams + [self._sample_1_bams[0]]
+        self._write_bams(bams, self._dup_input_bam_path)
+        self._cp_with_prefix('prep_1', self._prep_1_tmp_dir,
+                             self._dup_input_bam_tmp_dir)
+
+    def _setup_dup_prep_bam(self):
+        self._dup_prep_bam_path = os.path.join(self._generated_input_dir,
+                                               'dup_prep.txt')
+        bams = self._sample_1_bams
+        self._write_bams(bams, self._dup_prep_bam_path)
+        self._cp_with_prefix('prep_1', self._prep_1_tmp_dir,
+                             self._dup_prep_bam_tmp_dir)
+        self._cp_with_prefix('prep_1_again', self._prep_1_tmp_dir,
+                             self._dup_prep_bam_tmp_dir)
+
+    def _setup_miss_input_bam(self):
+        self._miss_input_bam_path = os.path.join(self._generated_input_dir,
+                                                 'miss_input.txt')
+        bams = [self._sample_1_bams[0]]
+        self._write_bams(bams, self._miss_input_bam_path)
+        self._cp_with_prefix('prep_1', self._prep_1_tmp_dir,
+                             self._miss_input_bam_tmp_dir)
+
+    def _setup_miss_prep_bam(self):
+        self._miss_prep_bam_path = os.path.join(self._generated_input_dir,
+                                                'miss_prep.txt')
+        bams = self._sample_1_bams + self._sample_2_bams
+        self._write_bams(bams, self._miss_prep_bam_path)
+        self._cp_with_prefix('prep_1', self._prep_1_tmp_dir,
+                             self._miss_prep_bam_tmp_dir)
 
     def _create_gtf(self, gtf_path):
         gtf = tests.gtf.GTF()
@@ -261,6 +367,14 @@ class Test(tests.base_test.BaseTest):
             self._check_results_inte_2_pass()
         elif self._sub_step == 'post':
             self._check_results_post()
+        elif self._sub_step == 'duplicate_input_bam':
+            self._check_results_dup_input_bam()
+        elif self._sub_step == 'duplicate_prep_bam':
+            self._check_results_dup_prep_bam()
+        elif self._sub_step == 'missing_input_bam':
+            self._check_results_miss_input_bam()
+        elif self._sub_step == 'missing_prep_bam':
+            self._check_results_miss_prep_bam()
         else:
             self.fail('unexpected sub_step: {}'.format(self._sub_step))
 
@@ -485,6 +599,44 @@ class Test(tests.base_test.BaseTest):
         self.assertAlmostEqual(float(inc_level_2_splits[0]), 0)
         self.assertAlmostEqual(float(inc_level_2_splits[1]), 0)
         self.assertAlmostEqual(float(se_mats_jc_row['IncLevelDifference']), 1)
+
+    def _check_results_dup_input_bam(self):
+        self.assertNotEqual(self._rmats_return_code, 0)
+
+        command_stderr_file_name = self._get_stderr_file_name()
+        with open(command_stderr_file_name, 'rt') as err_f_h:
+            err_lines = err_f_h.readlines()
+
+        dup_bam_path = self._sample_1_bams[0].path
+        expected_error = '{} given 2 times'.format(dup_bam_path)
+        tests.util.assert_some_line_has(self, err_lines, expected_error)
+
+    def _check_results_dup_prep_bam(self):
+        self.assertNotEqual(self._rmats_return_code, 0)
+
+        command_stderr_file_name = self._get_stderr_file_name()
+        with open(command_stderr_file_name, 'rt') as err_f_h:
+            err_lines = err_f_h.readlines()
+
+        for bam in self._sample_1_bams:
+            dup_bam_path = bam.path
+            expected_error = '{} found 2 times in .rmats'.format(dup_bam_path)
+            tests.util.assert_some_line_has(self, err_lines, expected_error)
+
+    def _check_results_miss_input_bam(self):
+        self._check_no_error_results()
+
+    def _check_results_miss_prep_bam(self):
+        self.assertNotEqual(self._rmats_return_code, 0)
+
+        command_stderr_file_name = self._get_stderr_file_name()
+        with open(command_stderr_file_name, 'rt') as err_f_h:
+            err_lines = err_f_h.readlines()
+
+        for bam in self._sample_2_bams:
+            miss_bam_path = bam.path
+            expected_error = '{} not found in .rmats'.format(miss_bam_path)
+            tests.util.assert_some_line_has(self, err_lines, expected_error)
 
 
 if __name__ == '__main__':
