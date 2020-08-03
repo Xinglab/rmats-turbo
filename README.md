@@ -281,8 +281,8 @@ optional arguments:
                         using fastq)
   --nthread NTHREAD     The number of threads. The optimal number of threads
                         should be equal to the number of CPU cores. Default: 1
-  --tstat TSTAT         The number of threads for the statistical model.
-                        Default: 1
+  --tstat TSTAT         The number of threads for the statistical model. If
+                        not set then the value of --nthread is used
   --cstat CSTAT         The cutoff splicing difference. The cutoff used in the
                         null hypothesis test for differential splicing. The
                         default is 0.0001 for 0.01% difference. Valid: 0 <=
