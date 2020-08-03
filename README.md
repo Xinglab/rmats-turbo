@@ -217,7 +217,7 @@ The default statistical model considers the samples to be unpaired. The `--paire
 /path/to/pair_1_b.bam,/path/to/pair_2_b.bam,/path/to/pair_3_b.bam
 ```
 
-The `--paired-stats` flag can then be given so that the paired statistical model is used instead of the default unpaired model.
+The `--paired-stats` flag can then be given so that the paired statistical model is used instead of the default unpaired model. As the paired model is running it updates a progress file under the `--tmp` directory. As an example `/path/to/tmp/JC_SE/pairadise_status.txt` is written when the paired model is producing the results for `SE.MATS.JC.txt`.
 
 ### Tips
 

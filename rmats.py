@@ -341,10 +341,18 @@ def process_counts(istat, tstat, counttype, ase, cstat, od, tmp, stat,
     # Calculate PValue and FDR
     if stat:
         if paired_stats:
-            paired_command = ['Rscript', paired_model, istat, str(tstat), ostat_fdr]
+            # PAIRADISE writes a status file to the working directory.
+            # Use the cwd kwarg of subprocess.call to set which
+            # directory the status file gets written to.
+            # This requires passing absolute path names to paired_model.R
+            abs_istat = os.path.abspath(istat)
+            abs_ostat_fdr = os.path.abspath(ostat_fdr)
+            paired_command = ['Rscript', paired_model, abs_istat, str(tstat),
+                              abs_ostat_fdr]
             with open(ostat_paired, 'wb') as paired_fp:
                 paired_model_return_code = subprocess.call(
-                    paired_command, stdout=paired_fp, stderr=subprocess.STDOUT)
+                    paired_command, stdout=paired_fp, stderr=subprocess.STDOUT,
+                    cwd=sec_tmp)
 
             if paired_model_return_code != 0:
                 print('error in paired model', file=sys.stderr)

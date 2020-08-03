@@ -216,6 +216,10 @@ class OneEventTest(PairedStatsBaseTest):
         se_mats_jcec_row_0 = se_mats_jcec_rows[0]
         self._check_row(se_mats_jcec_row_0, '2,6', '1,1', '0,2', '2,3', 2)
 
+        status_path = os.path.join(self._tmp_dir, 'JC_SE',
+                                   'pairadise_status.txt')
+        self.assertTrue(os.path.exists(status_path))
+
 
 class TwoEventTest(PairedStatsBaseTest):
     def _sub_test_name(self):
@@ -296,6 +300,10 @@ class TwoEventTest(PairedStatsBaseTest):
         self._check_row(se_mats_jcec_row_0, '2,4', '1,0', '0,3', '1,2', 2)
         se_mats_jcec_row_1 = se_mats_jcec_rows[1]
         self._check_row(se_mats_jcec_row_1, '1,4', '1,1', '1,4', '1,1', 2)
+
+        status_path = os.path.join(self._tmp_dir, 'JC_SE',
+                                   'pairadise_status.txt')
+        self.assertTrue(os.path.exists(status_path))
 
 
 class FilteredEventTest(PairedStatsBaseTest):
@@ -401,6 +409,10 @@ class FilteredEventTest(PairedStatsBaseTest):
                         expect_nan_pvalue=True)
         se_mats_jcec_row_2 = se_mats_jcec_rows[2]
         self._check_row(se_mats_jcec_row_2, '0,2', '0,1', '0,2', '0,1', 2)
+
+        status_path = os.path.join(self._tmp_dir, 'JC_SE',
+                                   'pairadise_status.txt')
+        self.assertTrue(os.path.exists(status_path))
 
 
 if __name__ == '__main__':
