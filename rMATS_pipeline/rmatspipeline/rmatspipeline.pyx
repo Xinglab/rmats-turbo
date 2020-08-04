@@ -3040,22 +3040,28 @@ cdef load_sg(str bams, const string& tmp, const int& rl,
     for name in all_files:
         _load_job(name, vbams, prep_counts_by_bam, rl, novel_juncs, exons, juncs, sg_mode)
 
-    any_error = False
+    prep_counts_by_bam_name = {bam_name: 0 for bam_name in vbams}
+    input_counts_by_bam_name = {bam_name: 0 for bam_name in vbams}
     for i, prep_count in enumerate(prep_counts_by_bam):
-        if prep_count == 0:
-            bam_name = vbams[i]
-            bam_count = vbams.count(bam_name)
-            if bam_count != 1:
-                sys.stderr.write('{} given {} times in input\n'.format(
-                    bam_name, bam_count))
-            else:
-                sys.stderr.write('{} not found in .rmats files\n'.format(
-                    vbams[i]))
+        bam_name = vbams[i]
+        input_counts_by_bam_name[bam_name] += 1
+        prep_counts_by_bam_name[bam_name] += prep_count
 
+    any_error = False
+    for bam_name, input_count in input_counts_by_bam_name.items():
+        if input_count != 1:
+            sys.stderr.write('{} given {} times in input\n'.format(
+                bam_name, input_count))
+            any_error = True
+
+    for bam_name, prep_count in prep_counts_by_bam_name.items():
+        if prep_count == 0:
+            sys.stderr.write('{} not found in .rmats files\n'.format(
+                bam_name))
             any_error = True
         elif prep_count > 1:
             sys.stderr.write('{} found {} times in .rmats files\n'.format(
-                vbams[i], prep_count))
+                bam_name, prep_count))
             any_error = True
 
     if any_error:
