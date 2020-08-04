@@ -771,7 +771,7 @@ cdef void parse_bam(long fidx, string bam,
 @boundscheck(False)
 @wraparound(False)
 cdef void output_read_outcomes(const vector[vector[int]]& read_outcome_counts,
-                               const vector[string]& vbams, str od):
+                               const vector[string]& vbams, str tmp_dir):
     cdef:
         vector[int] aggregated_read_outcome_counts
         int total_for_bam
@@ -780,7 +780,7 @@ cdef void output_read_outcomes(const vector[vector[int]]& read_outcome_counts,
     # initialize counts to zero
     aggregated_read_outcome_counts.resize(READ_ENUM_VALUE_COUNT)
 
-    f_name = join(od, 'read_outcomes_by_bam.txt')
+    f_name = join(tmp_dir, 'read_outcomes_by_bam.txt')
     with open(f_name, 'wt') as f_handle:
         for i in range(vbams.size()):
             f_handle.write('{}\n'.format(vbams[i]))
@@ -849,7 +849,7 @@ cdef void detect_novel(str bams, unordered_map[int,cset[string]]& geneGroup,
                   variable_read_length, dt, novelSS, mil, mel,
                   read_outcome_counts[fidx])
 
-    output_read_outcomes(read_outcome_counts, vbams, args.od)
+    output_read_outcomes(read_outcome_counts, vbams, args.tmp)
 
 
 @boundscheck(False)
