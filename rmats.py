@@ -126,8 +126,8 @@ def get_args():
     parser.add_argument('--nthread', action='store', type=int, default=1,
                         help='The number of threads. The optimal number of threads should be equal to the number of CPU cores. Default: %(default)s', dest='nthread')
 
-    parser.add_argument('--tstat', action='store', type=int, default=1,
-                        help='The number of threads for the statistical model. Default: %(default)s', dest='tstat')
+    parser.add_argument('--tstat', action='store', type=int,
+                        help='The number of threads for the statistical model. If not set then the value of --nthread is used', dest='tstat')
     parser.add_argument('--cstat', action='store', type=float, default=0.0001,
                         help='The cutoff splicing difference. The cutoff used in the null hypothesis test for differential splicing. The default is 0.0001 for 0.01%% difference. Valid: 0 <= cutoff < 1. Does not apply to the paired stats model', dest='cstat')
 
@@ -186,6 +186,9 @@ def get_args():
 
     dt_map = {'fr-unstranded':0, 'fr-firststrand':1, 'fr-secondstrand':2}
     args.dt = dt_map[args.dt]
+
+    if args.tstat is None:
+        args.tstat = args.nthread
 
     return args
 
