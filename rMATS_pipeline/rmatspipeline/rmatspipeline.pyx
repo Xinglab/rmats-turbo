@@ -47,6 +47,27 @@ cdef:
     int FRFIRSTSTRAND = 1
     int FRSECONDSTRAND = 2
 
+    # enum for counting the outcome of each read from the BAMs
+    int READ_USED = 0
+    int READ_NOT_PAIRED = 1
+    int READ_NOT_NH_1 = 2
+    int READ_NOT_EXPECTED_CIGAR = 3
+    int READ_NOT_EXPECTED_READ_LENGTH = 4
+    int READ_NOT_EXPECTED_STRAND = 5
+    int READ_EXON_NOT_MATCHED_TO_ANNOTATION = 6
+    int READ_JUNCTION_NOT_MATCHED_TO_ANNOTATION = 7
+    int READ_ENUM_VALUE_COUNT = 8
+    vector[string] READ_ENUM_NAMES = [
+        "USED",
+        "NOT_PAIRED",
+        "NOT_NH_1",
+        "NOT_EXPECTED_CIGAR",
+        "NOT_EXPECTED_READ_LENGTH",
+        "NOT_EXPECTED_STRAND",
+        "EXON_NOT_MATCHED_TO_ANNOTATION",
+        "JUNCTION_NOT_MATCHED_TO_ANNOTATION"
+    ]
+
     char* se_template = '%ld\t%s\t%s\t%s\t%c\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\n'
     char* mxe_template = '%ld\t%s\t%s\t%s\t%c\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\n'
     char* alt35_template = '%ld\t%s\t%s\t%s\t%c\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\n'
@@ -190,7 +211,7 @@ cdef void parse_gtf(str gtff, unordered_map[int,cset[string]]& geneGroup,
 
 @boundscheck(False)
 @wraparound(False)
-cdef cbool filter_read(const BamAlignment& bread, const cbool& ispaired) nogil:
+cdef cbool read_has_nh_tag_1(const BamAlignment& bread) nogil:
     cdef:
         char ttype
         int8_t int8
@@ -200,9 +221,6 @@ cdef cbool filter_read(const BamAlignment& bread, const cbool& ispaired) nogil:
         uint16_t uint16
         uint32_t uint32
         float ff
-
-    if ispaired and not bread.IsProperPair():
-        return False
 
     if bread.GetTagType(NH, ttype):
         if ttype == BAM_TAG_TYPE_INT8:
@@ -251,19 +269,34 @@ cdef cbool filter_read(const BamAlignment& bread, const cbool& ispaired) nogil:
 
 @boundscheck(False)
 @wraparound(False)
-cdef cbool is_bam_exonread(const BamAlignment& bread, const int& readLength,
-                           const cbool variable_read_length) nogil:
-    return (bread.CigarData.size() == 1
-            and bread.CigarData[0].Type == 'M'
-            and (variable_read_length
-                 or (bread.CigarData[0].Length == readLength)))
+cdef int filter_read(const BamAlignment& bread, const cbool& ispaired) nogil:
+    if ispaired and not bread.IsProperPair():
+        return READ_NOT_PAIRED
+
+    if not read_has_nh_tag_1(bread):
+        return READ_NOT_NH_1
+
+    return READ_USED
 
 
 @boundscheck(False)
 @wraparound(False)
-cdef cbool is_bam_multijunc(const BamAlignment& bread,
-                            const int readLength,
-                            const cbool variable_read_length) nogil:
+cdef int is_bam_exonread(const BamAlignment& bread, const int& readLength,
+                         const cbool variable_read_length) nogil:
+    if bread.CigarData.size() != 1 or bread.CigarData[0].Type != 'M':
+        return READ_NOT_EXPECTED_CIGAR
+
+    if (not variable_read_length) and bread.CigarData[0].Length != readLength:
+        return READ_NOT_EXPECTED_READ_LENGTH
+
+    return READ_USED
+
+
+@boundscheck(False)
+@wraparound(False)
+cdef int is_bam_multijunc(const BamAlignment& bread,
+                          const int readLength,
+                          const cbool variable_read_length) nogil:
     """TODO: Docstring for is_bam_multijunc.
     :returns: TODO
 
@@ -274,19 +307,22 @@ cdef cbool is_bam_multijunc(const BamAlignment& bread,
         int length = 0
 
     if num < 3 or num % 2 == 0:
-        return False
+        return READ_NOT_EXPECTED_CIGAR
 
     for i in range(num):
         if i % 2 == 1:
             if bread.CigarData[i].Type != 'N':
-                return False
+                return READ_NOT_EXPECTED_CIGAR
         else:
             if bread.CigarData[i].Type != 'M':
-                return False
+                return READ_NOT_EXPECTED_CIGAR
 
             length += bread.CigarData[i].Length
 
-    return variable_read_length or (length == readLength)
+    if (not variable_read_length) and length != readLength:
+        return READ_NOT_EXPECTED_READ_LENGTH
+
+    return READ_USED
 
 
 # jS 1-based
@@ -582,7 +618,8 @@ cdef void parse_bam(long fidx, string bam,
                     unordered_map[string,cmap[string,int]]& multis,
                     cbool issingle, int jld2, int readLength,
                     cbool variable_read_length, int dt, cbool& novelSS,
-                    long& mil, long& mel) nogil:
+                    long& mil, long& mel,
+                    vector[int]& read_outcome_counts) nogil:
     """TODO: Docstring for parse_bam.
     :returns: TODO
 
@@ -629,14 +666,21 @@ cdef void parse_bam(long fidx, string bam,
             refid2str[br.GetReferenceID(refv[i].RefName)] = refv[i].RefName
 
     while br.GetNextAlignment(bread):
-        if not filter_read(bread, ispaired):
+        filter_outcome = filter_read(bread, ispaired)
+        if filter_outcome != READ_USED:
+            read_outcome_counts[filter_outcome] += 1
             continue
 
-        if is_bam_exonread(bread, readLength, variable_read_length):
+        any_exon_match = False
+        any_multijunc_match = False
+        exon_outcome = is_bam_exonread(bread, readLength, variable_read_length)
+        multijunc_outcome = is_bam_multijunc(bread, readLength, variable_read_length)
+        if exon_outcome == READ_USED:
             mc = bread.Position + 1 # position (1-based) where alignment starts
 
             strand = check_strand(bread, ispaired, dt)
             if dt != FRUNSTRANDED and strand == cdot:
+                read_outcome_counts[READ_NOT_EXPECTED_STRAND] += 1
                 continue
 
             mec = mc + bread.CigarData[0].Length - 1
@@ -658,6 +702,7 @@ cdef void parse_bam(long fidx, string bam,
 
                     if (tetrad.first != -1 and tetrad.second != -1) or\
                             (tetrad.third != -1 and tetrad.fourth != -1):
+                        any_exon_match = True
                         if dt == FRUNSTRANDED:
                             exons[deref(cg)][tetrad].first = exons[deref(cg)][tetrad].first + 1
                         elif strand == plus_mark:
@@ -667,7 +712,7 @@ cdef void parse_bam(long fidx, string bam,
 
                     inc(cg)
 
-        elif is_bam_multijunc(bread, readLength, variable_read_length):
+        elif multijunc_outcome == READ_USED:
             mc = bread.Position # position (0-based) where alignment starts
 
             minAnchor = c_min(bread.CigarData[0].Length, bread.CigarData.back().Length)
@@ -698,16 +743,67 @@ cdef void parse_bam(long fidx, string bam,
                                      mil, mel)
 
                         if multiread.length() > 0:
+                            any_multijunc_match = True
                             multis[deref(cg)][multiread] = multis[deref(cg)][multiread] + 1
                         if ntx.size() != 0:
+                            any_multijunc_match = True
                             novel_juncs[deref(cg)].insert(novel_juncs[deref(cg)].begin(),
                                                           ntx.begin(), ntx.end())
 
                         inc(cg)
 
+        if any_exon_match or any_multijunc_match:
+            read_outcome_counts[READ_USED] += 1
+        elif exon_outcome == READ_USED:
+            read_outcome_counts[READ_EXON_NOT_MATCHED_TO_ANNOTATION] += 1
+        elif multijunc_outcome == READ_USED:
+            read_outcome_counts[READ_JUNCTION_NOT_MATCHED_TO_ANNOTATION] += 1
+        elif (exon_outcome == READ_NOT_EXPECTED_READ_LENGTH
+              or multijunc_outcome == READ_NOT_EXPECTED_READ_LENGTH):
+            read_outcome_counts[READ_NOT_EXPECTED_READ_LENGTH] += 1
+        else:
+            read_outcome_counts[READ_NOT_EXPECTED_CIGAR] += 1
+
     br.Close()
 
     return
+
+@boundscheck(False)
+@wraparound(False)
+cdef void output_read_outcomes(const vector[vector[int]]& read_outcome_counts,
+                               const vector[string]& vbams, str tmp_dir):
+    cdef:
+        vector[int] aggregated_read_outcome_counts
+        int total_for_bam
+        int total
+
+    # initialize counts to zero
+    aggregated_read_outcome_counts.resize(READ_ENUM_VALUE_COUNT)
+
+    f_name = join(tmp_dir, 'read_outcomes_by_bam.txt')
+    with open(f_name, 'wt') as f_handle:
+        for i in range(vbams.size()):
+            f_handle.write('{}\n'.format(vbams[i]))
+            total_for_bam = 0
+            for j in range(READ_ENUM_VALUE_COUNT):
+                f_handle.write('{}: {}\n'.format(READ_ENUM_NAMES[j],
+                                                 read_outcome_counts[i][j]))
+                aggregated_read_outcome_counts[j] += read_outcome_counts[i][j]
+                total_for_bam += read_outcome_counts[i][j]
+
+            f_handle.write('TOTAL_FOR_BAM: {}\n'.format(total_for_bam))
+
+    print('')
+    print('read outcome totals across all BAMs')
+    total = 0
+    for i in range(READ_ENUM_VALUE_COUNT):
+        print('{}: {}'.format(READ_ENUM_NAMES[i],
+                              aggregated_read_outcome_counts[i]))
+        total += aggregated_read_outcome_counts[i]
+
+    print('total: {}'.format(total))
+    print('outcomes by BAM written to: {}'.format(f_name))
+    print('')
 
 
 @boundscheck(False)
@@ -731,12 +827,18 @@ cdef void detect_novel(str bams, unordered_map[int,cset[string]]& geneGroup,
         vector[string] vbams = bams.split(',')
         long mil = args.mil
         long mel = args.mel
+        vector[vector[int]] read_outcome_counts
 
     dt = args.dt
     vlen = vbams.size()
     novel_juncs.resize(vlen)
     exons.resize(vlen)
     multis.resize(vlen)
+    read_outcome_counts.resize(vlen)
+
+    # initialize outcome counts to zero
+    for i in range(vlen):
+        read_outcome_counts[i].resize(READ_ENUM_VALUE_COUNT)
 
     if args.readtype == 'single':
         issingle = True
@@ -744,9 +846,10 @@ cdef void detect_novel(str bams, unordered_map[int,cset[string]]& geneGroup,
     for fidx in prange(vlen, schedule='static', num_threads=nthread, nogil=True):
         parse_bam(fidx, vbams[fidx], geneGroup, genes, supple, novel_juncs[fidx],
                   exons[fidx], multis[fidx], issingle, jld2, readLength,
-                  variable_read_length, dt, novelSS, mil, mel)
+                  variable_read_length, dt, novelSS, mil, mel,
+                  read_outcome_counts[fidx])
 
-    return
+    output_read_outcomes(read_outcome_counts, vbams, args.tmp)
 
 
 @boundscheck(False)

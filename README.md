@@ -356,3 +356,4 @@ Each alternative splicing event type has a corresponding set of output files. In
 
 - `{datetime}.rmats`: Summary generated from processing the BAM(s)
 - `bam{sample_num}_{replicate_num}/Aligned.sortedByCoord.out.bam`: result of mapping input FASTQ files
+- `read_outcomes_by_bam.txt`: Counts of the reads used from each BAM along with counts of the reasons that reads were not able to be used
