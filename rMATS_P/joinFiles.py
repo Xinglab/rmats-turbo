@@ -56,7 +56,10 @@ for line in iFile_1: ## for each line
 #logging.debug("Finished populating first input file dictionary with %d keys and %d duplicates" % (len(fd), dupKey));
 
 header = iFile_2.readline().strip();
-oFile.write(header + '\n');
+header_ele = header.split('\t')
+header_ele_without_key = header_ele[:col_2] + header_ele[col_2+1:]
+header_without_key = '\t'.join(header_ele_without_key)
+oFile.write(header_without_key + '\n');
 
 numFound =0;
 notFound =0;
@@ -65,7 +68,9 @@ for line in iFile_2: ## for each line
   key = ele[col_2];
   if key in fd: ## let's write it out
     numFound += 1;
-    oFile.write(fd[key] + '\t' + line.strip() + '\n');
+    ele_without_key = ele[:col_2] + ele[col_2+1:]
+    line_without_key = '\t'.join(ele_without_key)
+    oFile.write(fd[key] + '\t' + line_without_key + '\n');
   else: ## not found
     notFound += 1;
 #logging.debug("Finished accesing 2nd file. Found %d lines and did not find %d lines" % (numFound, notFound));
