@@ -1,5 +1,6 @@
 import unittest
 
+import tests.allow_clipping.test as allow_clipping_test
 import tests.alternative_3_splice_site_novel.test as alternative_3_splice_site_novel_test
 import tests.alternative_5_splice_site_novel.test as alternative_5_splice_site_novel_test
 import tests.mutually_exclusive_exons_novel.test as mutually_exclusive_exons_novel_test
@@ -15,6 +16,8 @@ import tests.variable_read_length.test as variable_read_length_test
 def build_test_suite():
     loader = unittest.defaultTestLoader
     suite = unittest.TestSuite()
+    suite.addTest(
+        loader.loadTestsFromModule(allow_clipping_test))
     suite.addTest(
         loader.loadTestsFromModule(alternative_3_splice_site_novel_test))
     suite.addTest(

@@ -145,6 +145,9 @@ def get_args():
                         help='Minimum Intron Length. Only impacts --novelSS behavior. Default: %(default)s', dest='mil')
     parser.add_argument('--mel', action='store', type=int, default=500,
                         help='Maximum Exon Length. Only impacts --novelSS behavior. Default: %(default)s', dest='mel')
+    parser.add_argument('--allow-clipping', action='store_true',
+                        help='Allow alignments with soft or hard clipping to be used',
+                        dest='allow_clipping')
 
     args = parser.parse_args()
 

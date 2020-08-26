@@ -122,7 +122,7 @@ rMATS will first process the FASTQ input into BAM files stored in the `--tmp` di
 
 #### Starting with BAM files
 
-Reads can be mapped independently of rMATS with any aligner and then the resulting BAM files can be used as input to rMATS.
+Reads can be mapped independently of rMATS with any aligner and then the resulting BAM files can be used as input to rMATS. rMATS requires aligned reads to match --readLength unless --variable-read-length is given. rMATS also ignores alignments with soft or hard clipping unless --allow-clipping is given.
 
 Suppose there are 2 sample groups with 2 BAM files per group.
 
@@ -305,6 +305,7 @@ optional arguments:
                         behavior. Default: 50
   --mel MEL             Maximum Exon Length. Only impacts --novelSS behavior.
                         Default: 500
+  --allow-clipping      Allow alignments with soft or hard clipping to be used
 ```
 
 ## Output

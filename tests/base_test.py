@@ -87,7 +87,8 @@ class BaseTest(unittest.TestCase):
         return gtf
 
     def _create_bam_from_paired_read_coords(self, bam_path, chromosome_length,
-                                            read_length, paired_read_coords):
+                                            read_length, paired_read_coords,
+                                            clip=False):
         bam = tests.bam.BAM()
         bam.path = bam_path
 
@@ -101,7 +102,7 @@ class BaseTest(unittest.TestCase):
             paired_read_2 = tests.bam.Read()
             error = tests.bam.set_read_pair_from_intervals(
                 paired_read_1, paired_read_2, read_1_coords, read_2_coords,
-                read_length)
+                read_length, clip=clip)
             self.assertFalse(error)
             bam_reads.extend([paired_read_1, paired_read_2])
 

@@ -97,7 +97,7 @@ class BAM(object):
 
 
 def set_read_pair_from_intervals(read_1, read_2, intervals_1, intervals_2,
-                                 read_length):
+                                 read_length, clip=False):
     read_1_start = intervals_1[0][0]
     read_1.start_coord = read_1_start
 
@@ -126,6 +126,9 @@ def set_read_pair_from_intervals(read_1, read_2, intervals_1, intervals_2,
 
         prev_end = end
 
+    if clip:
+        cigar_1 = '3H{}3H'.format(cigar_1)
+
     read_1.cigar = cigar_1
 
     cigar_2 = ''
@@ -150,6 +153,9 @@ def set_read_pair_from_intervals(read_1, read_2, intervals_1, intervals_2,
             remaining_length -= length
 
         prev_start = start
+
+    if clip:
+        cigar_2 = '3H{}3H'.format(cigar_2)
 
     read_2.cigar = cigar_2
 
