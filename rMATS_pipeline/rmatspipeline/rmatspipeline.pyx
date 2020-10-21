@@ -1337,12 +1337,15 @@ cdef void detect_se_mxe(const string& gID, Gene& gene, SupInfo& supInfo,
                                                   deref(ise).second.txtype,
                                                   deref(ise).second.includes_novel_ss)
 
-                    ise = junction_se.find(se_key)
-                    if (deref(ise).second.txtype == GTF_TX
-                        and (all_novel_left
-                             or all_novel_right
-                             or all_novel_skip)):
-                        deref(ise).second.txtype = BAM_TX
+                    # Do not update the novelJunction status when
+                    # handling novelSS
+                    if not includes_novel_ss:
+                        ise = junction_se.find(se_key)
+                        if (deref(ise).second.txtype == GTF_TX
+                            and (all_novel_left
+                                 or all_novel_right
+                                 or all_novel_skip)):
+                            deref(ise).second.txtype = BAM_TX
 
                     break
                 else:
@@ -1419,10 +1422,13 @@ cdef void detect_se_mxe(const string& gID, Gene& gene, SupInfo& supInfo,
                 # all_novel_left and all_novel_right do not need to be
                 # checked here since found_idx_bam_transcript would be
                 # True if either all_novel_left or all_novel_right was.
-                if (deref(imxe).second.txtype == GTF_TX
-                    and (found_mid_bam_transcript
-                         or found_idx_bam_transcript)):
-                    deref(imxe).second.txtype = BAM_TX
+                #
+                # Do not update the novelJunction status when handling novelSS
+                if not includes_novel_ss:
+                    if (deref(imxe).second.txtype == GTF_TX
+                        and (found_mid_bam_transcript
+                             or found_idx_bam_transcript)):
+                        deref(imxe).second.txtype = BAM_TX
 
 
 @boundscheck(False)
@@ -1490,10 +1496,12 @@ cdef void update_alt35_right_flank_event(const string& gID, const Gene& gene,
                                      deref(ialt35).second.txtype,
                                      deref(ialt35).second.includes_novel_ss)
 
-    ialt35 = junction_35.find(alt35_key)
-    if (deref(ialt35).second.txtype == GTF_TX
-        and (all_novel_i or all_novel_j)):
-        deref(ialt35).second.txtype = BAM_TX
+    # Do not update the novelJunction status when handling novelSS
+    if not includes_novel_ss:
+        ialt35 = junction_35.find(alt35_key)
+        if (deref(ialt35).second.txtype == GTF_TX
+            and (all_novel_i or all_novel_j)):
+            deref(ialt35).second.txtype = BAM_TX
 
 
 @boundscheck(False)
@@ -1544,10 +1552,12 @@ cdef void update_alt35_left_flank_event(const string& gID, const Gene& gene,
                                      deref(ialt35).second.txtype,
                                      deref(ialt35).second.includes_novel_ss)
 
-    ialt35 = junction_35.find(alt35_key)
-    if (deref(ialt35).second.txtype == GTF_TX
-        and (all_novel_i or all_novel_j)):
-        deref(ialt35).second.txtype = BAM_TX
+    # Do not update the novelJunction status when handling novelSS
+    if not includes_novel_ss:
+        ialt35 = junction_35.find(alt35_key)
+        if (deref(ialt35).second.txtype == GTF_TX
+            and (all_novel_i or all_novel_j)):
+            deref(ialt35).second.txtype = BAM_TX
 
 
 @boundscheck(False)
@@ -1726,9 +1736,12 @@ cdef void detect_ri(const string& gID, Gene& gene, SupInfo& supInfo,
                                       len_pair.third, len_pair.fourth,
                                       deref(iri).second.txtype,
                                       deref(iri).second.includes_novel_ss)
-        iri = junction_ri.find(ri_key)
-        if deref(iri).second.txtype == GTF_TX and all_novel:
-            deref(iri).second.txtype = BAM_TX
+
+        # Do not update the novelJunction status when handling novelSS
+        if not includes_novel_ss:
+            iri = junction_ri.find(ri_key)
+            if deref(iri).second.txtype == GTF_TX and all_novel:
+                deref(iri).second.txtype = BAM_TX
 
 
 @boundscheck(False)
