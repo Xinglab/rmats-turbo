@@ -9,10 +9,11 @@
 # cython: c_string_type=str, c_string_encoding=ascii
 
 
+import shutil
 import sys
 import time
 from nogilbam cimport *
-from os import walk
+from os import mkdir, walk
 from os.path import basename, splitext, join, exists
 from datetime import datetime
 from cython.parallel import prange
@@ -2214,7 +2215,7 @@ cdef void count_ri(cset[RI_info]& junction_ri,
 
 @boundscheck(False)
 @wraparound(False)
-cdef count_occurrence(str bams, str tmp, str od,
+cdef count_occurrence(str bams, list dot_rmats_paths, str od,
                       cset[SE_info]& se, cset[MXE_info]& mxe,
                       cset[ALT35_info]& alt3, cset[ALT35_info]& alt5,
                       cset[RI_info]& ri, int sam1len, int& jld2, int& rl,
@@ -2312,13 +2313,11 @@ cdef count_occurrence(str bams, str tmp, str od,
         jcec_ri[idx].strand = deref(iri).supInfo.strand
         inc(iri)
 
-    all_files = [join(root, name) for root, dirs, files in walk(tmp)
-                 for name in files if name.endswith('.rmats')]
-    vlen = len(all_files)
+    vlen = len(dot_rmats_paths)
     resindice.resize(vlen)
     for fidx in prange(vlen, schedule='static', num_threads=nthread, nogil=True):
         with gil:
-            resindice[fidx] = load_read(bams, all_files[fidx], rl, exons, juncs)
+            resindice[fidx] = load_read(bams, dot_rmats_paths[fidx], exons, juncs)
 
         count_se(se, exons, juncs, jc_se, jcec_se, resindice[fidx], dt)
         count_mxe(mxe, exons, juncs, jc_mxe, jcec_mxe, resindice[fidx], dt)
@@ -2886,88 +2885,83 @@ cdef void statistic(unordered_map[string,Gene]& genes,
 
 @boundscheck(False)
 @wraparound(False)
-cdef save_nj(fp, vector[string]& vbams,
-             vector[unordered_map[string,vector[Triad]]]& novel_juncs):
+cdef save_nj(fp, unordered_map[string,vector[Triad]]& novel_juncs):
     cdef:
         string line
         list formated
-        size_t i = 0, j = 0
+        size_t i = 0
         unordered_map[string,vector[Triad]].iterator inj
         cset[Triad] tmp_set
 
-    for i in range(vbams.size()):
-        line = '%d\n' % (novel_juncs[i].size())
-        fp.write(line)
+    line = '%d\n' % (novel_juncs.size())
+    fp.write(line)
 
-        inj = novel_juncs[i].begin()
-        while inj != novel_juncs[i].end():
-            tmp_set.clear()
-            for j in range(deref(inj).second.size()):
-                tmp_set.insert(deref(inj).second[j])
-            deref(inj).second.assign(tmp_set.begin(), tmp_set.end())
-            formated = ['%d,%d,%d' % (deref(inj).second[j].left,
-                        deref(inj).second[j].mid, deref(inj).second[j].right,)
-                        for j in range(deref(inj).second.size())]
-            formated.insert(0,deref(inj).first)
-            line = ';'.join(formated)
-            fp.write(line)
-            fp.write('\n')
-            inc(inj)
+    inj = novel_juncs.begin()
+    while inj != novel_juncs.end():
+        tmp_set.clear()
+        for i in range(deref(inj).second.size()):
+            tmp_set.insert(deref(inj).second[i])
+
+        deref(inj).second.assign(tmp_set.begin(), tmp_set.end())
+        formated = ['%d,%d,%d' % (deref(inj).second[i].left,
+                    deref(inj).second[i].mid, deref(inj).second[i].right,)
+                    for i in range(deref(inj).second.size())]
+        formated.insert(0,deref(inj).first)
+        line = ';'.join(formated)
+        fp.write(line)
+        fp.write('\n')
+        inc(inj)
 
 
 @boundscheck(False)
 @wraparound(False)
-cdef save_exons(fp, vector[string]& vbams,
-                vector[unordered_map[string,cmap[Tetrad,pair[int,int]]]]& exons):
+cdef save_exons(fp, unordered_map[string,cmap[Tetrad,pair[int,int]]]& exons):
     cdef:
         string line
-        size_t i = 0
         unordered_map[string,cmap[Tetrad,pair[int,int]]].iterator iexons
         cmap[Tetrad,pair[int,int]].iterator imap
 
-    for i in range(vbams.size()):
-        line = '%d\n' % (exons[i].size())
-        fp.write(line)
+    line = '%d\n' % (exons.size())
+    fp.write(line)
 
-        iexons = exons[i].begin()
-        while iexons != exons[i].end():
-            line = deref(iexons).first
-            imap = deref(iexons).second.begin()
-            while imap != deref(iexons).second.end():
-                line = '%s;%d,%d,%d,%d,%d,%d' % (line, deref(imap).first.first,
-                        deref(imap).first.second, deref(imap).first.third,
-                        deref(imap).first.fourth, deref(imap).second.first,
-                        deref(imap).second.second)
-                inc(imap)
-            fp.write(line)
-            fp.write('\n')
-            inc(iexons)
+    iexons = exons.begin()
+    while iexons != exons.end():
+        line = deref(iexons).first
+        imap = deref(iexons).second.begin()
+        while imap != deref(iexons).second.end():
+            line = '%s;%d,%d,%d,%d,%d,%d' % (line, deref(imap).first.first,
+                    deref(imap).first.second, deref(imap).first.third,
+                    deref(imap).first.fourth, deref(imap).second.first,
+                    deref(imap).second.second)
+            inc(imap)
+
+        fp.write(line)
+        fp.write('\n')
+        inc(iexons)
 
 
 @boundscheck(False)
 @wraparound(False)
-cdef save_multis(fp, vector[string]& vbams,
-                 vector[unordered_map[string,cmap[string,int]]]& multis):
+cdef save_multis(fp, unordered_map[string,cmap[string,int]]& multis):
     cdef:
         string line
-        size_t i = 0
         unordered_map[string,cmap[string,int]].iterator imultis
         cmap[string,int].iterator imap
 
-    for i in range(vbams.size()):
-        line = '%d\n' % (multis[i].size())
-        fp.write(line)
+    line = '%d\n' % (multis.size())
+    fp.write(line)
 
-        imultis = multis[i].begin()
-        while imultis != multis[i].end():
-            line = deref(imultis).first
-            imap = deref(imultis).second.begin()
-            while imap != deref(imultis).second.end():
-                line = '%s;%s,%d' % (line, deref(imap).first, deref(imap).second)
-                inc(imap)
-            fp.write(line)
-            fp.write('\n')
-            inc(imultis)
+    imultis = multis.begin()
+    while imultis != multis.end():
+        line = deref(imultis).first
+        imap = deref(imultis).second.begin()
+        while imap != deref(imultis).second.end():
+            line = '%s;%s,%d' % (line, deref(imap).first, deref(imap).second)
+            inc(imap)
+
+        fp.write(line)
+        fp.write('\n')
+        inc(imultis)
 
 
 @boundscheck(False)
@@ -2977,22 +2971,36 @@ cdef save_job(str bams, const string& od, const int& readLength,
               vector[unordered_map[string,cmap[Tetrad,pair[int,int]]]]& exons,
               vector[unordered_map[string,cmap[string,int]]]& multis):
     cdef:
-        str fn
+        int bam_i
+        str bam
+        str file_name_template
+        str file_path
+        str time_str
         vector[string] vbams = bams.split(',')
 
-    fn = datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d-%H:%M:%S_%f')
-    while exists('%s/%s.rmats' % (od, fn)):
-        fn = datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d-%H:%M:%S_%f')
-    with open('%s/%s.rmats' % (od, fn), 'w') as fp:
-        # TODO absolute or relative path.
-        fp.write('%s\n' % (bams))
-        fp.write('%d\n' % (readLength))
+    file_name_template = join(od, '{}_{}.rmats')
+    while True:
+        time_str = datetime.fromtimestamp(time.time()).strftime(
+            '%Y-%m-%d-%H:%M:%S_%f')
+        file_path = file_name_template.format(time_str, 0)
+        if not exists(file_path):
+            with open(file_path, 'wt') as fp:
+                pass  # create the file to claim the timestamp
 
-        save_nj(fp, vbams, novel_juncs)
-        save_exons(fp, vbams, exons)
-        save_multis(fp, vbams, multis)
+            break
 
-    print 'The splicing graph and candidate read have been saved into %s' % ('%s/%s.rmats' % (od, fn))
+    for bam_i, bam in enumerate(vbams):
+        file_path = file_name_template.format(time_str, bam_i)
+        with open(file_path, 'wt') as fp:
+            fp.write('{}\n'.format(bam))
+            fp.write('{}\n'.format(readLength))
+
+            save_nj(fp, novel_juncs[bam_i])
+            save_exons(fp, exons[bam_i])
+            save_multis(fp, multis[bam_i])
+
+    print('The splicing graph and candidate read have been saved into {}'
+          .format(file_name_template.format(time_str, '*')))
 
 
 @boundscheck(False)
@@ -3011,13 +3019,13 @@ cdef int try_get_index(list values, object value, cbool* found):
 
 @boundscheck(False)
 @wraparound(False)
-cdef size_t _load_job(str rmatsf, list vbams, list prep_counts_by_bam, const int& rl,
+cdef size_t _load_job(str rmatsf, list vbams, list prep_counts_by_bam,
                       vector[unordered_map[string,vector[Triad]]]& novel_juncs,
                       vector[unordered_map[string,cmap[Tetrad,pair[int,int]]]]& exons,
                       vector[unordered_map[string,cmap[vector[pair[long,long]],int]]]& juncs,
                       int mode):
     cdef:
-        int i = 0, j = 0, k = 0, num = 0, idx = 0, local_rl = 0
+        int i = 0, j = 0, k = 0, num = 0, idx = 0
         size_t vlen
         Triad triad
         Tetrad tetrad
@@ -3036,13 +3044,8 @@ cdef size_t _load_job(str rmatsf, list vbams, list prep_counts_by_bam, const int
 
     with open(rmatsf, 'r') as fp:
         bams = fp.readline().strip().split(',')
-        local_rl = int(fp.readline().strip())
-        if local_rl != rl:
-            print 'WARNING: The post step should use the same read length as the prep step.'
-            print '         The prep step\'s read length: %d' % (local_rl)
-            print '         The post step\'s read length: %d' % (rl)
-            print '         Please check %s' % (rmatsf)
-
+        # Skip over read length line. Already handled in split_sg_files_by_bam.
+        fp.readline()
         for i in range(len(bams)):
             idx = try_get_index(vbams, bams[i], &index_found)
             if not index_found:
@@ -3126,11 +3129,11 @@ cdef size_t _load_job(str rmatsf, list vbams, list prep_counts_by_bam, const int
 
 @boundscheck(False)
 @wraparound(False)
-cdef load_sg(str bams, const string& tmp, const int& rl,
+cdef load_sg(str bams, list dot_rmats_paths,
              vector[unordered_map[string,vector[Triad]]]& novel_juncs):
     cdef:
         int num = 0, num_file = 0
-        list vbams = bams.split(','), all_files
+        list vbams = bams.split(',')
         list prep_counts_by_bam
         vector[unordered_map[string,cmap[Tetrad,pair[int,int]]]] exons
         vector[unordered_map[string,cmap[vector[pair[long,long]],int]]] juncs
@@ -3138,10 +3141,8 @@ cdef load_sg(str bams, const string& tmp, const int& rl,
     num = len(vbams)
     prep_counts_by_bam = [0 for i in range(num)]
 
-    all_files = [join(root, name) for root, dirs, files in walk(tmp)
-                 for name in files if name.endswith('.rmats')]
-    for name in all_files:
-        _load_job(name, vbams, prep_counts_by_bam, rl, novel_juncs, exons, juncs, sg_mode)
+    for name in dot_rmats_paths:
+        _load_job(name, vbams, prep_counts_by_bam, novel_juncs, exons, juncs, sg_mode)
 
     prep_counts_by_bam_name = {bam_name: 0 for bam_name in vbams}
     input_counts_by_bam_name = {bam_name: 0 for bam_name in vbams}
@@ -3170,10 +3171,110 @@ cdef load_sg(str bams, const string& tmp, const int& rl,
     if any_error:
         sys.exit(1)
 
+@boundscheck(False)
+@wraparound(False)
+cdef dict split_sg_files_by_bam(str bams, str tmp_dir, str out_dir,
+                                const int read_length):
+    cdef:
+        dict result
+        int gene_i
+        int num_genes
+        int orig_i
+        int read_length_from_file
+        int section_i
+        int split_i
+        list all_orig_dot_rmats
+        list bams_from_file
+        list dot_rmats_file_paths
+        list in_input_by_splits
+        list splits_for_this_orig
+        set input_bam_paths
+        str bam_from_file
+        str gene_line
+        str num_genes_line
+        str orig_basename
+        str orig_dot_rmats
+        str split_dot_rmats_dir_path
+        str split_path
+
+    split_dot_rmats_dir_path = join(out_dir, 'split_dot_rmats')
+    if exists(split_dot_rmats_dir_path):
+        shutil.rmtree(split_dot_rmats_dir_path)
+
+    mkdir(split_dot_rmats_dir_path)
+
+    input_bam_paths = set(bams.split(','))
+    all_orig_dot_rmats = [join(root, name)
+                          for root, dirs, files in walk(tmp_dir)
+                          for name in files if name.endswith('.rmats')]
+    dot_rmats_file_paths = list()
+    for orig_i, orig_dot_rmats in enumerate(all_orig_dot_rmats):
+        with open(orig_dot_rmats, 'r') as orig_handle:
+            bams_from_file = orig_handle.readline().strip().split(',')
+            read_length_from_file = int(orig_handle.readline().strip())
+            if read_length_from_file != read_length:
+                print('WARNING: The post step should use the same read length'
+                      ' as the prep step.'
+                      '\n         The prep step\'s read length: {}'
+                      '\n         The post step\'s read length: {}'
+                      '\n         Please check {}'
+                      .format(read_length_from_file, read_length,
+                              orig_dot_rmats))
+
+            # Already a single bam
+            if len(bams_from_file) == 1:
+                # Only track files with data from input bams
+                if bams_from_file[0] in input_bam_paths:
+                    dot_rmats_file_paths.append(orig_dot_rmats)
+
+                continue
+
+            splits_for_this_orig = list()
+            in_input_by_splits = list()
+            for split_i, bam_from_file in enumerate(bams_from_file):
+                in_input_by_splits.append(bam_from_file in input_bam_paths)
+                orig_basename = basename(orig_dot_rmats)
+                split_path = join(
+                    split_dot_rmats_dir_path,
+                    '{}_{}_{}'.format(orig_i, split_i, orig_basename))
+                splits_for_this_orig.append(split_path)
+
+                # Only track files with data from input bams
+                if not in_input_by_splits[split_i]:
+                    continue
+
+                dot_rmats_file_paths.append(split_path)
+                with open(split_path, 'wt') as split_handle:
+                    split_handle.write('{}\n'.format(bam_from_file))
+                    split_handle.write('{}\n'.format(read_length_from_file))
+
+            # copy the novel junctions, exon reads, and junction reads sections
+            for section_i in range(3):
+                for split_i, split_path in enumerate(splits_for_this_orig):
+                    num_genes_line = orig_handle.readline()
+                    num_genes = int(num_genes_line)
+                    # Only write files with data from input bams
+                    if in_input_by_splits[split_i]:
+                        with open(split_path, 'at') as split_handle:
+                            split_handle.write(num_genes_line)
+
+                            for gene_i in range(num_genes):
+                                gene_line = orig_handle.readline()
+                                split_handle.write(gene_line)
+                    else:
+                        for gene_i in range(num_genes):
+                            # skip over without writing
+                            orig_handle.readline()
+
+    result = dict()
+    result['file_paths'] = dot_rmats_file_paths
+    result['dir_path'] = split_dot_rmats_dir_path
+    return result
+
 
 @boundscheck(False)
 @wraparound(False)
-cdef vector[size_t] load_read(str bams, str fn, const int& rl,
+cdef vector[size_t] load_read(str bams, str fn,
                               vector[unordered_map[string,cmap[Tetrad,pair[int,int]]]]& exons,
                               vector[unordered_map[string,cmap[vector[pair[long,long]],int]]]& juncs):
     cdef:
@@ -3186,7 +3287,7 @@ cdef vector[size_t] load_read(str bams, str fn, const int& rl,
     num = len(vbams)
     prep_counts_by_bam = [0 for i in range(num)]
 
-    _load_job(fn, vbams, prep_counts_by_bam, rl, novel_juncs, exons, juncs, read_mode)
+    _load_job(fn, vbams, prep_counts_by_bam, novel_juncs, exons, juncs, read_mode)
     residx = [i for i in range(num) if prep_counts_by_bam[i] == 1]
 
     return residx
@@ -3237,7 +3338,12 @@ def run_pipe(args):
 
         multis.clear()
         start = time.time()
-        load_sg(args.bams, args.tmp, args.readLength, novel_juncs)
+        split_sg_files_result = split_sg_files_by_bam(
+            args.bams, args.tmp, args.od, args.readLength)
+        dot_rmats_file_paths = split_sg_files_result['file_paths']
+        split_dot_rmats_dir_path = split_sg_files_result['dir_path']
+
+        load_sg(args.bams, dot_rmats_file_paths, novel_juncs)
         print 'loadsg:', time.time() - start
 
         start = time.time()
@@ -3247,6 +3353,9 @@ def run_pipe(args):
         print 'ase:', time.time() - start
 
         start = time.time()
-        count_occurrence(args.bams, args.tmp, args.od, se, mxe, alt3, alt5, ri, sam1len,
-                         args.junctionLength/2, args.readLength, args.nthread, args.dt, args.stat)
+        count_occurrence(args.bams, dot_rmats_file_paths, args.od, se, mxe,
+                         alt3, alt5, ri, sam1len, args.junctionLength/2,
+                         args.readLength, args.nthread, args.dt, args.stat)
         print 'count:', time.time() - start
+
+        shutil.rmtree(split_dot_rmats_dir_path)
