@@ -240,5 +240,68 @@ class NovelSpliceSite(SkippedExonNovelBaseTest):
                                  '0', '100', '202', '300', '400', '500')
 
 
+class NovelSpliceSiteNotNovelJunction(SkippedExonNovelBaseTest):
+    '''
+    There was a bug where --novelSS would label an event as
+    novelJunction even though the event was fully annotated. This
+    would happen if one of the exons in the event could have a novel
+    splice site, but the novel splice site was not necessary to detect
+    the event.
+    '''
+    def _sub_test_name(self):
+        return 'nss_not_nj'
+
+    def test(self):
+        self._run_test()
+
+    def _rmats_arguments(self):
+        arguments = super()._rmats_arguments()
+        arguments.append('--novelSS')
+        return arguments
+
+    def _exons_by_transcript(self):
+        return [
+            [(1, 100), (201, 300), (401, 500), (601, 700)],
+            [(1, 100), (201, 300), (601, 700)],
+        ]
+
+    def _paired_read_coords(self):
+        return [
+            ([[81, 100], [205, 300]], [[205, 300]]),
+            ([[281, 300], [401, 500]], [[401, 500]]),
+            ([[281, 300], [601, 700]], [[601, 700]]),
+            ([[401, 500]], [[401, 500], [601, 620]]),
+            ([[201, 300]], [[201, 300], [601, 620]]),
+        ]
+
+    def _check_results(self):
+        self._check_no_error_results()
+
+        from_gtf_se_path = os.path.join(self._out_dir, 'fromGTF.SE.txt')
+        from_gtf_se_header, from_gtf_se_rows, error = (
+            output_parser.parse_from_gtf(from_gtf_se_path))
+        self.assertFalse(error)
+        self.assertEqual(len(from_gtf_se_rows), 1)
+        self._check_event_coords(from_gtf_se_rows[0], '200', '300', '400', '500',
+                                 '600', '700')
+
+        from_gtf_novel_junction_se_path = os.path.join(
+            self._out_dir, 'fromGTF.novelJunction.SE.txt')
+        (from_gtf_novel_junction_se_header, from_gtf_novel_junction_se_rows,
+         error) = output_parser.parse_from_gtf_novel_junction(
+             from_gtf_novel_junction_se_path)
+        self.assertFalse(error)
+        self.assertEqual(len(from_gtf_novel_junction_se_rows), 0)
+
+        from_gtf_novel_splice_site_se_path = os.path.join(
+            self._out_dir, 'fromGTF.novelSpliceSite.SE.txt')
+        (from_gtf_novel_splice_site_se_header,
+         from_gtf_novel_splice_site_se_rows,
+         error) = output_parser.parse_from_gtf_novel_splice_site(
+             from_gtf_novel_splice_site_se_path)
+        self.assertFalse(error)
+        self.assertEqual(len(from_gtf_novel_splice_site_se_rows), 0)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
