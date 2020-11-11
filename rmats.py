@@ -446,7 +446,8 @@ def claim_prep_prefix(task, tmp_dir):
 def create_output_dirs(args):
     args.out_tmp_sub_dir = os.path.join(args.od, 'tmp')
     for dir_path in [args.od, args.out_tmp_sub_dir, args.tmp]:
-        os.makedirs(dir_path, exist_ok=True)
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)   # python2: makedirs() got an unexpected keyword argument 'exist_ok' 
 
 
 def main():
