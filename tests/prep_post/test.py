@@ -393,60 +393,58 @@ class Test(tests.base_test.BaseTest):
         tests.util.assert_no_line_has(self, out_lines,
                                       'Processing count files')
 
-        dot_rmats_paths = self._get_dot_rmats_paths(self._prep_1_tmp_dir)
-        self.assertEqual(len(dot_rmats_paths), 1)
-        dot_rmats_contents, error = output_parser.parse_dot_rmats(
-            dot_rmats_paths[0])
-        self.assertFalse(error)
-
-        self.assertEqual(dot_rmats_contents['bams'],
-                         [bam.path for bam in self._sample_1_bams])
-        self.assertEqual(dot_rmats_contents['read_length'], self._read_length)
-
         test_gene_id = tests.util.gene_id_str(1)
         quoted_test_gene_id = tests.util.double_quote(test_gene_id)
-        novel_juncs = dot_rmats_contents['novel_juncs']
-        self.assertEqual(len(novel_juncs), 2)
-        self.assertEqual(novel_juncs[0], {})
-        self.assertEqual(novel_juncs[1], {})
+        dot_rmats_paths = self._get_dot_rmats_paths(self._prep_1_tmp_dir)
+        self.assertEqual(len(dot_rmats_paths), 2)
+        for dot_rmats_i in range(2):
+            dot_rmats_contents, error = output_parser.parse_dot_rmats(
+                dot_rmats_paths[dot_rmats_i])
+            self.assertFalse(error)
 
-        exons = dot_rmats_contents['exons']
-        self.assertEqual(len(exons), 2)
-        self.assertEqual(
-            exons[0], {
-                quoted_test_gene_id: [{
-                    'start_box': [401, 499],
-                    'end_box': [401, 499],
-                    'counts': [1, 0]
-                }]
-            })
-        self.assertEqual(
-            exons[1], {
-                quoted_test_gene_id: [{
-                    'start_box': [1, 99],
-                    'end_box': [1, 99],
-                    'counts': [1, 0]
-                }]
-            })
+            self.assertEqual(dot_rmats_contents['bams'],
+                             [self._sample_1_bams[dot_rmats_i].path])
+            self.assertEqual(dot_rmats_contents['read_length'],
+                             self._read_length)
 
-        multis = dot_rmats_contents['multis']
-        self.assertEqual(len(multis), 2)
-        self.assertEqual(
-            multis[0], {
-                quoted_test_gene_id: [{
-                    'junction_pairs': [[1, 1], [100, 200], [299, 299]],
-                    'count':
-                    1
-                }]
-            })
-        self.assertEqual(
-            multis[1], {
-                quoted_test_gene_id: [{
-                    'junction_pairs': [[201, 201], [300, 400], [499, 499]],
-                    'count':
-                    1
-                }]
-            })
+            novel_juncs = dot_rmats_contents['novel_juncs']
+            self.assertEqual(novel_juncs, [dict()])
+
+            exons = dot_rmats_contents['exons']
+            if dot_rmats_i == 0:
+                self.assertEqual(exons, [{
+                    quoted_test_gene_id: [{
+                        'start_box': [401, 499],
+                        'end_box': [401, 499],
+                        'counts': [1, 0]
+                    }]
+                }])
+            else:
+                self.assertEqual(exons, [{
+                    quoted_test_gene_id: [{
+                        'start_box': [1, 99],
+                        'end_box': [1, 99],
+                        'counts': [1, 0]
+                    }]
+                }])
+
+            multis = dot_rmats_contents['multis']
+            if dot_rmats_i == 0:
+                self.assertEqual(multis, [{
+                    quoted_test_gene_id: [{
+                        'junction_pairs': [[1, 1], [100, 200], [299, 299]],
+                        'count':
+                        1
+                    }]
+                }])
+            else:
+                self.assertEqual(multis, [{
+                    quoted_test_gene_id: [{
+                        'junction_pairs': [[201, 201], [300, 400], [499, 499]],
+                        'count':
+                        1
+                    }]
+                }])
 
         self._cp_with_prefix('prep_1_', self._prep_1_tmp_dir,
                              self._post_tmp_dir)
@@ -461,60 +459,58 @@ class Test(tests.base_test.BaseTest):
         tests.util.assert_no_line_has(self, out_lines,
                                       'Processing count files')
 
-        dot_rmats_paths = self._get_dot_rmats_paths(self._prep_2_tmp_dir)
-        self.assertEqual(len(dot_rmats_paths), 1)
-        dot_rmats_contents, error = output_parser.parse_dot_rmats(
-            dot_rmats_paths[0])
-        self.assertFalse(error)
-
-        self.assertEqual(dot_rmats_contents['bams'],
-                         [bam.path for bam in self._sample_2_bams])
-        self.assertEqual(dot_rmats_contents['read_length'], self._read_length)
-
         test_gene_id = tests.util.gene_id_str(1)
         quoted_test_gene_id = tests.util.double_quote(test_gene_id)
-        novel_juncs = dot_rmats_contents['novel_juncs']
-        self.assertEqual(len(novel_juncs), 2)
-        self.assertEqual(novel_juncs[0], {quoted_test_gene_id: [[0, 0, 2]]})
-        self.assertEqual(novel_juncs[1], {quoted_test_gene_id: [[0, 0, 2]]})
+        dot_rmats_paths = self._get_dot_rmats_paths(self._prep_2_tmp_dir)
+        self.assertEqual(len(dot_rmats_paths), 2)
+        for dot_rmats_i in range(2):
+            dot_rmats_contents, error = output_parser.parse_dot_rmats(
+                dot_rmats_paths[dot_rmats_i])
+            self.assertFalse(error)
 
-        exons = dot_rmats_contents['exons']
-        self.assertEqual(len(exons), 2)
-        self.assertEqual(
-            exons[0], {
-                quoted_test_gene_id: [{
-                    'start_box': [401, 499],
-                    'end_box': [401, 499],
-                    'counts': [1, 0]
-                }]
-            })
-        self.assertEqual(
-            exons[1], {
-                quoted_test_gene_id: [{
-                    'start_box': [1, 99],
-                    'end_box': [1, 99],
-                    'counts': [1, 0]
-                }]
-            })
+            self.assertEqual(dot_rmats_contents['bams'],
+                             [self._sample_2_bams[dot_rmats_i].path])
+            self.assertEqual(dot_rmats_contents['read_length'],
+                             self._read_length)
+
+            novel_juncs = dot_rmats_contents['novel_juncs']
+            self.assertEqual(novel_juncs, [{quoted_test_gene_id: [[0, 0, 2]]}])
+
+            exons = dot_rmats_contents['exons']
+            if dot_rmats_i == 0:
+                self.assertEqual(exons, [{
+                    quoted_test_gene_id: [{
+                        'start_box': [401, 499],
+                        'end_box': [401, 499],
+                        'counts': [1, 0]
+                    }]
+                }])
+            else:
+                self.assertEqual(exons, [{
+                    quoted_test_gene_id: [{
+                        'start_box': [1, 99],
+                        'end_box': [1, 99],
+                        'counts': [1, 0]
+                    }]
+                }])
 
         multis = dot_rmats_contents['multis']
-        self.assertEqual(len(multis), 2)
-        self.assertEqual(
-            multis[0], {
+        if dot_rmats_i == 0:
+            self.assertEqual(multis, [{
                 quoted_test_gene_id: [{
                     'junction_pairs': [[1, 1], [100, 400], [499, 499]],
                     'count':
                     1
                 }]
-            })
-        self.assertEqual(
-            multis[1], {
+            }])
+        else:
+            self.assertEqual(multis, [{
                 quoted_test_gene_id: [{
                     'junction_pairs': [[1, 1], [100, 400], [499, 499]],
                     'count':
                     1
                 }]
-            })
+            }])
 
         self._cp_with_prefix('prep_2_', self._prep_2_tmp_dir,
                              self._post_tmp_dir)
