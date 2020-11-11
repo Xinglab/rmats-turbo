@@ -10,9 +10,12 @@ from __future__ import print_function
 
 import sys
 import os
+import os.path
 import argparse
 import subprocess
 import shutil
+import time
+from datetime import datetime
 from rmatspipeline import run_pipe
 
 
@@ -50,7 +53,8 @@ def doSTARMapping(args): ## do STAR mapping
             sample = [pair.split(':') for pair in fastqs[i].split(',')]
             print("mapping the first sample")
             for rr, pair in enumerate(sample):
-                map_folder = os.path.join(args.tmp, 'bam%d_%d' % (i+1, rr+1));
+                map_folder = os.path.join(
+                    args.tmp, '{}_bam{}_{}'.format(args.prep_prefix, i+1, rr+1))
 
                 if os.path.exists(map_folder):
                     if os.path.isdir(map_folder):
@@ -102,7 +106,7 @@ def get_args():
                         help='A text file containing a comma separated list of the FASTQ files for sample_2. If using paired reads the format is ":" to separate pairs and "," to separate replicates. (Only if using fastq)', dest='s2')
 
     parser.add_argument('--od', action='store',
-                        help='The directory for final output', dest='od')
+                        help='The directory for final output from the post step', dest='od')
     parser.add_argument('--tmp', action='store',
                         help='The directory for intermediate output such as ".rmats" files from the prep step', dest='tmp')
     parser.add_argument('-t', action='store', default='paired',
@@ -177,6 +181,9 @@ def get_args():
         and (len(args.b1) * len(args.b2) == 0)
         and (len(args.s1) * len(args.s2) == 0)):
         sys.exit('ERROR: while performing statistical analysis, user should provide two groups of samples. Please check b1,b2 or s1,s2.')
+
+    create_output_dirs(args)
+    args.prep_prefix = claim_prep_prefix(args.task, args.tmp)
 
     if args.b1 == '' and args.b2 == '' and (args.s1 != '' or args.s2 != ''):
         args.b1, args.b2 = doSTARMapping(args)
@@ -301,7 +308,7 @@ def filter_countfile(fn):
     return
 
 
-def process_counts(istat, tstat, counttype, ase, cstat, od, tmp, stat,
+def process_counts(istat, tstat, counttype, ase, cstat, od, od_tmp, stat,
                    paired_stats, python_executable, root_dir):
     """TODO: Docstring for process_counts.
     :returns: TODO
@@ -311,7 +318,7 @@ def process_counts(istat, tstat, counttype, ase, cstat, od, tmp, stat,
         filter_countfile(istat)
 
     efn = '%s/fromGTF.%s.txt' % (od, ase)
-    sec_tmp = os.path.join(tmp, '%s_%s' % (counttype, ase))
+    sec_tmp = os.path.join(od_tmp, '%s_%s' % (counttype, ase))
     if os.path.exists(sec_tmp):
         if os.path.isdir(sec_tmp):
             shutil.rmtree(sec_tmp)
@@ -417,17 +424,37 @@ def generate_summary(python_executable, out_dir, root_dir):
                         stdout=f_handle)
 
 
+def claim_prep_prefix(task, tmp_dir):
+    if task not in ['prep', 'both']:
+        return None
+
+    file_name_template = os.path.join(tmp_dir, '{}_0.rmats')
+    prep_prefix = None
+    while True:
+        prep_prefix = datetime.fromtimestamp(time.time()).strftime(
+            '%Y-%m-%d-%H:%M:%S_%f')
+        file_path = file_name_template.format(prep_prefix)
+        if not os.path.exists(file_path):
+            with open(file_path, 'wt'):
+                pass  # create the file to claim the timestamp
+
+            break
+
+    return prep_prefix
+
+
+def create_output_dirs(args):
+    args.out_tmp_sub_dir = os.path.join(args.od, 'tmp')
+    for dir_path in [args.od, args.out_tmp_sub_dir, args.tmp]:
+        os.makedirs(dir_path, exist_ok=True)
+
+
 def main():
     """TODO: Docstring for main.
     :returns: TODO
 
     """
     args = get_args()
-
-    if not os.path.exists(args.od) or not os.path.isdir(args.od):
-        os.mkdir(args.od)
-    if not os.path.exists(args.tmp) or not os.path.isdir(args.tmp):
-        os.mkdir(args.tmp)
 
     if args.task == 'inte':
         check_integrity(args.bams, args.tmp)
@@ -446,10 +473,10 @@ def main():
     print('Processing count files.')
     for event_type in ['SE', 'MXE', 'A3SS', 'A5SS', 'RI']:
         process_counts(jc_it % (event_type), args.tstat, 'JC', event_type,
-                       args.cstat, args.od, args.tmp, args.stat,
+                       args.cstat, args.od, args.out_tmp_sub_dir, args.stat,
                        args.paired_stats, python_executable, root_dir)
         process_counts(jcec_it % (event_type), args.tstat, 'JCEC', event_type,
-                       args.cstat, args.od, args.tmp, args.stat,
+                       args.cstat, args.od, args.out_tmp_sub_dir, args.stat,
                        args.paired_stats, python_executable, root_dir)
 
     generate_summary(python_executable, args.od, root_dir)
