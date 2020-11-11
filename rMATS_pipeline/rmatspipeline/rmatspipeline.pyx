@@ -772,7 +772,8 @@ cdef void parse_bam(long fidx, string bam,
 @boundscheck(False)
 @wraparound(False)
 cdef void output_read_outcomes(const vector[vector[int]]& read_outcome_counts,
-                               const vector[string]& vbams, str tmp_dir):
+                               const vector[string]& vbams, str tmp_dir,
+                               str prep_prefix):
     cdef:
         vector[int] aggregated_read_outcome_counts
         int total_for_bam
@@ -781,7 +782,7 @@ cdef void output_read_outcomes(const vector[vector[int]]& read_outcome_counts,
     # initialize counts to zero
     aggregated_read_outcome_counts.resize(READ_ENUM_VALUE_COUNT)
 
-    f_name = join(tmp_dir, 'read_outcomes_by_bam.txt')
+    f_name = join(tmp_dir, '{}_read_outcomes_by_bam.txt'.format(prep_prefix))
     with open(f_name, 'wt') as f_handle:
         for i in range(vbams.size()):
             f_handle.write('{}\n'.format(vbams[i]))
@@ -850,7 +851,7 @@ cdef void detect_novel(str bams, unordered_map[int,cset[string]]& geneGroup,
                   variable_read_length, dt, novelSS, mil, mel,
                   read_outcome_counts[fidx])
 
-    output_read_outcomes(read_outcome_counts, vbams, args.tmp)
+    output_read_outcomes(read_outcome_counts, vbams, args.tmp, args.prep_prefix)
 
 
 @boundscheck(False)
@@ -2979,7 +2980,8 @@ cdef save_multis(fp, unordered_map[string,cmap[string,int]]& multis):
 
 @boundscheck(False)
 @wraparound(False)
-cdef save_job(str bams, const string& od, const int& readLength,
+cdef save_job(str bams, const string& tmp_dir, str prep_prefix,
+              const int& readLength,
               vector[unordered_map[string,vector[Triad]]]& novel_juncs,
               vector[unordered_map[string,cmap[Tetrad,pair[int,int]]]]& exons,
               vector[unordered_map[string,cmap[string,int]]]& multis):
@@ -2988,22 +2990,11 @@ cdef save_job(str bams, const string& od, const int& readLength,
         str bam
         str file_name_template
         str file_path
-        str time_str
         vector[string] vbams = bams.split(',')
 
-    file_name_template = join(od, '{}_{}.rmats')
-    while True:
-        time_str = datetime.fromtimestamp(time.time()).strftime(
-            '%Y-%m-%d-%H:%M:%S_%f')
-        file_path = file_name_template.format(time_str, 0)
-        if not exists(file_path):
-            with open(file_path, 'wt') as fp:
-                pass  # create the file to claim the timestamp
-
-            break
-
+    file_name_template = join(tmp_dir, '{}_{}.rmats')
     for bam_i, bam in enumerate(vbams):
-        file_path = file_name_template.format(time_str, bam_i)
+        file_path = file_name_template.format(prep_prefix, bam_i)
         with open(file_path, 'wt') as fp:
             fp.write('{}\n'.format(bam))
             fp.write('{}\n'.format(readLength))
@@ -3013,7 +3004,7 @@ cdef save_job(str bams, const string& od, const int& readLength,
             save_multis(fp, multis[bam_i])
 
     print('The splicing graph and candidate read have been saved into {}'
-          .format(file_name_template.format(time_str, '*')))
+          .format(file_name_template.format(prep_prefix, '*')))
 
 
 @boundscheck(False)
@@ -3344,7 +3335,8 @@ def run_pipe(args):
         print 'novel:', time.time() - start
 
         start = time.time()
-        save_job(args.bams, args.tmp, args.readLength, novel_juncs, exons, multis)
+        save_job(args.bams, args.tmp, args.prep_prefix, args.readLength,
+                 novel_juncs, exons, multis)
         print 'save:', time.time() - start
 
     if args.task in post_tasks:
