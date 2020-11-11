@@ -59,7 +59,11 @@ def doSTARMapping(args): ## do STAR mapping
                         os.unlink(map_folder)
 
                 os.makedirs(map_folder)
-                cmd = 'STAR --chimSegmentMin 2 --outFilterMismatchNmax 3 --alignEndsType EndToEnd --runThreadN 4 --outSAMstrandField intronMotif --outSAMtype BAM SortedByCoordinate ';
+                cmd = 'STAR --chimSegmentMin 2 --outFilterMismatchNmax 3'
+                if not args.allow_clipping:
+                    cmd += ' --alignEndsType EndToEnd'
+
+                cmd += ' --runThreadN 4 --outSAMstrandField intronMotif --outSAMtype BAM SortedByCoordinate '
                 cmd += '--alignSJDBoverhangMin ' + str(args.tophatAnchor) + ' --alignIntronMax 299999 --genomeDir ' + args.bIndex + ' --sjdbGTFfile ' + args.gtf; 
                 cmd += ' --outFileNamePrefix ' + map_folder + '/ --readFilesIn ';
                 cmd += ' '.join(pair)
