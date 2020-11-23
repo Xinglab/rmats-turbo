@@ -95,7 +95,7 @@ def count_events(file_path, args):
 
 def summarize(args, output_file_handle):
     headers = [
-        'EventType', 'TotalEvents', 'SignificantEventsJC',
+        'EventType', 'TotalEventsJC', 'TotalEventsJCEC', 'SignificantEventsJC',
         'SigEventsJCSample1HigherInclusion',
         'SigEventsJCSample2HigherInclusion', 'SignificantEventsJCEC',
         'SigEventsJCECSample1HigherInclusion',
@@ -109,10 +109,11 @@ def summarize(args, output_file_handle):
                                  '{}.MATS.JCEC.txt'.format(event))
         jc_event_counts = count_events(jc_path, args)
         jcec_event_counts = count_events(jcec_path, args)
+        jc_total = jc_event_counts['total']
         jcec_total = jcec_event_counts['total']
 
         values = [
-            event, jcec_total, jc_event_counts['sig'],
+            event, jc_total, jcec_total, jc_event_counts['sig'],
             jc_event_counts['sig_sample_1_higher'],
             jc_event_counts['sig_sample_2_higher'], jcec_event_counts['sig'],
             jcec_event_counts['sig_sample_1_higher'],
