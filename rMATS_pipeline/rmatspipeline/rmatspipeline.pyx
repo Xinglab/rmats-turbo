@@ -284,12 +284,17 @@ cdef int filter_read(const BamAlignment& bread, const cbool& ispaired) nogil:
 @boundscheck(False)
 @wraparound(False)
 cdef int is_bam_exonread(const vector[CigarOp]& cigar_data,
+                         const int amount_clipped,
                          const int& readLength,
                          const cbool variable_read_length) nogil:
+    cdef:
+        int length
+
     if cigar_data.size() != 1 or cigar_data[0].Type != 'M':
         return READ_NOT_EXPECTED_CIGAR
 
-    if (not variable_read_length) and cigar_data[0].Length != readLength:
+    length = amount_clipped + cigar_data[0].Length
+    if (not variable_read_length) and length != readLength:
         return READ_NOT_EXPECTED_READ_LENGTH
 
     return READ_USED
@@ -298,6 +303,7 @@ cdef int is_bam_exonread(const vector[CigarOp]& cigar_data,
 @boundscheck(False)
 @wraparound(False)
 cdef int is_bam_multijunc(const vector[CigarOp]& cigar_data,
+                          const int amount_clipped,
                           const int readLength,
                           const cbool variable_read_length) nogil:
     """TODO: Docstring for is_bam_multijunc.
@@ -307,7 +313,7 @@ cdef int is_bam_multijunc(const vector[CigarOp]& cigar_data,
     cdef:
         size_t i
         size_t num = cigar_data.size()
-        int length = 0
+        int length = amount_clipped
 
     if num < 3 or num % 2 == 0:
         return READ_NOT_EXPECTED_CIGAR
@@ -614,6 +620,7 @@ cdef char check_strand(const BamAlignment& bread, const cbool& ispaired, const i
 @wraparound(False)
 cdef void drop_clipping_info(const BamAlignment& bread,
                              vector[CigarOp]* no_clip_cigar_data,
+                             int* amount_clipped,
                              cbool* was_clipped,
                              cbool* invalid_cigar) nogil:
     cdef:
@@ -621,11 +628,13 @@ cdef void drop_clipping_info(const BamAlignment& bread,
         int first_non_clip_i = 0
         int first_trailing_clip_i = 0
 
+    amount_clipped[0] = 0
     invalid_cigar[0] = False
     no_clip_cigar_data[0].clear()
 
     for i in range(bread.CigarData.size()):
         if bread.CigarData[i].Type == 'S' or bread.CigarData[i].Type == 'H':
+            amount_clipped[0] += bread.CigarData[i].Length
             first_non_clip_i += 1
             continue
         else:
@@ -641,6 +650,7 @@ cdef void drop_clipping_info(const BamAlignment& bread,
 
     for i in range(first_trailing_clip_i, bread.CigarData.size()):
         if bread.CigarData[i].Type == 'S' or bread.CigarData[i].Type == 'H':
+            amount_clipped[0] += bread.CigarData[i].Length
             continue
         else:
             invalid_cigar[0] = True
@@ -695,6 +705,7 @@ cdef void parse_bam(long fidx, string bam,
         vector[CigarOp] cigar_data_after_clipping
         cbool bread_was_clipped
         cbool drop_clipping_info_invalid_cigar
+        int amount_clipped
 
     if not br.Open(bam):
         with gil:
@@ -710,8 +721,8 @@ cdef void parse_bam(long fidx, string bam,
             refid2str[br.GetReferenceID(refv[i].RefName)] = refv[i].RefName
 
     while br.GetNextAlignment(bread):
-        drop_clipping_info(bread, &cigar_data_after_clipping, &bread_was_clipped,
-                           &drop_clipping_info_invalid_cigar)
+        drop_clipping_info(bread, &cigar_data_after_clipping, &amount_clipped,
+                           &bread_was_clipped, &drop_clipping_info_invalid_cigar)
         if drop_clipping_info_invalid_cigar:
             read_outcome_counts[READ_NOT_EXPECTED_CIGAR] += 1
             continue
@@ -727,10 +738,12 @@ cdef void parse_bam(long fidx, string bam,
 
         any_exon_match = False
         any_multijunc_match = False
-        exon_outcome = is_bam_exonread(cigar_data_after_clipping, readLength,
-                                       variable_read_length)
-        multijunc_outcome = is_bam_multijunc(cigar_data_after_clipping,
-                                             readLength, variable_read_length)
+        exon_outcome = is_bam_exonread(
+            cigar_data_after_clipping, amount_clipped, readLength,
+            variable_read_length)
+        multijunc_outcome = is_bam_multijunc(
+            cigar_data_after_clipping, amount_clipped, readLength,
+            variable_read_length)
         if exon_outcome == READ_USED:
             mc = bread.Position + 1 # position (1-based) where alignment starts
 

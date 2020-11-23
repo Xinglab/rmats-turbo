@@ -73,13 +73,19 @@ class AllowClippingBaseTest(tests.base_test.BaseTest):
                               sample_1_replicate_template):
         rep_1_bam_path = sample_1_replicate_template.format(1)
         rep_1_bam = self._create_bam_from_paired_read_coords(
-            rep_1_bam_path, self._chromosome_length, self._read_length,
-            self._paired_read_coords_1_1(), clip=False)
+            rep_1_bam_path,
+            self._chromosome_length,
+            self._read_length,
+            self._paired_read_coords_1_1(),
+            clip_length=None)
 
         rep_2_bam_path = sample_1_replicate_template.format(2)
         rep_2_bam = self._create_bam_from_paired_read_coords(
-            rep_2_bam_path, self._chromosome_length, self._read_length,
-            self._paired_read_coords_1_2(), clip=True)
+            rep_2_bam_path,
+            self._chromosome_length,
+            self._read_length,
+            self._paired_read_coords_1_2(),
+            clip_length=3)
 
         sample_1_bams = [rep_1_bam, rep_2_bam]
         self._write_bams(sample_1_bams, sample_1_bams_path)
@@ -89,13 +95,19 @@ class AllowClippingBaseTest(tests.base_test.BaseTest):
                               sample_2_replicate_template):
         rep_1_bam_path = sample_2_replicate_template.format(1)
         rep_1_bam = self._create_bam_from_paired_read_coords(
-            rep_1_bam_path, self._chromosome_length, self._read_length,
-            self._paired_read_coords_2_1(), clip=False)
+            rep_1_bam_path,
+            self._chromosome_length,
+            self._read_length,
+            self._paired_read_coords_2_1(),
+            clip_length=None)
 
         rep_2_bam_path = sample_2_replicate_template.format(2)
         rep_2_bam = self._create_bam_from_paired_read_coords(
-            rep_2_bam_path, self._chromosome_length, self._read_length,
-            self._paired_read_coords_2_2(), clip=True)
+            rep_2_bam_path,
+            self._chromosome_length,
+            self._read_length,
+            self._paired_read_coords_2_2(),
+            clip_length=3)
 
         sample_2_bams = [rep_1_bam, rep_2_bam]
         self._write_bams(sample_2_bams, sample_2_bams_path)
