@@ -109,16 +109,10 @@ def summarize(args, output_file_handle):
                                  '{}.MATS.JCEC.txt'.format(event))
         jc_event_counts = count_events(jc_path, args)
         jcec_event_counts = count_events(jcec_path, args)
-        jc_total = jc_event_counts['total']
         jcec_total = jcec_event_counts['total']
-        if jc_total != jcec_total:
-            print('Total {} event counts should match for JC and JCEC'
-                  ' but saw: JC={}, JCEC={}'.format(event, jc_total,
-                                                    jcec_total),
-                  file=sys.stderr)
 
         values = [
-            event, jc_total, jc_event_counts['sig'],
+            event, jcec_total, jc_event_counts['sig'],
             jc_event_counts['sig_sample_1_higher'],
             jc_event_counts['sig_sample_2_higher'], jcec_event_counts['sig'],
             jcec_event_counts['sig_sample_1_higher'],
