@@ -63,7 +63,11 @@ def doSTARMapping(args): ## do STAR mapping
                         os.unlink(map_folder)
 
                 os.makedirs(map_folder)
-                cmd = 'STAR --chimSegmentMin 2 --outFilterMismatchNmax 3 --alignEndsType EndToEnd --runThreadN 4 --outSAMstrandField intronMotif --outSAMtype BAM SortedByCoordinate ';
+                cmd = 'STAR --chimSegmentMin 2 --outFilterMismatchNmax 3'
+                if not args.allow_clipping:
+                    cmd += ' --alignEndsType EndToEnd'
+
+                cmd += ' --runThreadN 4 --outSAMstrandField intronMotif --outSAMtype BAM SortedByCoordinate '
                 cmd += '--alignSJDBoverhangMin ' + str(args.tophatAnchor) + ' --alignIntronMax 299999 --genomeDir ' + args.bIndex + ' --sjdbGTFfile ' + args.gtf; 
                 cmd += ' --outFileNamePrefix ' + map_folder + '/ --readFilesIn ';
                 cmd += ' '.join(pair)
@@ -149,6 +153,9 @@ def get_args():
                         help='Minimum Intron Length. Only impacts --novelSS behavior. Default: %(default)s', dest='mil')
     parser.add_argument('--mel', action='store', type=int, default=500,
                         help='Maximum Exon Length. Only impacts --novelSS behavior. Default: %(default)s', dest='mel')
+    parser.add_argument('--allow-clipping', action='store_true',
+                        help='Allow alignments with soft or hard clipping to be used',
+                        dest='allow_clipping')
 
     args = parser.parse_args()
 

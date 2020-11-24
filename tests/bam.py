@@ -96,16 +96,45 @@ class BAM(object):
             f_handle.write('{}\n'.format('\t'.join(sq_values)))
 
 
-def set_read_pair_from_intervals(read_1, read_2, intervals_1, intervals_2,
-                                 read_length):
-    read_1_start = intervals_1[0][0]
-    read_1.start_coord = read_1_start
+def _clip_length_from_cigar_ends(clip_length, cigar):
+    first_op = cigar[0]
+    if first_op[1] != 'M':
+        return 'cannot clip without initial M cigar operation: {}'.format(
+            cigar)
+    if first_op[0] <= clip_length:
+        return 'not enough initial M to clip: {} {}'.format(clip_length, cigar)
+    cigar[0][0] -= clip_length
+    cigar.insert(0, [clip_length, 'H'])
 
-    read_2.is_reversed = True
-    read_2_start = intervals_2[-1][-1]
-    read_1.template_len = (read_2_start - read_1_start) + 1
+    last_op = cigar[-1]
+    if last_op[1] != 'M':
+        return 'cannot clip without trailing M cigar operation: {}'.format(
+            cigar)
+    if last_op[0] <= clip_length:
+        return 'not enough trailing M to clip: {} {}'.format(
+            clip_length, cigar)
 
-    cigar_1 = ''
+    cigar[-1][0] -= clip_length
+    cigar.append([clip_length, 'H'])
+
+    return None
+
+
+def _string_from_cigar_ops(cigar_ops):
+    cigar_s = ''
+    for length, op in cigar_ops:
+        cigar_s += '{}{}'.format(length, op)
+
+    return cigar_s
+
+
+def set_read_pair_from_intervals(read_1,
+                                 read_2,
+                                 intervals_1,
+                                 intervals_2,
+                                 read_length,
+                                 clip_length=None):
+    cigar_1 = list()
     remaining_length = read_length
     prev_end = None
     for start, end in intervals_1:
@@ -114,21 +143,31 @@ def set_read_pair_from_intervals(read_1, read_2, intervals_1, intervals_2,
 
         if prev_end is not None:
             skip_len = (start - prev_end) - 1
-            cigar_1 += '{}N'.format(skip_len)
+            cigar_1.append([skip_len, 'N'])
 
         length = (end - start) + 1
         if length >= remaining_length:
-            cigar_1 += '{}M'.format(remaining_length)
+            cigar_1.append([remaining_length, 'M'])
             remaining_length = 0
         else:
-            cigar_1 += '{}M'.format(length)
+            cigar_1.append([length, 'M'])
             remaining_length -= length
 
         prev_end = end
 
-    read_1.cigar = cigar_1
+    read_1_start = intervals_1[0][0]
+    if clip_length:
+        read_1_start += clip_length
+        clip_error = _clip_length_from_cigar_ends(clip_length, cigar_1)
+        if clip_error:
+            return clip_error
 
-    cigar_2 = ''
+    read_1.start_coord = read_1_start
+    read_1.cigar = _string_from_cigar_ops(cigar_1)
+
+    read_2.is_reversed = True
+    read_2_start = None
+    cigar_2 = list()
     remaining_length = read_length
     prev_start = None
     for start, end in reversed(intervals_2):
@@ -137,22 +176,33 @@ def set_read_pair_from_intervals(read_1, read_2, intervals_1, intervals_2,
 
         if prev_start is not None:
             skip_len = (prev_start - end) - 1
-            cigar_2 = '{}N{}'.format(skip_len, cigar_2)
+            cigar_2.append([skip_len, 'N'])
 
         length = (end - start) + 1
         if length >= remaining_length:
-            read_2.start_coord = end - (remaining_length - 1)
-            cigar_2 = '{}M{}'.format(remaining_length, cigar_2)
+            read_2_start = end - (remaining_length - 1)
+            cigar_2.append([remaining_length, 'M'])
             remaining_length = 0
         else:
-            read_2.start_coord = start
-            cigar_2 = '{}M{}'.format(length, cigar_2)
+            read_2_start = start
+            cigar_2.append([length, 'M'])
             remaining_length -= length
 
         prev_start = start
 
-    read_2.cigar = cigar_2
+    cigar_2.reverse()
+    read_2_end = intervals_2[-1][-1]
+    if clip_length:
+        read_2_start += clip_length
+        read_2_end -= clip_length
+        clip_error = _clip_length_from_cigar_ends(clip_length, cigar_2)
+        if clip_error:
+            return clip_error
 
+    read_2.start_coord = read_2_start
+    read_2.cigar = _string_from_cigar_ops(cigar_2)
+
+    read_1.template_len = (read_2_end - read_1_start) + 1
     make_read_pair(read_1, read_2)
     return None
 

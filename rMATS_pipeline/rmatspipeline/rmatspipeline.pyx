@@ -57,7 +57,8 @@ cdef:
     int READ_NOT_EXPECTED_STRAND = 5
     int READ_EXON_NOT_MATCHED_TO_ANNOTATION = 6
     int READ_JUNCTION_NOT_MATCHED_TO_ANNOTATION = 7
-    int READ_ENUM_VALUE_COUNT = 8
+    int READ_CLIPPED = 8
+    int READ_ENUM_VALUE_COUNT = 9
     vector[string] READ_ENUM_NAMES = [
         "USED",
         "NOT_PAIRED",
@@ -66,7 +67,8 @@ cdef:
         "NOT_EXPECTED_READ_LENGTH",
         "NOT_EXPECTED_STRAND",
         "EXON_NOT_MATCHED_TO_ANNOTATION",
-        "JUNCTION_NOT_MATCHED_TO_ANNOTATION"
+        "JUNCTION_NOT_MATCHED_TO_ANNOTATION",
+        "CLIPPED"
     ]
 
     char* se_template = '%ld\t%s\t%s\t%s\t%c\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\n'
@@ -282,12 +284,18 @@ cdef int filter_read(const BamAlignment& bread, const cbool& ispaired) nogil:
 
 @boundscheck(False)
 @wraparound(False)
-cdef int is_bam_exonread(const BamAlignment& bread, const int& readLength,
+cdef int is_bam_exonread(const vector[CigarOp]& cigar_data,
+                         const int amount_clipped,
+                         const int& readLength,
                          const cbool variable_read_length) nogil:
-    if bread.CigarData.size() != 1 or bread.CigarData[0].Type != 'M':
+    cdef:
+        int length
+
+    if cigar_data.size() != 1 or cigar_data[0].Type != 'M':
         return READ_NOT_EXPECTED_CIGAR
 
-    if (not variable_read_length) and bread.CigarData[0].Length != readLength:
+    length = amount_clipped + cigar_data[0].Length
+    if (not variable_read_length) and length != readLength:
         return READ_NOT_EXPECTED_READ_LENGTH
 
     return READ_USED
@@ -295,7 +303,8 @@ cdef int is_bam_exonread(const BamAlignment& bread, const int& readLength,
 
 @boundscheck(False)
 @wraparound(False)
-cdef int is_bam_multijunc(const BamAlignment& bread,
+cdef int is_bam_multijunc(const vector[CigarOp]& cigar_data,
+                          const int amount_clipped,
                           const int readLength,
                           const cbool variable_read_length) nogil:
     """TODO: Docstring for is_bam_multijunc.
@@ -304,21 +313,21 @@ cdef int is_bam_multijunc(const BamAlignment& bread,
     """
     cdef:
         size_t i
-        size_t num = bread.CigarData.size()
-        int length = 0
+        size_t num = cigar_data.size()
+        int length = amount_clipped
 
     if num < 3 or num % 2 == 0:
         return READ_NOT_EXPECTED_CIGAR
 
     for i in range(num):
         if i % 2 == 1:
-            if bread.CigarData[i].Type != 'N':
+            if cigar_data[i].Type != 'N':
                 return READ_NOT_EXPECTED_CIGAR
         else:
-            if bread.CigarData[i].Type != 'M':
+            if cigar_data[i].Type != 'M':
                 return READ_NOT_EXPECTED_CIGAR
 
-            length += bread.CigarData[i].Length
+            length += cigar_data[i].Length
 
     if (not variable_read_length) and length != readLength:
         return READ_NOT_EXPECTED_READ_LENGTH
@@ -610,6 +619,49 @@ cdef char check_strand(const BamAlignment& bread, const cbool& ispaired, const i
 
 @boundscheck(False)
 @wraparound(False)
+cdef void drop_clipping_info(const BamAlignment& bread,
+                             vector[CigarOp]* no_clip_cigar_data,
+                             int* amount_clipped,
+                             cbool* was_clipped,
+                             cbool* invalid_cigar) nogil:
+    cdef:
+        int i = 0
+        int first_non_clip_i = 0
+        int first_trailing_clip_i = 0
+
+    amount_clipped[0] = 0
+    invalid_cigar[0] = False
+    no_clip_cigar_data[0].clear()
+
+    for i in range(bread.CigarData.size()):
+        if bread.CigarData[i].Type == 'S' or bread.CigarData[i].Type == 'H':
+            amount_clipped[0] += bread.CigarData[i].Length
+            first_non_clip_i += 1
+            continue
+        else:
+            break
+
+    first_trailing_clip_i = first_non_clip_i
+    for i in range(first_non_clip_i, bread.CigarData.size()):
+        if bread.CigarData[i].Type == 'S' or bread.CigarData[i].Type == 'H':
+            break
+        else:
+            no_clip_cigar_data[0].push_back(bread.CigarData[i])
+            first_trailing_clip_i += 1
+
+    for i in range(first_trailing_clip_i, bread.CigarData.size()):
+        if bread.CigarData[i].Type == 'S' or bread.CigarData[i].Type == 'H':
+            amount_clipped[0] += bread.CigarData[i].Length
+            continue
+        else:
+            invalid_cigar[0] = True
+            break
+
+    was_clipped[0] = no_clip_cigar_data[0].size() != bread.CigarData.size()
+
+
+@boundscheck(False)
+@wraparound(False)
 cdef void parse_bam(long fidx, string bam,
                     unordered_map[int,cset[string]]& geneGroup,
                     unordered_map[string,Gene]& genes,
@@ -619,7 +671,7 @@ cdef void parse_bam(long fidx, string bam,
                     unordered_map[string,cmap[string,int]]& multis,
                     cbool issingle, int jld2, int readLength,
                     cbool variable_read_length, int dt, cbool& novelSS,
-                    long& mil, long& mel,
+                    long& mil, long& mel, cbool allow_clipping,
                     vector[int]& read_outcome_counts) nogil:
     """TODO: Docstring for parse_bam.
     :returns: TODO
@@ -647,11 +699,14 @@ cdef void parse_bam(long fidx, string bam,
         char strand
         cbool valid
 
-
     cdef:
         BamReader br
         BamAlignment bread
         RefVector refv
+        vector[CigarOp] cigar_data_after_clipping
+        cbool bread_was_clipped
+        cbool drop_clipping_info_invalid_cigar
+        int amount_clipped
 
     if not br.Open(bam):
         with gil:
@@ -667,6 +722,16 @@ cdef void parse_bam(long fidx, string bam,
             refid2str[br.GetReferenceID(refv[i].RefName)] = refv[i].RefName
 
     while br.GetNextAlignment(bread):
+        drop_clipping_info(bread, &cigar_data_after_clipping, &amount_clipped,
+                           &bread_was_clipped, &drop_clipping_info_invalid_cigar)
+        if drop_clipping_info_invalid_cigar:
+            read_outcome_counts[READ_NOT_EXPECTED_CIGAR] += 1
+            continue
+
+        if bread_was_clipped and not allow_clipping:
+            read_outcome_counts[READ_CLIPPED] += 1
+            continue
+
         filter_outcome = filter_read(bread, ispaired)
         if filter_outcome != READ_USED:
             read_outcome_counts[filter_outcome] += 1
@@ -674,8 +739,12 @@ cdef void parse_bam(long fidx, string bam,
 
         any_exon_match = False
         any_multijunc_match = False
-        exon_outcome = is_bam_exonread(bread, readLength, variable_read_length)
-        multijunc_outcome = is_bam_multijunc(bread, readLength, variable_read_length)
+        exon_outcome = is_bam_exonread(
+            cigar_data_after_clipping, amount_clipped, readLength,
+            variable_read_length)
+        multijunc_outcome = is_bam_multijunc(
+            cigar_data_after_clipping, amount_clipped, readLength,
+            variable_read_length)
         if exon_outcome == READ_USED:
             mc = bread.Position + 1 # position (1-based) where alignment starts
 
@@ -684,7 +753,7 @@ cdef void parse_bam(long fidx, string bam,
                 read_outcome_counts[READ_NOT_EXPECTED_STRAND] += 1
                 continue
 
-            mec = mc + bread.CigarData[0].Length - 1
+            mec = mc + cigar_data_after_clipping[0].Length - 1
             bref_name = refid2str[bread.RefID]
 
             visited.clear()
@@ -716,17 +785,18 @@ cdef void parse_bam(long fidx, string bam,
         elif multijunc_outcome == READ_USED:
             mc = bread.Position # position (0-based) where alignment starts
 
-            minAnchor = c_min(bread.CigarData[0].Length, bread.CigarData.back().Length)
+            minAnchor = c_min(cigar_data_after_clipping[0].Length,
+                              cigar_data_after_clipping.back().Length)
             valid = (minAnchor >= rl_jl)
             bref_name = refid2str[bread.RefID]
 
             visited.clear()
             estart = mc
-            for i in range(0, bread.CigarData.size()):
+            for i in range(0, cigar_data_after_clipping.size()):
                 if i%2 == 0:
-                    eend = estart + bread.CigarData[i].Length # 1-based, end of exonic part
+                    eend = estart + cigar_data_after_clipping[i].Length # 1-based, end of exonic part
                 elif i%2 == 1:
-                    estart = eend + bread.CigarData[i].Length# 0-based, start of exonic part
+                    estart = eend + cigar_data_after_clipping[i].Length# 0-based, start of exonic part
                     continue
 
                 for j in range(estart/refer_len, eend/refer_len+1):
@@ -739,7 +809,7 @@ cdef void parse_bam(long fidx, string bam,
                             continue
 
                         visited.insert(deref(cg))
-                        locate_multi(mc, bread.CigarData, rl_jl, ntx, multiread,
+                        locate_multi(mc, cigar_data_after_clipping, rl_jl, ntx, multiread,
                                      genes[deref(cg)], numstr, valid, novelSS,
                                      mil, mel)
 
@@ -829,6 +899,7 @@ cdef void detect_novel(str bams, unordered_map[int,cset[string]]& geneGroup,
         vector[string] vbams = bams.split(',')
         long mil = args.mil
         long mel = args.mel
+        cbool allow_clipping = args.allow_clipping
         vector[vector[int]] read_outcome_counts
 
     dt = args.dt
@@ -848,7 +919,7 @@ cdef void detect_novel(str bams, unordered_map[int,cset[string]]& geneGroup,
     for fidx in prange(vlen, schedule='static', num_threads=nthread, nogil=True):
         parse_bam(fidx, vbams[fidx], geneGroup, genes, supple, novel_juncs[fidx],
                   exons[fidx], multis[fidx], issingle, jld2, readLength,
-                  variable_read_length, dt, novelSS, mil, mel,
+                  variable_read_length, dt, novelSS, mil, mel, allow_clipping,
                   read_outcome_counts[fidx])
 
     output_read_outcomes(read_outcome_counts, vbams, args.tmp, args.prep_prefix)
