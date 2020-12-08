@@ -3286,6 +3286,12 @@ cdef dict split_sg_files_by_bam(str bams, str tmp_dir, str out_dir,
     for orig_i, orig_dot_rmats in enumerate(all_orig_dot_rmats):
         with open(orig_dot_rmats, 'r') as orig_handle:
             bams_from_file = orig_handle.readline().strip().split(',')
+            if bams_from_file == ['']:
+                sys.stderr.write(
+                    'WARNING: A .rmats file was found with no bams listed in'
+                    ' it. Ignoring that file: {}\n'.format(orig_dot_rmats))
+                continue
+
             read_length_from_file = int(orig_handle.readline().strip())
             if read_length_from_file != read_length:
                 print('WARNING: The post step should use the same read length'
