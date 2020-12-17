@@ -66,24 +66,25 @@ def count_events(file_path, args):
     sig = 0
     sig_sample_1_higher = 0
     sig_sample_2_higher = 0
-    with open(file_path, 'rt') as file_handle:
-        reader = csv.DictReader(file_handle, delimiter='\t')
-        for row in reader:
-            total += 1
-            p_value = parse_float(row['PValue'])
-            fdr = parse_float(row['FDR'])
-            inc_level_diff = parse_float(row['IncLevelDifference'])
-            check_p_value = p_value if args.use_raw_p else fdr
-            if (math.isnan(check_p_value) or math.isnan(inc_level_diff)
-                    or check_p_value > args.p_cutoff
-                    or abs(inc_level_diff) < args.inc_level_diff_cutoff):
-                continue
+    if os.path.exists(file_path):
+        with open(file_path, 'rt') as file_handle:
+            reader = csv.DictReader(file_handle, delimiter='\t')
+            for row in reader:
+                total += 1
+                p_value = parse_float(row['PValue'])
+                fdr = parse_float(row['FDR'])
+                inc_level_diff = parse_float(row['IncLevelDifference'])
+                check_p_value = p_value if args.use_raw_p else fdr
+                if (math.isnan(check_p_value) or math.isnan(inc_level_diff)
+                        or check_p_value > args.p_cutoff
+                        or abs(inc_level_diff) < args.inc_level_diff_cutoff):
+                    continue
 
-            sig += 1
-            if inc_level_diff > 0:
-                sig_sample_1_higher += 1
-            else:
-                sig_sample_2_higher += 1
+                sig += 1
+                if inc_level_diff > 0:
+                    sig_sample_1_higher += 1
+                else:
+                    sig_sample_2_higher += 1
 
     return {
         'total': total,

@@ -127,3 +127,40 @@ class BaseTest(unittest.TestCase):
 
     def _check_se_mats_jcec_header(self, header):
         self._check_se_mats_jc_header(header)
+
+    def _check_mxe_mats_jc_header(self, header):
+        self.assertEqual(header, [
+            'ID', 'GeneID', 'geneSymbol', 'chr', 'strand',
+            '1stExonStart_0base', '1stExonEnd', '2ndExonStart_0base',
+            '2ndExonEnd', 'upstreamES', 'upstreamEE', 'downstreamES',
+            'downstreamEE', 'ID', 'IJC_SAMPLE_1', 'SJC_SAMPLE_1',
+            'IJC_SAMPLE_2', 'SJC_SAMPLE_2', 'IncFormLen', 'SkipFormLen',
+            'PValue', 'FDR', 'IncLevel1', 'IncLevel2', 'IncLevelDifference'
+        ])
+
+    def _check_mxe_mats_jcec_header(self, header):
+        self._check_mxe_mats_jc_header(header)
+
+    def _check_a35ss_mats_jc_header(self, header):
+        self.assertEqual(header, [
+            'ID', 'GeneID', 'geneSymbol', 'chr', 'strand',
+            'longExonStart_0base', 'longExonEnd', 'shortES', 'shortEE',
+            'flankingES', 'flankingEE', 'ID', 'IJC_SAMPLE_1', 'SJC_SAMPLE_1',
+            'IJC_SAMPLE_2', 'SJC_SAMPLE_2', 'IncFormLen', 'SkipFormLen',
+            'PValue', 'FDR', 'IncLevel1', 'IncLevel2', 'IncLevelDifference'
+        ])
+
+    def _check_a35ss_mats_jcec_header(self, header):
+        self._check_a35ss_mats_jc_header(header)
+
+    def _check_ri_mats_jc_header(self, header):
+        self.assertEqual(header, [
+            'ID', 'GeneID', 'geneSymbol', 'chr', 'strand', 'riExonStart_0base',
+            'riExonEnd', 'upstreamES', 'upstreamEE', 'downstreamES',
+            'downstreamEE', 'ID', 'IJC_SAMPLE_1', 'SJC_SAMPLE_1',
+            'IJC_SAMPLE_2', 'SJC_SAMPLE_2', 'IncFormLen', 'SkipFormLen',
+            'PValue', 'FDR', 'IncLevel1', 'IncLevel2', 'IncLevelDifference'
+        ])
+
+    def _check_ri_mats_jcec_header(self, header):
+        self._check_ri_mats_jc_header(header)

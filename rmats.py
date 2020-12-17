@@ -140,8 +140,8 @@ def get_args():
                         help='The cutoff splicing difference. The cutoff used in the null hypothesis test for differential splicing. The default is 0.0001 for 0.01%% difference. Valid: 0 <= cutoff < 1. Does not apply to the paired stats model', dest='cstat')
 
     parser.add_argument('--task', action='store', default='both',
-                        choices=['prep', 'post', 'both', 'inte',],
-                        help='Specify which step(s) of rMATS to run. Default: %(default)s. prep: preprocess BAMs and generate a .rmats file. post: load .rmats file(s) into memory, detect and count alternative splicing events, and calculate P value (if not --statoff). both: prep + post. inte (integrity): check that the BAM filenames recorded by the prep task(s) match the BAM filenames for the current command line', dest='task')
+                        choices=['prep', 'post', 'both', 'inte', 'stat'],
+                        help='Specify which step(s) of rMATS to run. Default: %(default)s. prep: preprocess BAMs and generate a .rmats file. post: load .rmats file(s) into memory, detect and count alternative splicing events, and calculate P value (if not --statoff). both: prep + post. inte (integrity): check that the BAM filenames recorded by the prep task(s) match the BAM filenames for the current command line. stat: run statistical test on existing output files', dest='task')
     parser.add_argument('--statoff', action='store_false',
                         help='Skip the statistical analysis', dest='stat')
     parser.add_argument('--paired-stats', action='store_true',
@@ -159,17 +159,22 @@ def get_args():
 
     args = parser.parse_args()
 
-    if args.b1 == '' and args.b2 == '' and args.s1 == '' and args.s2 == '':
-        sys.exit('ERROR: BAM/FASTQ required. Please check b1, b2, s1 and s2.')
-    if args.gtf == None or args.od == None or args.tmp == None:
-        sys.exit('ERROR: GTF file, output folder and temporary folder required. Please check --gtf, --od and --tmp.')
+    if args.task != 'stat':
+        if args.b1 == '' and args.b2 == '' and args.s1 == '' and args.s2 == '':
+            sys.exit('ERROR: BAM/FASTQ required. Please check b1, b2, s1 and s2.')
+        if args.gtf == None:
+            sys.exit('ERROR: GTF file required. Please check --gtf.')
+        if args.readLength is None:
+            sys.exit('ERROR: --readLength is required. An average or median'
+                     ' --readLength can be used in combination with'
+                     ' --variable-read-length when the reads do not have the'
+                     ' same length.')
+        args.junctionLength = 2 * (args.readLength - args.anchorLength)
+
+    if args.od == None or args.tmp == None:
+        sys.exit('ERROR: output folder and temporary folder required. Please check --od and --tmp.')
     if (args.s1 != '' or args.s2 != '') and args.bIndex == '':
         sys.exit('ERROR: STAR binary indexes required. Please check --bi.')
-    if args.readLength is None:
-        sys.exit('ERROR: --readLength is required. An average or median'
-                 ' --readLength can be used in combination with'
-                 ' --variable-read-length when the reads do not have the'
-                 ' same length.')
 
     if len(args.b1) > 0:
         with open(args.b1, 'r') as fp:
@@ -184,11 +189,6 @@ def get_args():
         with open(args.s2, 'r') as fp:
             args.s2 = fp.read().strip(' ,\n')
 
-    if (args.task != 'prep' and args.stat
-        and (len(args.b1) * len(args.b2) == 0)
-        and (len(args.s1) * len(args.s2) == 0)):
-        sys.exit('ERROR: while performing statistical analysis, user should provide two groups of samples. Please check b1,b2 or s1,s2.')
-
     create_output_dirs(args)
     args.prep_prefix = claim_prep_prefix(args.task, args.tmp)
 
@@ -196,7 +196,6 @@ def get_args():
         args.b1, args.b2 = doSTARMapping(args)
 
     args.bams = ','.join([args.b1, args.b2]).strip(',')
-    args.junctionLength = 2 * (args.readLength - args.anchorLength)
 
     dt_map = {'fr-unstranded':0, 'fr-firststrand':1, 'fr-secondstrand':2}
     args.dt = dt_map[args.dt]
@@ -269,6 +268,24 @@ def check_integrity(input_bams_string, tmp_dir):
     print('Ok.')
 
 
+def check_if_has_counts(counts_file_path):
+    has_sample_1_counts = False
+    has_sample_2_counts = False
+    with open(counts_file_path, 'rt') as f_handle:
+        for i, line in enumerate(f_handle):
+            if i == 0:
+                continue  # skip header line
+
+            values = line.strip().split('\t')
+            inc_sample_1_vs = values[1]
+            inc_sample_2_vs = values[3]
+            has_sample_1_counts = inc_sample_1_vs != ''
+            has_sample_2_counts = inc_sample_2_vs != ''
+            break  # only check the first row
+
+    return has_sample_1_counts, has_sample_2_counts
+
+
 def filter_countfile(fn):
     """TODO: Docstring for filter_countfile.
     :returns: TODO
@@ -321,10 +338,29 @@ def process_counts(istat, tstat, counttype, ase, cstat, od, od_tmp, stat,
     :returns: TODO
 
     """
-    if stat:
-        filter_countfile(istat)
+    from_gtf_path = '%s/fromGTF.%s.txt' % (od, ase)
+    if not os.path.exists(from_gtf_path):
+        print('WARNING: Cannot find {}. Unable to produce final output files'
+              ' for {} {}.'.format(from_gtf_path, ase, counttype),
+              file=sys.stderr)
+        return
 
-    efn = '%s/fromGTF.%s.txt' % (od, ase)
+    if not os.path.exists(istat):
+        print('WARNING: Cannot find {}. Unable to produce final output files'
+              ' for {} {}.'.format(istat, ase, counttype),
+              file=sys.stderr)
+        return
+
+    if stat:
+        has_sample_1_counts, has_sample_2_counts = check_if_has_counts(istat)
+        if has_sample_1_counts and has_sample_2_counts:
+            filter_countfile(istat)
+        elif has_sample_1_counts or has_sample_2_counts:
+            print('WARNING: Statistical step is skipped for {} {} because only'
+                  ' one group is involved'.format(ase, counttype),
+                  file=sys.stderr)
+            stat = False
+
     sec_tmp = os.path.join(od_tmp, '%s_%s' % (counttype, ase))
     if os.path.exists(sec_tmp):
         if os.path.isdir(sec_tmp):
@@ -382,7 +418,7 @@ def process_counts(istat, tstat, counttype, ase, cstat, od, od_tmp, stat,
 
     # Combine into final output
     subprocess.call(['paste', ostat_fdr, ostat_il,], stdout=resfp)
-    subprocess.call([python_executable, join_2f, efn, resfp.name, '0', '0', finfn,], stdout=FNULL)
+    subprocess.call([python_executable, join_2f, from_gtf_path, resfp.name, '0', '0', finfn,], stdout=FNULL)
 
     FNULL.close()
     resfp.close()
@@ -469,7 +505,7 @@ def main():
     if args.task in pipe_tasks:
         run_pipe(args)
 
-    if args.task not in ['post', 'both']:
+    if args.task not in ['post', 'both', 'stat']:
         return
 
     jc_it = os.path.join(args.od, 'JC.raw.input.%s.txt')
