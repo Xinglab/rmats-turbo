@@ -111,41 +111,7 @@ class OnlyOneSampleBaseTest(tests.base_test.BaseTest):
         self._write_bams(sample_1_bams, sample_1_bams_path)
         return sample_1_bams
 
-
-class StatOnTest(OnlyOneSampleBaseTest):
-    def _sub_test_name(self):
-        return 'stat_on'
-
-    def test(self):
-        self._run_test()
-
-    def _check_results(self):
-        self.assertNotEqual(self._rmats_return_code, 0)
-
-        command_stderr_file_name = self._get_stderr_file_name()
-        with open(command_stderr_file_name, 'rt') as err_f_h:
-            err_lines = err_f_h.readlines()
-
-        tests.util.assert_some_line_has(
-            self, err_lines, 'while performing statistical analysis,'
-            ' user should provide two groups of samples')
-
-
-class StatOffTest(OnlyOneSampleBaseTest):
-    def _sub_test_name(self):
-        return 'stat_off'
-
-    def test(self):
-        self._run_test()
-
-    def _rmats_arguments(self):
-        arguments = super()._rmats_arguments()
-        arguments.append('--statoff')
-        return arguments
-
-    def _check_results(self):
-        self._check_no_error_results()
-
+    def _check_results_base(self):
         jc_raw_se_path = os.path.join(self._out_dir, 'JC.raw.input.SE.txt')
         jc_raw_se_header, jc_raw_se_rows, error = output_parser.parse_jc_raw(
             jc_raw_se_path)
@@ -172,6 +138,46 @@ class StatOffTest(OnlyOneSampleBaseTest):
         self.assertAlmostEqual(float(inc_level_1_splits[1]), 0)
         self.assertEqual(se_mats_jc_row['IncLevel2'], '')
         self.assertEqual(se_mats_jc_row['IncLevelDifference'], 'NA')
+
+
+class StatOnTest(OnlyOneSampleBaseTest):
+    def _sub_test_name(self):
+        return 'stat_on'
+
+    def test(self):
+        self._run_test()
+
+    def _check_results(self):
+        self.assertEqual(self._rmats_return_code, 0)
+
+        command_stderr_file_name = self._get_stderr_file_name()
+        with open(command_stderr_file_name, 'rt') as err_f_h:
+            err_lines = err_f_h.readlines()
+
+        self.assertEqual(len(err_lines), 2)
+        tests.util.assert_some_line_has(
+            self, err_lines, 'Statistical step is skipped for SE JC because')
+        tests.util.assert_some_line_has(
+            self, err_lines, 'Statistical step is skipped for SE JCEC because')
+
+        self._check_results_base()
+
+
+class StatOffTest(OnlyOneSampleBaseTest):
+    def _sub_test_name(self):
+        return 'stat_off'
+
+    def test(self):
+        self._run_test()
+
+    def _rmats_arguments(self):
+        arguments = super()._rmats_arguments()
+        arguments.append('--statoff')
+        return arguments
+
+    def _check_results(self):
+        self._check_no_error_results()
+        self._check_results_base()
 
 
 if __name__ == '__main__':

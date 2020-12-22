@@ -11,10 +11,13 @@ function write_test_config() {
   local TEST_CONFIG="${TEST_BASE_DIR}/test_config.py"
   local RUN_RMATS="${SCRIPT_DIR}/run_rmats"
   local CP_WITH_PREFIX="${SCRIPT_DIR}/cp_with_prefix.py"
+  local PREPARE_STAT_INPUTS="${SCRIPT_DIR}/rMATS_P/prepare_stat_inputs.py"
 
   echo "TEST_BASE_DIR = '${TEST_BASE_DIR}'" > "${TEST_CONFIG}" || return 1
   echo "RMATS_COMMAND = '${RUN_RMATS}'" >> "${TEST_CONFIG}" || return 1
   echo "CP_WITH_PREFIX = '${CP_WITH_PREFIX}'" >> "${TEST_CONFIG}" || return 1
+  echo "PREPARE_STAT_INPUTS = '${PREPARE_STAT_INPUTS}'" \
+       >> "${TEST_CONFIG}" || return 1
 }
 
 function create_and_activate_conda_env() {
