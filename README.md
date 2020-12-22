@@ -228,18 +228,18 @@ The rMATS statistical model requires an event definition file (`fromGTF.[AS].txt
 python rmats.py --od /path/to/dir_with_existing_files --tmp /path/to/tmp_dir --task stat
 ```
 
-One use case for `--task stat` is when there are more than two groups to compare. For example, if there are 3 sample groups, then it is possible to compare each sample to the other two (1 to 2, 1 to 3, 2 to 3). This can be done by first processing all the samples together using the usual rMATS pipeline
+One use case for `--task stat` is when there are more than two groups to compare. For example, if there are 3 sample groups, then it is possible to compare each sample group to the other two (1 to 2, 1 to 3, 2 to 3). This can be done by first processing all the samples together using the usual rMATS pipeline
 
 * Run the prep step for each BAM (can utilize multiple compute nodes)
 * Combine all the prep results in a single post step (`--statoff`)
 
-After all of the BAMs have been processed in this way, the output directory will contain the necessary `fromGTF.[AS].txt` and `{JC,JCEC}.raw.input.[AS].txt` files. The `fromGTF.[AS].txt` files can be used "as is" for all comparisons involving the samples, but the information that is relevant to a specific comparison needs to be extracted from the `{JC,JCEC}.raw.input.[AS].txt` files. This can be done using [rMATS_P/prepare_stat_inputs.py](rMATS_P/prepare_stat_inputs.py). If there are 3 replicates in each of the 3 samples and they were provided in the `--b1` argument of the post step in ascending order (`sample_1_rep_1, sample_1_rep_2, ..., sample_3_rep_3`) then the comparisons can be performed by
+After all of the BAMs have been processed in this way, the output directory will contain the necessary `fromGTF.[AS].txt` and `{JC,JCEC}.raw.input.[AS].txt` files. The `fromGTF.[AS].txt` files can be used "as is" for all comparisons involving the samples, but the information that is relevant to a specific comparison needs to be extracted from the `{JC,JCEC}.raw.input.[AS].txt` files. This can be done using [rMATS_P/prepare_stat_inputs.py](rMATS_P/prepare_stat_inputs.py). If there are 3 replicates in each of the 3 groups and they were provided in the `--b1` argument of the post step in ascending order (`group_1_rep_1, group_1_rep_2, ..., group_3_rep_3`) then the comparisons can be performed by
 
-* `python rMATS_P/prepare_stat_inputs.py --new-output-dir /path/to/1_to_2_output --old-output-dir /path/to/combined_post_output --sample-1-indices 0,1,2 --sample-2-indices 3,4,5`
+* `python rMATS_P/prepare_stat_inputs.py --new-output-dir /path/to/1_to_2_output --old-output-dir /path/to/combined_post_output --group-1-indices 0,1,2 --group-2-indices 3,4,5`
 * `python rmats.py --od /path/to/1_to_2_output --tmp /path/to/1_to_2_tmp --task stat`
-* `python rMATS_P/prepare_stat_inputs.py --new-output-dir /path/to/1_to_3_output --old-output-dir /path/to/combined_post_output --sample-1-indices 0,1,2 --sample-2-indices 6,7,8`
+* `python rMATS_P/prepare_stat_inputs.py --new-output-dir /path/to/1_to_3_output --old-output-dir /path/to/combined_post_output --group-1-indices 0,1,2 --group-2-indices 6,7,8`
 * `python rmats.py --od /path/to/1_to_3_output --tmp /path/to/1_to_3_tmp --task stat`
-* `python rMATS_P/prepare_stat_inputs.py --new-output-dir /path/to/2_to_3_output --old-output-dir /path/to/combined_post_output --sample-1-indices 3,4,5 --sample-2-indices 6,7,8`
+* `python rMATS_P/prepare_stat_inputs.py --new-output-dir /path/to/2_to_3_output --old-output-dir /path/to/combined_post_output --group-1-indices 3,4,5 --group-2-indices 6,7,8`
 * `python rmats.py --od /path/to/2_to_3_output --tmp /path/to/2_to_3_tmp --task stat`
 
 ### Tips

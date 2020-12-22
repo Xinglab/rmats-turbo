@@ -19,19 +19,19 @@ def parse_args():
                         required=True,
                         help='Path to the directory of existing rMATS output')
     parser.add_argument(
-        '--sample-1-indices',
+        '--group-1-indices',
         required=True,
-        help='Comma separated list of replicates to be used as sample 1 in the'
+        help='Comma separated list of replicates to be used as group 1 in the'
         ' new statistical comparison. Each replicate is identified by its'
-        ' 0-based index in the concatenation of replicates from samples 1 and 2'
+        ' 0-based index in the concatenation of replicates from groups 1 and 2'
         ' in the --old-output-dir. Example: If --old-output-dir had 2 reps in'
-        ' sample 1 and 3 in sample 2 then --sample-1-indices 0,1,4 would select'
-        ' both reps from the old sample 1 and the last rep from the old sample'
-        ' 2 to be the new sample 1')
+        ' group 1 and 3 in group 2 then --group-1-indices 0,1,4 would select'
+        ' both reps from the old group 1 and the last rep from the old group'
+        ' 2 to be the new group 1')
     parser.add_argument(
-        '--sample-2-indices',
+        '--group-2-indices',
         required=True,
-        help='Comma separated list of replicates to be used as sample 2 in the'
+        help='Comma separated list of replicates to be used as group 2 in the'
         ' new statistical comparison')
 
     return parser.parse_args()
@@ -53,8 +53,8 @@ def parse_indices(indices_str):
 
 
 def prepare_stat_inputs(args):
-    sample_1_indices = parse_indices(args.sample_1_indices)
-    sample_2_indices = parse_indices(args.sample_2_indices)
+    group_1_indices = parse_indices(args.group_1_indices)
+    group_2_indices = parse_indices(args.group_2_indices)
     if not os.path.exists(args.new_output_dir):
         print('creating {}'.format(args.new_output_dir))
         os.makedirs(args.new_output_dir)
@@ -74,7 +74,7 @@ def prepare_stat_inputs(args):
             with open(old_counts, 'rt') as old_counts_handle:
                 with open(new_counts, 'wt') as new_counts_handle:
                     create_count_file(old_counts_handle, new_counts_handle,
-                                      sample_1_indices, sample_2_indices)
+                                      group_1_indices, group_2_indices)
 
 
 def split_and_combine(vals_1, vals_2):
@@ -85,8 +85,8 @@ def split_and_combine(vals_1, vals_2):
     return filtered
 
 
-def create_count_file(old_counts_handle, new_counts_handle, sample_1_indices,
-                      sample_2_indices):
+def create_count_file(old_counts_handle, new_counts_handle, group_1_indices,
+                      group_2_indices):
     header = old_counts_handle.readline()
     header_columns = header.strip().split('\t')
     expected_header_columns = [
@@ -111,10 +111,10 @@ def create_count_file(old_counts_handle, new_counts_handle, sample_1_indices,
         old_sjc_2 = values[sjc_2_index]
         old_ijc_combined = split_and_combine(old_ijc_1, old_ijc_2)
         old_sjc_combined = split_and_combine(old_sjc_1, old_sjc_2)
-        new_ijc_1 = [old_ijc_combined[i] for i in sample_1_indices]
-        new_sjc_1 = [old_sjc_combined[i] for i in sample_1_indices]
-        new_ijc_2 = [old_ijc_combined[i] for i in sample_2_indices]
-        new_sjc_2 = [old_sjc_combined[i] for i in sample_2_indices]
+        new_ijc_1 = [old_ijc_combined[i] for i in group_1_indices]
+        new_sjc_1 = [old_sjc_combined[i] for i in group_1_indices]
+        new_ijc_2 = [old_ijc_combined[i] for i in group_2_indices]
+        new_sjc_2 = [old_sjc_combined[i] for i in group_2_indices]
         values[ijc_1_index] = ','.join(new_ijc_1)
         values[sjc_1_index] = ','.join(new_sjc_1)
         values[ijc_2_index] = ','.join(new_ijc_2)

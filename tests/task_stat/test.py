@@ -225,13 +225,13 @@ class Test(tests.base_test.BaseTest):
     def _paired_read_coords_2_2(self):
         return self._se_reads_from_counts(10, 0, 15, 5) + self._other_reads()
 
-    def _prepare_stat_inputs(self, new_out_dir, old_out_dir, sample_1_indices,
-                             sample_2_indices):
+    def _prepare_stat_inputs(self, new_out_dir, old_out_dir, group_1_indices,
+                             group_2_indices):
         command = [
             sys.executable, tests.test_config.PREPARE_STAT_INPUTS,
             '--new-output-dir', new_out_dir, '--old-output-dir', old_out_dir,
-            '--sample-1-indices', ','.join([str(x) for x in sample_1_indices]),
-            '--sample-2-indices', ','.join([str(x) for x in sample_2_indices])
+            '--group-1-indices', ','.join([str(x) for x in group_1_indices]),
+            '--group-2-indices', ','.join([str(x) for x in group_2_indices])
         ]
 
         subprocess.run(command,
