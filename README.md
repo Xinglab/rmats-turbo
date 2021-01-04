@@ -222,7 +222,7 @@ The `--paired-stats` flag can then be given so that the paired statistical model
 
 #### Running the statistical model separately
 
-The rMATS statistical model requires an event definition file (`fromGTF.[AS].txt`) and a count file (`{JC,JCEC}.raw.input.[AS].txt`) as input. Usually those files are created by the post step which also runs the statistical model to create the final output file (`[AS].MATS.{JC,JCEC}.txt`). There may be situations where the event definitions and counts are already available and the statistical model can be run on those existing files with
+The rMATS statistical model requires an event definition file (`fromGTF.[AS].txt`) and count files (`{JC,JCEC}.raw.input.[AS].txt`, `individualCounts.[AS].txt`) as input. Usually those files are created by the post step which also runs the statistical model to create the final output file (`[AS].MATS.{JC,JCEC}.txt`). There may be situations where the event definitions and counts are already available and the statistical model can be run on those existing files with
 
 ```
 python rmats.py --od /path/to/dir_with_existing_files --tmp /path/to/tmp_dir --task stat
@@ -233,7 +233,7 @@ One use case for `--task stat` is when there are more than two groups to compare
 * Run the prep step for each BAM (can utilize multiple compute nodes)
 * Combine all the prep results in a single post step (`--statoff`)
 
-After all of the BAMs have been processed in this way, the output directory will contain the necessary `fromGTF.[AS].txt` and `{JC,JCEC}.raw.input.[AS].txt` files. The `fromGTF.[AS].txt` files can be used "as is" for all comparisons involving the samples, but the information that is relevant to a specific comparison needs to be extracted from the `{JC,JCEC}.raw.input.[AS].txt` files. This can be done using [rMATS_P/prepare_stat_inputs.py](rMATS_P/prepare_stat_inputs.py). If there are 3 replicates in each of the 3 groups and they were provided in the `--b1` argument of the post step in ascending order (`group_1_rep_1, group_1_rep_2, ..., group_3_rep_3`) then the comparisons can be performed by
+After all of the BAMs have been processed in this way, the output directory will contain the necessary `fromGTF.[AS].txt`, `{JC,JCEC}.raw.input.[AS].txt`, and `individualCounts.[AS].txt` files. The `fromGTF.[AS].txt` files can be used "as is" for all comparisons involving the samples, but the information that is relevant to a specific comparison needs to be extracted from the `{JC,JCEC}.raw.input.[AS].txt` and `individualCounts.[AS].txt` files. This can be done using [rMATS_P/prepare_stat_inputs.py](rMATS_P/prepare_stat_inputs.py). If there are 3 replicates in each of the 3 groups and they were provided in the `--b1` argument of the post step in ascending order (`group_1_rep_1, group_1_rep_2, ..., group_3_rep_3`) then the comparisons can be performed by
 
 * `python rMATS_P/prepare_stat_inputs.py --new-output-dir /path/to/1_to_2_output --old-output-dir /path/to/combined_post_output --group-1-indices 0,1,2 --group-2-indices 3,4,5`
 * `python rmats.py --od /path/to/1_to_2_output --tmp /path/to/1_to_2_tmp --task stat`
@@ -348,6 +348,7 @@ Each alternative splicing event type has a corresponding set of output files. In
 - `fromGTF.novelSpliceSite.[AS_Event].txt`: This file contains only those events which include an unannotated splice site. Only relevant if `--novelSS` is enabled.
 - `JC.raw.input.[AS_Event].txt`: Event counts including only reads that span junctions defined by rmats (Junction Counts)
 - `JCEC.raw.input.[AS_Event].txt`: Event counts including both reads that span junctions defined by rmats (Junction Counts) and reads that do not cross an exon boundary (Exon Counts)
+- `individualCounts.[AS_Event].txt`: The breakdown of individual counts which contribute to the inclusion and skipping counts
 - Shared columns:
   * `ID`: rMATS event id
   * `GeneID`: Gene id
@@ -365,15 +366,15 @@ Each alternative splicing event type has a corresponding set of output files. In
   * `IncLevel1`: Inclusion level for sample 1. Replicates are comma separated. Calculated from normalized counts
   * `IncLevel2`: Inclusion level for sample 2. Replicates are comma separated. Calculated from normalized counts
   * `IncLevelDifference`: average(IncLevel1) - average(IncLevel2)
-- Event specific columns (event coordinates):
-  * SE: `exonStart_0base` `exonEnd` `upstreamES` `upstreamEE` `downstreamES` `downstreamEE`
+- Event specific columns (event coordinates and counts):
+  * SE: `exonStart_0base` `exonEnd` `upstreamES` `upstreamEE` `downstreamES` `downstreamEE` `upstream_to_target_count` `target_to_downstream_count` `target_count` `upstream_to_downstream_count`
     + The inclusion form includes the target exon (`exonStart_0base`, `exonEnd`)
-  * MXE: `1stExonStart_0base` `1stExonEnd` `2ndExonStart_0base` `2ndExonEnd` `upstreamES` `upstreamEE` `downstreamES` `downstreamEE`
+  * MXE: `1stExonStart_0base` `1stExonEnd` `2ndExonStart_0base` `2ndExonEnd` `upstreamES` `upstreamEE` `downstreamES` `downstreamEE` `upstream_to_first_count` `first_to_downstream_count` `first_count` `upstream_to_second_count` `second_to_downstream_count` `second_count`
     + If the strand is `+` then the inclusion form includes the 1st exon (`1stExonStart_0base`, `1stExonEnd`) and skips the 2nd exon
     + If the strand is `-` then the inclusion form includes the 2nd exon (`2ndExonStart_0base`, `2ndExonEnd`) and skips the 1st exon
-  * A3SS, A5SS: `longExonStart_0base` `longExonEnd` `shortES` `shortEE` `flankingES` `flankingEE`
+  * A3SS, A5SS: `longExonStart_0base` `longExonEnd` `shortES` `shortEE` `flankingES` `flankingEE` `across_short_boundary_count` `long_to_flanking_count` `exclusive_to_long_count` `short_to_flanking_count`
     + The inclusion form includes the long exon (`longExonStart_0base`, `longExonEnd`) instead of the short exon (`shortES` `shortEE`)
-  * RI: `riExonStart_0base` `riExonEnd` `upstreamES` `upstreamEE` `downstreamES` `downstreamEE`
+  * RI: `riExonStart_0base` `riExonEnd` `upstreamES` `upstreamEE` `downstreamES` `downstreamEE` `upstream_to_intron_count` `intron_to_downstream_count` `intron_count` `upstream_to_downstream_count`
     + The inclusion form includes (retains) the intron (`upstreamEE`, `downstreamES`)
 - `summary.txt`: Brief summary of all AS event types. Includes the total event counts and significant event counts. By default, events are counted as significant if FDR <= 0.05. The summary can be regenerated with different criteria by running [rMATS_P/summary.py](rMATS_P/summary.py)
 

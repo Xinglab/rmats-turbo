@@ -219,12 +219,162 @@ cdef extern from 'tcx.h' namespace 'rmats' nogil:
         Tetrad tetrad
         void set(const char& istrand, const long& ifirst, const long& isecond, const long& ithird, const long& ifourth)
 
-    cdef cppclass Read_count_table:
-        vector[int] incv
-        vector[int] skpv
+    cdef cppclass Inc_skp_len:
+        Inc_skp_len()
         int inc_len
         int skp_len
-        char strand
+
+    cdef cppclass Inc_skp_count:
+        Inc_skp_count()
+        int inc_count
+        int skp_count
+
+    cdef cppclass String_and_stream:
+        const char* c_str()
+
+    cdef cppclass SE_counts_for_event:
+        SE_counts_for_event()
+        Inc_skp_count jc_counts
+        Inc_skp_count jcec_counts
+        int upstream_to_target_count
+        int target_to_downstream_count
+        int target_count
+        int upstream_to_downstream_count
+
+    cdef cppclass SE_joined_count_strings:
+        String_and_stream jc_inc_1
+        String_and_stream jc_skp_1
+        String_and_stream jc_inc_2
+        String_and_stream jc_skp_2
+        String_and_stream jcec_inc_1
+        String_and_stream jcec_skp_1
+        String_and_stream jcec_inc_2
+        String_and_stream jcec_skp_2
+        String_and_stream upstream_to_target
+        String_and_stream target_to_downstream
+        String_and_stream target
+        String_and_stream upstream_to_downstream
+
+        void clear()
+
+    cdef cppclass SE_counts_for_event_by_bam:
+      char strand
+      Inc_skp_len jc_lengths
+      Inc_skp_len jcec_lengths
+      vector[SE_counts_for_event] counts
+
+      void join_counts_across_bams(
+          int sam1len,
+          SE_joined_count_strings* joined_strings) const
+
+    cdef cppclass MXE_counts_for_event:
+        MXE_counts_for_event()
+        Inc_skp_count jc_counts
+        Inc_skp_count jcec_counts
+        int upstream_to_first_count
+        int first_to_downstream_count
+        int first_count
+        int upstream_to_second_count
+        int second_to_downstream_count
+        int second_count
+
+    cdef cppclass MXE_joined_count_strings:
+        String_and_stream jc_inc_1
+        String_and_stream jc_skp_1
+        String_and_stream jc_inc_2
+        String_and_stream jc_skp_2
+        String_and_stream jcec_inc_1
+        String_and_stream jcec_skp_1
+        String_and_stream jcec_inc_2
+        String_and_stream jcec_skp_2
+        String_and_stream upstream_to_first
+        String_and_stream first_to_downstream
+        String_and_stream first
+        String_and_stream upstream_to_second
+        String_and_stream second_to_downstream
+        String_and_stream second
+
+        void clear()
+
+    cdef cppclass MXE_counts_for_event_by_bam:
+      char strand
+      Inc_skp_len jc_lengths
+      Inc_skp_len jcec_lengths
+      vector[MXE_counts_for_event] counts
+
+      void join_counts_across_bams(
+          int sam1len,
+          MXE_joined_count_strings* joined_strings) const
+
+    cdef cppclass ALT35_counts_for_event:
+        ALT35_counts_for_event()
+        Inc_skp_count jc_counts
+        Inc_skp_count jcec_counts
+        int across_short_boundary_count
+        int long_to_flanking_count
+        int exclusive_to_long_count
+        int short_to_flanking_count
+
+    cdef cppclass ALT35_joined_count_strings:
+        String_and_stream jc_inc_1
+        String_and_stream jc_skp_1
+        String_and_stream jc_inc_2
+        String_and_stream jc_skp_2
+        String_and_stream jcec_inc_1
+        String_and_stream jcec_skp_1
+        String_and_stream jcec_inc_2
+        String_and_stream jcec_skp_2
+        String_and_stream across_short_boundary
+        String_and_stream long_to_flanking
+        String_and_stream exclusive_to_long
+        String_and_stream short_to_flanking
+
+        void clear()
+
+    cdef cppclass ALT35_counts_for_event_by_bam:
+      char strand
+      Inc_skp_len jc_lengths
+      Inc_skp_len jcec_lengths
+      vector[ALT35_counts_for_event] counts
+
+      void join_counts_across_bams(
+          int sam1len,
+          ALT35_joined_count_strings* joined_strings) const
+
+    cdef cppclass RI_counts_for_event:
+        RI_counts_for_event()
+        Inc_skp_count jc_counts
+        Inc_skp_count jcec_counts
+        int upstream_to_intron_count
+        int intron_to_downstream_count
+        int intron_count
+        int upstream_to_downstream_count
+
+    cdef cppclass RI_joined_count_strings:
+        String_and_stream jc_inc_1
+        String_and_stream jc_skp_1
+        String_and_stream jc_inc_2
+        String_and_stream jc_skp_2
+        String_and_stream jcec_inc_1
+        String_and_stream jcec_skp_1
+        String_and_stream jcec_inc_2
+        String_and_stream jcec_skp_2
+        String_and_stream upstream_to_intron
+        String_and_stream intron_to_downstream
+        String_and_stream intron
+        String_and_stream upstream_to_downstream
+
+        void clear()
+
+    cdef cppclass RI_counts_for_event_by_bam:
+      char strand
+      Inc_skp_len jc_lengths
+      Inc_skp_len jcec_lengths
+      vector[RI_counts_for_event] counts
+
+      void join_counts_across_bams(
+          int sam1len,
+          RI_joined_count_strings* joined_strings) const
 
     cdef cppclass Str_ptr:
         const string *p

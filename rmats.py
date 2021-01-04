@@ -156,6 +156,18 @@ def get_args():
     parser.add_argument('--allow-clipping', action='store_true',
                         help='Allow alignments with soft or hard clipping to be used',
                         dest='allow_clipping')
+    # The help text for --imbalance ratio is not added to the parser
+    # since the parameter is only intended for internal use and it
+    # defaults to no filtering.
+    #
+    # Filter events where the ratio of upstream junction reads to
+    # downstream junction reads (or downstream to upstream) exceeds
+    # --imbalance-ratio. The events are filtered before running the
+    # stats model so that the FDR is based on the filtered
+    # events. If not specified then no events are filtered
+    parser.add_argument('--imbalance-ratio', type=float,
+                        help=argparse.SUPPRESS,
+                        dest='imbalance_ratio')
 
     args = parser.parse_args()
 
@@ -333,33 +345,22 @@ def filter_countfile(fn):
 
 
 def process_counts(istat, tstat, counttype, ase, cstat, od, od_tmp, stat,
-                   paired_stats, python_executable, root_dir):
+                   paired_stats, python_executable, root_dir, imbalance_ratio):
     """TODO: Docstring for process_counts.
     :returns: TODO
 
     """
     from_gtf_path = '%s/fromGTF.%s.txt' % (od, ase)
-    if not os.path.exists(from_gtf_path):
-        print('WARNING: Cannot find {}. Unable to produce final output files'
-              ' for {} {}.'.format(from_gtf_path, ase, counttype),
-              file=sys.stderr)
-        return
+    indiv_counts_file_name = os.path.join(
+        od, 'individualCounts.{}.txt'.format(ase))
+    indiv_counts_temp_file_name = '{}.tmp'.format(indiv_counts_file_name)
 
-    if not os.path.exists(istat):
-        print('WARNING: Cannot find {}. Unable to produce final output files'
-              ' for {} {}.'.format(istat, ase, counttype),
-              file=sys.stderr)
-        return
-
-    if stat:
-        has_sample_1_counts, has_sample_2_counts = check_if_has_counts(istat)
-        if has_sample_1_counts and has_sample_2_counts:
-            filter_countfile(istat)
-        elif has_sample_1_counts or has_sample_2_counts:
-            print('WARNING: Statistical step is skipped for {} {} because only'
-                  ' one group is involved'.format(ase, counttype),
+    for file_path in [from_gtf_path, istat, indiv_counts_file_name]:
+        if not os.path.exists(file_path):
+            print('WARNING: Cannot find {}. Unable to produce final output'
+                  ' files for {} {}.'.format(file_path, ase, counttype),
                   file=sys.stderr)
-            stat = False
+            return
 
     sec_tmp = os.path.join(od_tmp, '%s_%s' % (counttype, ase))
     if os.path.exists(sec_tmp):
@@ -368,7 +369,7 @@ def process_counts(istat, tstat, counttype, ase, cstat, od, od_tmp, stat,
         else:
             os.unlink(sec_tmp)
     os.mkdir(sec_tmp)
-    ostat = os.path.join(sec_tmp, 'rMATS_result_%s.txt' % ('%s'))
+    ostat = os.path.join(sec_tmp, 'rMATS_result_%s.txt')
 
     FNULL = open(os.devnull, 'w')
     resfp = open(ostat % (''), 'w')
@@ -386,6 +387,21 @@ def process_counts(istat, tstat, counttype, ase, cstat, od, od_tmp, stat,
     inc_lvl = os.path.join(root_dir, 'rMATS_P/inclusion_level.py')
     fdr_cal = os.path.join(root_dir, 'rMATS_P/FDR.py')
     join_2f = os.path.join(root_dir, 'rMATS_P/joinFiles.py')
+
+    if stat:
+        has_sample_1_counts, has_sample_2_counts = check_if_has_counts(istat)
+        if has_sample_1_counts and has_sample_2_counts:
+            filter_countfile(istat)
+        elif has_sample_1_counts or has_sample_2_counts:
+            print('WARNING: Statistical step is skipped for {} {} because only'
+                  ' one group is involved'.format(ase, counttype),
+                  file=sys.stderr)
+            stat = False
+
+    if imbalance_ratio is not None:
+        filter_countfile_by_imbalance_ratio(
+            istat, indiv_counts_file_name, indiv_counts_temp_file_name,
+            imbalance_ratio, ase)
 
     # Calculate inclusion levels
     subprocess.call([python_executable, pas_out, '-i', istat, '--o1', ostat_id, '--o2', ostat_inp,], stdout=FNULL)
@@ -419,6 +435,8 @@ def process_counts(istat, tstat, counttype, ase, cstat, od, od_tmp, stat,
     # Combine into final output
     subprocess.call(['paste', ostat_fdr, ostat_il,], stdout=resfp)
     subprocess.call([python_executable, join_2f, from_gtf_path, resfp.name, '0', '0', finfn,], stdout=FNULL)
+    append_individual_counts(indiv_counts_file_name, finfn,
+                             indiv_counts_temp_file_name)
 
     FNULL.close()
     resfp.close()
@@ -443,6 +461,282 @@ def append_columns_with_defaults(in_file_name, out_file_name, column_names, defa
                     out_file.write(column_names_addition)
                 else:
                     out_file.write(default_values_addition)
+
+
+def filter_countfile_by_imbalance_ratio(
+        counts_file_name, indiv_counts_file_name, temp_file_name,
+        imbalance_ratio, splicing_event_type):
+    with open(counts_file_name, 'rt') as counts_file_handle:
+        with open(indiv_counts_file_name, 'rt') as indiv_counts_file_handle:
+            with open(temp_file_name, 'wt') as temp_file_handle:
+                error = filter_countfile_by_imbalance_ratio_with_handles(
+                    counts_file_handle, indiv_counts_file_handle,
+                    temp_file_handle, imbalance_ratio, splicing_event_type)
+
+    if error:
+        formatted_message = (
+            'error in filter_countfile_by_imbalance_ratio({}, {}, {}, {}, {})'
+            .format(counts_file_name, indiv_counts_file_name, temp_file_name,
+                    imbalance_ratio, splicing_event_type))
+        print(formatted_message, file=sys.stderr)
+
+    shutil.move(temp_file_name, counts_file_name)
+
+
+def filter_countfile_by_imbalance_ratio_with_handles(
+        counts_file_handle, indiv_counts_file_handle, temp_file_handle,
+        imbalance_ratio, splicing_event_type):
+    inverse_imbalance_ratio = 1 / imbalance_ratio
+    calculate_ratios = get_calculate_ratios_for_event_type(splicing_event_type)
+    if calculate_ratios is None:
+        return 'unexpected splicing_event_type: {}'.format(splicing_event_type)
+
+    for i, counts_line in enumerate(counts_file_handle):
+        counts_line = counts_line.rstrip('\n')
+        if i == 0:
+            temp_file_handle.write('{}\n'.format(counts_line))
+            indiv_counts_header_line = (
+                indiv_counts_file_handle.readline().rstrip('\n'))
+            indiv_counts_header_columns = indiv_counts_header_line.split('\t')
+            continue
+
+        counts_columns = counts_line.split('\t')
+        counts_id = counts_columns[0]
+        indiv_counts_columns = get_indiv_counts_columns_for_id(
+            counts_id, indiv_counts_file_handle)
+        if indiv_counts_columns is None:
+            return 'ID: {} not found in individual count file'.format(counts_id)
+
+        is_imbalanced, error = check_if_imbalanced(
+            imbalance_ratio, inverse_imbalance_ratio,
+            indiv_counts_header_columns, indiv_counts_columns, calculate_ratios)
+        if error:
+            return error
+
+        if is_imbalanced:
+            continue
+
+        temp_file_handle.write('{}\n'.format(counts_line))
+
+    return None
+
+
+def append_individual_counts(counts_file_name, mats_file_name, temp_file_name):
+    with open(counts_file_name, 'rt') as counts_file_handle:
+        with open(mats_file_name, 'rt') as mats_file_handle:
+            with open(temp_file_name, 'wt') as temp_file_handle:
+                error = append_individual_counts_with_handles(
+                    counts_file_handle, mats_file_handle, temp_file_handle)
+
+    if error:
+        formatted_message = (
+            'error in append_individual_counts({}, {}, {}): {}'
+            .format(counts_file_name, mats_file_name, temp_file_name, error))
+        print(formatted_message, file=sys.stderr)
+
+    shutil.move(temp_file_name, mats_file_name)
+
+
+def append_individual_counts_with_handles(counts_file_handle, mats_file_handle,
+                                          temp_file_handle):
+    for i, mats_line in enumerate(mats_file_handle):
+        mats_line = mats_line.rstrip('\n')
+        mats_columns = mats_line.split('\t')
+        if i == 0:
+            counts_header_line = counts_file_handle.readline().rstrip('\n')
+            counts_header_columns = counts_header_line.split('\t')
+            counts_header_cols_without_id = counts_header_columns[1:]
+            combined_line = '\t'.join(mats_columns
+                                      + counts_header_cols_without_id)
+            temp_file_handle.write('{}\n'.format(combined_line))
+            continue
+
+        mats_id = mats_columns[0]
+        counts_columns = get_indiv_counts_columns_for_id(mats_id,
+                                                         counts_file_handle)
+        if counts_columns is None:
+            return 'ID: {} not found in individual count file'.format(mats_id)
+
+        counts_cols_without_id = counts_columns[1:]
+        combined_line = '\t'.join(mats_columns + counts_cols_without_id)
+        temp_file_handle.write('{}\n'.format(combined_line))
+
+    return None
+
+
+def try_parse_float(float_str):
+    try:
+        return float(float_str), None
+    except ValueError as e:
+        return None, 'error in try_parse_float({}): {}'.format(float_str, e)
+
+
+def try_sum_floats(floats_string):
+    float_strings = floats_string.split(',')
+    float_sum = 0
+    for float_string in float_strings:
+        parsed_float, error = try_parse_float(float_string)
+        if error:
+            return None, 'try_sum_floats({}): {}'.format(floats_string, error)
+
+        float_sum += parsed_float
+
+    return float_sum, None
+
+
+def calculate_ratio(a, b):
+    if 0 in [a, b]:
+        return 0
+
+    return a / b
+
+
+def calculate_ratios_se(headers, values):
+    upstream_to_target_count = None
+    target_to_downstream_count = None
+    for i, header in enumerate(headers):
+        if header == 'upstream_to_target_count':
+            upstream_to_target_count, error = try_sum_floats(values[i])
+            if error:
+                return None, error
+
+        if header == 'target_to_downstream_count':
+            target_to_downstream_count, error = try_sum_floats(values[i])
+            if error:
+                return None, error
+
+    if None in [upstream_to_target_count, target_to_downstream_count]:
+        error = ('Missing expected headers in calculate_ratios_se({}, {})'
+                 .format(headers, values))
+        return None, error
+
+    ratio = calculate_ratio(upstream_to_target_count, target_to_downstream_count)
+    return [ratio], None
+
+
+def calculate_ratios_mxe(headers, values):
+    upstream_to_first_count = None
+    first_to_downstream_count = None
+    upstream_to_second_count = None
+    second_to_downstream_count = None
+    for i, header in enumerate(headers):
+        if header == 'upstream_to_first_count':
+            upstream_to_first_count, error = try_sum_floats(values[i])
+            if error:
+                return None, error
+
+        if header == 'first_to_downstream_count':
+            first_to_downstream_count, error = try_sum_floats(values[i])
+            if error:
+                return None, error
+
+        if header == 'upstream_to_second_count':
+            upstream_to_second_count, error = try_sum_floats(values[i])
+            if error:
+                return None, error
+
+        if header == 'second_to_downstream_count':
+            second_to_downstream_count, error = try_sum_floats(values[i])
+            if error:
+                return None, error
+
+    if None in [upstream_to_first_count, first_to_downstream_count,
+                upstream_to_second_count, second_to_downstream_count]:
+        error = ('Missing expected headers in calculate_ratios_mxe({}, {})'
+                 .format(headers, values))
+        return None, error
+
+    first_ratio = calculate_ratio(upstream_to_first_count,
+                                  first_to_downstream_count)
+    second_ratio = calculate_ratio(upstream_to_second_count,
+                                   second_to_downstream_count)
+    return [first_ratio, second_ratio], None
+
+
+def calculate_ratios_alt_ss(headers, values):
+    across_short_boundary_count = None
+    long_to_flanking_count = None
+    for i, header in enumerate(headers):
+        if header == 'across_short_boundary_count':
+            across_short_boundary_count, error = try_sum_floats(values[i])
+            if error:
+                return None, error
+
+        if header == 'long_to_flanking_count':
+            long_to_flanking_count, error = try_sum_floats(values[i])
+            if error:
+                return None, error
+
+    if None in [across_short_boundary_count, long_to_flanking_count]:
+        error = ('Missing expected headers in calculate_ratios_alt_ss({}, {})'
+                 .format(headers, values))
+        return None, error
+
+    ratio = calculate_ratio(across_short_boundary_count, long_to_flanking_count)
+    return [ratio], None
+
+
+def calculate_ratios_ri(headers, values):
+    upstream_to_intron_count = None
+    intron_to_downstream_count = None
+    for i, header in enumerate(headers):
+        if header == 'upstream_to_intron_count':
+            upstream_to_intron_count, error = try_sum_floats(values[i])
+            if error:
+                return None, error
+
+        if header == 'intron_to_downstream_count':
+            intron_to_downstream_count, error = try_sum_floats(values[i])
+            if error:
+                return None, error
+
+    if None in [upstream_to_intron_count, intron_to_downstream_count]:
+        error = ('Missing expected headers in calculate_ratios_ri({}, {})'
+                 .format(headers, values))
+        return None, error
+
+    ratio = calculate_ratio(upstream_to_intron_count, intron_to_downstream_count)
+    return [ratio], None
+
+
+def get_calculate_ratios_for_event_type(event_type):
+    if event_type == 'SE':
+        return calculate_ratios_se
+    if event_type == 'MXE':
+        return calculate_ratios_mxe
+    if event_type in ['A3SS', 'A5SS']:
+        return calculate_ratios_alt_ss
+    if event_type == 'RI':
+        return calculate_ratios_ri
+
+    return None
+
+
+def check_if_imbalanced(imbalance_ratio, inverse_imbalance_ratio,
+                        header_columns, counts_columns, calculate_ratios_func):
+    ratios, error = calculate_ratios_func(header_columns,
+                                          counts_columns)
+    if error:
+        return None, error
+
+    for ratio in ratios:
+        if ratio > imbalance_ratio or ratio < inverse_imbalance_ratio:
+            return True, None
+
+    return False, None
+
+
+def get_indiv_counts_columns_for_id(mats_id, counts_file_handle):
+    # The IDs have the same order in both files, but some IDs may only be
+    # in the counts file.
+    for counts_line in counts_file_handle:
+        counts_line = counts_line.rstrip('\n')
+        counts_columns = counts_line.split('\t')
+        counts_id = counts_columns[0]
+        if counts_id == mats_id:
+            return counts_columns
+
+    return None
 
 
 def get_python_executable():
@@ -518,10 +812,12 @@ def main():
     for event_type in ['SE', 'MXE', 'A3SS', 'A5SS', 'RI']:
         process_counts(jc_it % (event_type), args.tstat, 'JC', event_type,
                        args.cstat, args.od, args.out_tmp_sub_dir, args.stat,
-                       args.paired_stats, python_executable, root_dir)
+                       args.paired_stats, python_executable, root_dir,
+                       args.imbalance_ratio)
         process_counts(jcec_it % (event_type), args.tstat, 'JCEC', event_type,
                        args.cstat, args.od, args.out_tmp_sub_dir, args.stat,
-                       args.paired_stats, python_executable, root_dir)
+                       args.paired_stats, python_executable, root_dir,
+                       args.imbalance_ratio)
 
     generate_summary(python_executable, args.od, root_dir)
     print('Done processing count files.')

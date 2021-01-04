@@ -116,51 +116,66 @@ class BaseTest(unittest.TestCase):
         bam.reads = bam_reads
         return bam
 
+    def _from_gtf_base_headers(self):
+        return ['ID', 'GeneID', 'geneSymbol', 'chr', 'strand']
+
+    def _mats_base_headers(self):
+        return [
+            'ID', 'IJC_SAMPLE_1', 'SJC_SAMPLE_1', 'IJC_SAMPLE_2',
+            'SJC_SAMPLE_2', 'IncFormLen', 'SkipFormLen', 'PValue', 'FDR',
+            'IncLevel1', 'IncLevel2', 'IncLevelDifference'
+        ]
+
     def _check_se_mats_jc_header(self, header):
-        self.assertEqual(header, [
-            'ID', 'GeneID', 'geneSymbol', 'chr', 'strand', 'exonStart_0base',
-            'exonEnd', 'upstreamES', 'upstreamEE', 'downstreamES',
-            'downstreamEE', 'ID', 'IJC_SAMPLE_1', 'SJC_SAMPLE_1',
-            'IJC_SAMPLE_2', 'SJC_SAMPLE_2', 'IncFormLen', 'SkipFormLen',
-            'PValue', 'FDR', 'IncLevel1', 'IncLevel2', 'IncLevelDifference'
+        expected = (self._from_gtf_base_headers() + [
+            'exonStart_0base', 'exonEnd', 'upstreamES', 'upstreamEE',
+            'downstreamES', 'downstreamEE'
+        ] + self._mats_base_headers() + [
+            'upstream_to_target_count', 'target_to_downstream_count',
+            'target_count', 'upstream_to_downstream_count'
         ])
+        self.assertEqual(header, expected)
 
     def _check_se_mats_jcec_header(self, header):
         self._check_se_mats_jc_header(header)
 
+    def _check_alt35_mats_jc_header(self, header):
+        expected = (self._from_gtf_base_headers() + [
+            'longExonStart_0base', 'longExonEnd', 'shortES', 'shortEE',
+            'flankingES', 'flankingEE'
+        ] + self._mats_base_headers() + [
+            'across_short_boundary_count', 'long_to_flanking_count',
+            'exclusive_to_long_count', 'short_to_flanking_count'
+        ])
+        self.assertEqual(header, expected)
+
+    def _check_alt35_mats_jcec_header(self, header):
+        self._check_alt35_mats_jc_header(header)
+
     def _check_mxe_mats_jc_header(self, header):
-        self.assertEqual(header, [
-            'ID', 'GeneID', 'geneSymbol', 'chr', 'strand',
+        expected = (self._from_gtf_base_headers() + [
             '1stExonStart_0base', '1stExonEnd', '2ndExonStart_0base',
             '2ndExonEnd', 'upstreamES', 'upstreamEE', 'downstreamES',
-            'downstreamEE', 'ID', 'IJC_SAMPLE_1', 'SJC_SAMPLE_1',
-            'IJC_SAMPLE_2', 'SJC_SAMPLE_2', 'IncFormLen', 'SkipFormLen',
-            'PValue', 'FDR', 'IncLevel1', 'IncLevel2', 'IncLevelDifference'
+            'downstreamEE'
+        ] + self._mats_base_headers() + [
+            'upstream_to_first_count', 'first_to_downstream_count',
+            'first_count', 'upstream_to_second_count',
+            'second_to_downstream_count', 'second_count'
         ])
+        self.assertEqual(header, expected)
 
     def _check_mxe_mats_jcec_header(self, header):
         self._check_mxe_mats_jc_header(header)
 
-    def _check_a35ss_mats_jc_header(self, header):
-        self.assertEqual(header, [
-            'ID', 'GeneID', 'geneSymbol', 'chr', 'strand',
-            'longExonStart_0base', 'longExonEnd', 'shortES', 'shortEE',
-            'flankingES', 'flankingEE', 'ID', 'IJC_SAMPLE_1', 'SJC_SAMPLE_1',
-            'IJC_SAMPLE_2', 'SJC_SAMPLE_2', 'IncFormLen', 'SkipFormLen',
-            'PValue', 'FDR', 'IncLevel1', 'IncLevel2', 'IncLevelDifference'
-        ])
-
-    def _check_a35ss_mats_jcec_header(self, header):
-        self._check_a35ss_mats_jc_header(header)
-
     def _check_ri_mats_jc_header(self, header):
-        self.assertEqual(header, [
-            'ID', 'GeneID', 'geneSymbol', 'chr', 'strand', 'riExonStart_0base',
-            'riExonEnd', 'upstreamES', 'upstreamEE', 'downstreamES',
-            'downstreamEE', 'ID', 'IJC_SAMPLE_1', 'SJC_SAMPLE_1',
-            'IJC_SAMPLE_2', 'SJC_SAMPLE_2', 'IncFormLen', 'SkipFormLen',
-            'PValue', 'FDR', 'IncLevel1', 'IncLevel2', 'IncLevelDifference'
+        expected = (self._from_gtf_base_headers() + [
+            'riExonStart_0base', 'riExonEnd', 'upstreamES', 'upstreamEE',
+            'downstreamES', 'downstreamEE'
+        ] + self._mats_base_headers() + [
+            'upstream_to_intron_count', 'intron_to_downstream_count',
+            'intron_count', 'upstream_to_downstream_count'
         ])
+        self.assertEqual(header, expected)
 
     def _check_ri_mats_jcec_header(self, header):
         self._check_ri_mats_jc_header(header)
