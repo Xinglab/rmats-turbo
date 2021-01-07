@@ -26,9 +26,6 @@ RUN apt-get update \
     # The build will source setup_environment.sh which will source ~/.bashrc.
     # Skip that by truncating setup_environment.sh
     && echo '' > setup_environment.sh \
-    # c++03 was the default for gcc 5.4.0.
-    # Explicitly set the standard to build with newer gcc.
-    && export CXXFLAGS="-std=c++03" \
     && ./build_rmats \
     # Copy the build results
     && mkdir /rmats \

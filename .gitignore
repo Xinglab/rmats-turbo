@@ -48,6 +48,7 @@ s2.txt
 
 # conda
 /conda_envs/
+/conda_requirements.txt
 
 # build
 /bamtools/build/

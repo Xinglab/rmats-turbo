@@ -1,8 +1,15 @@
-CC  = gcc
-CXX = g++
-FC = gfortran
-FFLAGS = -c
+# Set compilers if not set by environment variables
+ifndef CC
+CC := gcc
+endif
+ifndef CXX
+CXX := g++
+endif
+ifndef FC
+FC := gfortran
+endif
 
+FFLAGS := -c
 LDFLAGS := -lm -lgfortran -lgsl -lgslcblas -lgomp -lblas -llapack
 CFLAGS := -Wall -O2 -msse2 -funroll-loops -fopenmp
 

@@ -1,4 +1,7 @@
-FC = gfortran
+# Set compiler if not set by environment variable
+ifndef FC
+FC := gfortran
+endif
 
 FFLAGS = -O
 

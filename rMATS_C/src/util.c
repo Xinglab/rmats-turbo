@@ -236,7 +236,7 @@ int parse_file(const char* filename, diff_list_node* list, char** title_element_
 
     if ((ifp = fopen(filename, "r")) == NULL) {
         printf("Fail to open!");
-        return -1;
+        return 0;
     }
     fgets(title, TITLE_LEN, ifp);
     col_num = parse_title(title, title_element_list);
