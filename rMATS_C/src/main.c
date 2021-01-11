@@ -70,9 +70,17 @@ int main(int argc, char *argv[]) {
     clock_t start, diff;
     start = clock();
 
-    odiff *datum[row_num];
+    odiff **datum = (odiff**)malloc(row_num*sizeof(odiff*));
+    if (datum == NULL) {
+      fprintf(stderr, "Failed to allocate datum (%lu)\n", row_num*sizeof(odiff*));
+      exit(EXIT_FAILURE);
+    }
     diff_list_node *node = list;
-    double *prob[row_num];
+    double **prob = (double**)malloc(row_num*sizeof(double*));
+    if (prob == NULL) {
+      fprintf(stderr, "Failed to allocate prob (%lu)\n", row_num*sizeof(double*));
+      exit(EXIT_FAILURE);
+    }
     for (i = 0; i < row_num; ++i) {
         node = node->next;
         datum[i] = node->data;
@@ -110,5 +118,7 @@ int main(int argc, char *argv[]) {
     msec = dur * 1000 / CLOCKS_PER_SEC;
     printf("Time for func(single thread): %d seconds %d milliseconds\n", msec/1000, msec%1000);
 
+    free(datum);
+    free(prob);
     return 0;
 }
