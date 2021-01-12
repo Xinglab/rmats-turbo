@@ -23,7 +23,7 @@ clock_t dur = 0;
 int main(int argc, char *argv[]) {
     char *inputf = "input.txt", *outputf = (char*)malloc(sizeof(char)*MAX_CHAR);
     char str_line[MAX_LINE], *title_element_list[100];
-    int nthread = 1, batch_size = 1, opt, row_num = 0, i = 0;
+    int nthread = 1, opt, row_num = 0, i = 0;
 
     while ((opt = getopt(argc, argv, "t:bc:o:i:")) != -1) {
         switch (opt) {
@@ -31,7 +31,7 @@ int main(int argc, char *argv[]) {
             nthread = atoi(optarg);
             break;
         case 'b':
-            batch_size = 0;
+            // ignore legacy batch_size parameter
             break;
         case 'c':
             cutoff = atof(optarg);

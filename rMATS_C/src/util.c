@@ -231,7 +231,7 @@ int parse_file(const char* filename, diff_list_node* list, char** title_element_
     size_t olen = MAX_LINE;
     char *str_line = (char*)malloc(sizeof(char)*olen);
     char title[TITLE_LEN], id[MAX_LINE];
-    int col_num = 0, row_num=0, inclu_len, skip_len;
+    int row_num=0, inclu_len, skip_len;
     gsl_vector *inc1 = NULL, *skp1 = NULL, *inc2 = NULL, *skp2 = NULL;
 
     if ((ifp = fopen(filename, "r")) == NULL) {
@@ -239,7 +239,7 @@ int parse_file(const char* filename, diff_list_node* list, char** title_element_
         return 0;
     }
     fgets(title, TITLE_LEN, ifp);
-    col_num = parse_title(title, title_element_list);
+    parse_title(title, title_element_list);
 
     while (getline(&str_line, &olen, ifp) != -1) {
         ++row_num;
@@ -386,13 +386,12 @@ double sum_for_marginal_der(const double i, va_list argv) {
     double beta = va_arg(argv, double);
     double I_ = gsl_vector_get(va_arg(argv, gsl_vector*), *idx);
     double S_ = gsl_vector_get(va_arg(argv, gsl_vector*), *idx);
-    double var = va_arg(argv, double), new_psi;
+    double var = va_arg(argv, double);
     int inclu_len = va_arg(argv, int), skip_len = va_arg(argv, int);
     double f1_1der, f1_2der, f1_3der, one_i = 1-i;
     *idx += 1;
     double powi = pow(i,2), pow1_i = pow(one_i,2);
 
-    new_psi = inclu_len * i/(inclu_len * i + skip_len * one_i);
     f1_3der = (2 * i - 1)/(powi * pow1_i*beta*(1-beta)*var);
     f1_2der = myfunc_marginal_2der(i, I_, S_, beta, var, inclu_len, skip_len);
     f1_1der = (logit(i) - logit(beta))/(beta * (1-beta) * var);
