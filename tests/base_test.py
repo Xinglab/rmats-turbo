@@ -66,7 +66,10 @@ class BaseTest(unittest.TestCase):
 
         self.assertEqual(err_lines, list())
 
-    def _create_gtf_from_transcripts(self, gtf_path, exons_by_transcript):
+    def _create_gtf_from_transcripts(self,
+                                     gtf_path,
+                                     exons_by_transcript,
+                                     genes=None):
         gtf = tests.gtf.GTF()
         gtf.path = gtf_path
 
@@ -75,8 +78,12 @@ class BaseTest(unittest.TestCase):
             transcript = tests.gtf.Transcript()
             transcript.chromosome = '1'
             transcript.strand = '+'
-            transcript.gene_id = tests.util.gene_id_str(1)
-            transcript.gene_name = tests.util.gene_name_str(1)
+            gene_i = 1
+            if genes is not None:
+                gene_i = genes[i]
+
+            transcript.gene_id = tests.util.gene_id_str(gene_i)
+            transcript.gene_name = tests.util.gene_name_str(gene_i)
             transcript.transcript_id = tests.util.transcript_id_str(i)
             transcript.exons = exons_for_transcript
             transcripts.append(transcript)
