@@ -512,7 +512,9 @@ def main():
     jcec_it = os.path.join(args.od, 'JCEC.raw.input.%s.txt')
 
     python_executable = get_python_executable()
-    root_dir = os.path.abspath(os.path.dirname(__file__))
+    # realpath is used here to support the conda install which creates a
+    # symlink for rmats.py
+    root_dir = os.path.abspath(os.path.dirname(os.path.realpath(__file__)))
 
     print('Processing count files.')
     for event_type in ['SE', 'MXE', 'A3SS', 'A5SS', 'RI']:

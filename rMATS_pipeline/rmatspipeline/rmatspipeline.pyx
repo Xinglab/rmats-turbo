@@ -216,14 +216,14 @@ cdef void parse_gtf(str gtff, unordered_map[int,cset[string]]& geneGroup,
 @wraparound(False)
 cdef cbool read_has_nh_tag_1(const BamAlignment& bread) nogil:
     cdef:
-        char ttype
-        int8_t int8
-        int16_t int16
-        int32_t int32
-        uint8_t uint8
-        uint16_t uint16
-        uint32_t uint32
-        float ff
+        char ttype = '0'
+        int8_t int8 = 0
+        int16_t int16 = 0
+        int32_t int32 = 0
+        uint8_t uint8 = 0
+        uint16_t uint16 = 0
+        uint32_t uint32 = 0
+        float ff = 0
 
     if bread.GetTagType(NH, ttype):
         if ttype == BAM_TAG_TYPE_INT8:

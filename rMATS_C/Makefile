@@ -1,8 +1,15 @@
-CC  = gcc
-CXX = g++
-FC = gfortran
-FFLAGS = -c
+# Set compilers if not set by environment variables
+ifndef CC
+CC := gcc
+endif
+ifndef CXX
+CXX := g++
+endif
+ifndef FC
+FC := gfortran
+endif
 
+FFLAGS := -c
 LDFLAGS := -lm -lgfortran -lgsl -lgslcblas -lgomp -lblas -llapack
 CFLAGS := -Wall -O2 -msse2 -funroll-loops -fopenmp
 
@@ -32,7 +39,6 @@ $(FOR_DIR)/$(FOBJ):
 	cd $(FOR_DIR) && make
 
 rMATSexe: $(SRC_DIR)/main.c $(INC_DIR)/global.h $(INC_DIR)/myfunc.h $(SRC_DIR)/myfunc.c $(INC_DIR)/util.h $(SRC_DIR)/util.c $(INC_DIR)/cthreadpool.h $(SRC_DIR)/cthreadpool.c $(FOR_DIR)/$(LBFGSB) $(FOR_DIR)/$(LINPACK) $(FOR_DIR)/$(TIMER)
-	# $(FC) $(FFLAGS) $(FOR_DIR)/$(ROUTINES) -o $(FOR_DIR)/$(FOBJ)
 	$(CC) $(CFLAGS) -o $@ $(filter %.o %.c %.cc %.a, $^) $(LDFLAGS)
 	make clean
 
@@ -77,6 +83,5 @@ Rcheck:
 	R CMD check --as-cran rMATS*.tar.gz
 
 clean:
-	# rm -rf $(OBJ) *.o */*.o */*/*.o *~ */*~ */*/*~
 	rm -rf $(OBJ) *.o src/*.o $(FOR_DIR)/*.o
 	rm -rf rMATS.Rcheck

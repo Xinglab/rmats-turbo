@@ -35,12 +35,12 @@ rMATS turbo is the C/Cython version of rMATS (refer to http://rnaseq-mats.source
 
 Tested with
 
-- Python (either 2.7 or 3.6)
-  * Cython (0.29.14)
-  * numpy (1.16.5)
+- Python (3.6.12 or 2.7.15)
+  * Cython (0.29.21 or 0.29.15 for Python 2)
+  * numpy (1.16.6 or 1.16.5 for Python 2)
 - BLAS, LAPACK
 - GNU Scientific Library (GSL 2.5)
-- GCC (5.4.0)
+- GCC (>=5.4.0)
 - gfortran (Fortran 77)
 - CMake (3.15.4)
 - [PAIRADISE](https://github.com/Xinglab/PAIRADISE) (optional)
@@ -67,7 +67,7 @@ The [build_rmats](build_rmats) script usage is:
 --no-paired-model: do not install dependencies for the paired model
 ```
 
-With `--conda` [build_rmats](build_rmats) installs a conda environment that satisfies the required Python dependencies and also the R dependencies needed to use the paired model (PAIRADISE). The Python dependencies are listed in [python_requirements.txt](python_requirements.txt) and the R dependencies are handled using [install_r_deps.R](install_r_deps.R) after cloning the PAIRADISE git repo.
+With `--conda` [build_rmats](build_rmats) installs a conda environment that satisfies the required Python dependencies and also the R dependencies needed to use the paired model (PAIRADISE). The Python dependencies are listed in [python_conda_requirements.txt](python_conda_requirements.txt) and the R dependencies are handled using [r_conda_requirements.txt](r_conda_requirements.txt) and [install_r_deps.R](install_r_deps.R) after cloning the PAIRADISE git repo.
 
 
 [run_rmats](run_rmats) is a wrapper to call [rmats.py](rmats.py) with the conda environment used by [build_rmats](build_rmats). It also sources [setup_environment.sh](setup_environment.sh) which can be modified to handle other setup that might be needed before running rmats (such as Environment Modules).

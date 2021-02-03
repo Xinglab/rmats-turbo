@@ -122,7 +122,9 @@ int threadpool_reclaim(threadpool_t *pool) {
     pthread_mutex_unlock(&(pool->pool_lock));
 
     for (i = 0; i < pool->nthread; ++i) {
-        pool->working[i] != IDLE && pthread_join(pool->threads[i], NULL);
+        if (pool->working[i] != IDLE) {
+            pthread_join(pool->threads[i], NULL);
+        }
     }
 
     free(pool->threads);
