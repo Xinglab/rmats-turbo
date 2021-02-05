@@ -6,6 +6,7 @@ import tests.alternative_5_splice_site_novel.test as alternative_5_splice_site_n
 import tests.fixed_event_set.test as fixed_event_set_test
 import tests.mutually_exclusive_exons_novel.test as mutually_exclusive_exons_novel_test
 import tests.only_one_sample.test as only_one_sample_test
+import tests.overlapped_gene.test as overlapped_gene_test
 import tests.paired_stats.test as paired_stats_tests
 import tests.prep_post.test as prep_post_test
 import tests.retained_intron_novel.test as retained_intron_novel_test
@@ -28,6 +29,7 @@ def build_test_suite():
     suite.addTest(
         loader.loadTestsFromModule(mutually_exclusive_exons_novel_test))
     suite.addTest(loader.loadTestsFromModule(only_one_sample_test))
+    suite.addTest(loader.loadTestsFromModule(overlapped_gene_test))
     suite.addTest(loader.loadTestsFromModule(paired_stats_tests))
     suite.addTest(loader.loadTestsFromModule(prep_post_test))
     suite.addTest(loader.loadTestsFromModule(retained_intron_novel_test))

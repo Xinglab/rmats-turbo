@@ -1324,6 +1324,11 @@ cdef void detect_se_mxe(const string& gID, Gene& gene, SupInfo& supInfo,
         cmap[SE_key,SE_info].iterator ise
         cmap[MXE_key,MXE_info].iterator imxe
         cbool found_any, all_novel_left, all_novel_right, all_novel_skip
+        cbool event_tx_type, increased_inc_skp_len, converts_to_novel_ss
+        cbool converts_to_annotated, maintains_tx_type
+        cbool found_mid_gtf_transcript, found_mid_bam_transcript
+        cbool found_mid_transcript, found_idx_gtf_transcript
+        cbool found_idx_bam_transcript, found_idx_transcript
 
     gtf_pair.second = GTF_TX
     bam_pair.second = BAM_TX
@@ -1373,6 +1378,13 @@ cdef void detect_se_mxe(const string& gID, Gene& gene, SupInfo& supInfo,
                     if not found_any:
                         continue
 
+                    event_tx_type = GTF_TX
+                    if ((not includes_novel_ss)
+                        and (all_novel_left
+                             or all_novel_right
+                             or all_novel_skip)):
+                        event_tx_type = BAM_TX
+
                     ise = junction_se.find(se_key)
                     if ise == junction_se.end():
                         iid = junction_se.size()
@@ -1384,7 +1396,8 @@ cdef void detect_se_mxe(const string& gID, Gene& gene, SupInfo& supInfo,
                                                 idx, left, right,
                                                 len_pair.first, len_pair.second,
                                                 len_pair.third, len_pair.fourth,
-                                                GTF_TX, includes_novel_ss)
+                                                event_tx_type,
+                                                includes_novel_ss)
                     else:
                         increased_inc_skp_len = (
                             len_pair.first > deref(ise).second.inc_len
@@ -1395,7 +1408,17 @@ cdef void detect_se_mxe(const string& gID, Gene& gene, SupInfo& supInfo,
                             includes_novel_ss
                             and (not deref(ise).second.includes_novel_ss)
                         )
-                        if increased_inc_skp_len and not converts_to_novel_ss:
+                        converts_to_annotated = (
+                            event_tx_type == GTF_TX
+                            and deref(ise).second.txtype == BAM_TX
+                        )
+                        maintains_tx_type = (
+                            event_tx_type == deref(ise).second.txtype
+                        )
+                        if ((not converts_to_novel_ss)
+                            and (converts_to_annotated
+                                 or (increased_inc_skp_len
+                                     and maintains_tx_type))):
                             deref(ise).second.set(-1, gID, supInfo,
                                                   exon.first-1, exon.second,
                                                   gene.idx_exon[left].first-1,
@@ -1404,18 +1427,8 @@ cdef void detect_se_mxe(const string& gID, Gene& gene, SupInfo& supInfo,
                                                   idx, left, right,
                                                   len_pair.first, len_pair.second,
                                                   len_pair.third, len_pair.fourth,
-                                                  deref(ise).second.txtype,
-                                                  deref(ise).second.includes_novel_ss)
-
-                    # Do not update the novelJunction status when
-                    # handling novelSS
-                    if not includes_novel_ss:
-                        ise = junction_se.find(se_key)
-                        if (deref(ise).second.txtype == GTF_TX
-                            and (all_novel_left
-                                 or all_novel_right
-                                 or all_novel_skip)):
-                            deref(ise).second.txtype = BAM_TX
+                                                  event_tx_type,
+                                                  includes_novel_ss)
 
                     break
                 else:
@@ -1449,6 +1462,15 @@ cdef void detect_se_mxe(const string& gID, Gene& gene, SupInfo& supInfo,
                 if not (found_mid_transcript and found_idx_transcript):
                     continue
 
+                # all_novel_left and all_novel_right do not need to be
+                # checked here since found_idx_bam_transcript would be
+                # True if either all_novel_left or all_novel_right was.
+                event_tx_type = GTF_TX
+                if ((not includes_novel_ss)
+                    and (found_mid_bam_transcript
+                         or found_idx_bam_transcript)):
+                    event_tx_type = BAM_TX
+
                 imxe = junction_mxe.find(mxe_key)
                 # TODO plus_mark: se_key.first,second == mxe_key.first.second
                 if supInfo.strand == minus_mark:
@@ -1466,7 +1488,7 @@ cdef void detect_se_mxe(const string& gID, Gene& gene, SupInfo& supInfo,
                                               idx, mid, left, right,
                                               len_pair.first, len_pair.second,
                                               len_pair.third, len_pair.fourth,
-                                              GTF_TX, includes_novel_ss)
+                                              event_tx_type, includes_novel_ss)
                 else:
                     increased_inc_skp_len = (
                         len_pair.first > deref(imxe).second.inc_len
@@ -1477,7 +1499,17 @@ cdef void detect_se_mxe(const string& gID, Gene& gene, SupInfo& supInfo,
                         includes_novel_ss
                         and (not deref(imxe).second.includes_novel_ss)
                     )
-                    if increased_inc_skp_len and not converts_to_novel_ss:
+                    converts_to_annotated = (
+                        event_tx_type == GTF_TX
+                        and deref(imxe).second.txtype == BAM_TX
+                    )
+                    maintains_tx_type = (
+                        event_tx_type == deref(imxe).second.txtype
+                    )
+                    if ((not converts_to_novel_ss)
+                        and (converts_to_annotated
+                             or (increased_inc_skp_len
+                                 and maintains_tx_type))):
                         deref(imxe).second.set(-1, gID, supInfo,
                                                exon.first-1, exon.second,
                                                gene.idx_exon[mid].first-1, gene.idx_exon[mid].second,
@@ -1486,19 +1518,8 @@ cdef void detect_se_mxe(const string& gID, Gene& gene, SupInfo& supInfo,
                                                idx, mid, left, right,
                                                len_pair.first, len_pair.second,
                                                len_pair.third, len_pair.fourth,
-                                               deref(imxe).second.txtype,
-                                               deref(imxe).second.includes_novel_ss)
-                imxe = junction_mxe.find(mxe_key)
-                # all_novel_left and all_novel_right do not need to be
-                # checked here since found_idx_bam_transcript would be
-                # True if either all_novel_left or all_novel_right was.
-                #
-                # Do not update the novelJunction status when handling novelSS
-                if not includes_novel_ss:
-                    if (deref(imxe).second.txtype == GTF_TX
-                        and (found_mid_bam_transcript
-                             or found_idx_bam_transcript)):
-                        deref(imxe).second.txtype = BAM_TX
+                                               event_tx_type,
+                                               includes_novel_ss)
 
 
 @boundscheck(False)
@@ -1533,6 +1554,13 @@ cdef void update_alt35_right_flank_event(const string& gID, const Gene& gene,
     cdef:
         cmap[ALT35_key, ALT35_info].iterator ialt35
         int iid
+        cbool event_tx_type, increased_inc_skp_len, converts_to_novel_ss
+        cbool converts_to_annotated, maintains_tx_type
+
+    event_tx_type = GTF_TX
+    if ((not includes_novel_ss)
+        and (all_novel_i or all_novel_j)):
+        event_tx_type = BAM_TX
 
     ialt35 = junction_35.find(alt35_key)
     if ialt35 == junction_35.end():
@@ -1543,7 +1571,8 @@ cdef void update_alt35_right_flank_event(const string& gID, const Gene& gene,
                                    exon.first-1, exon.second,
                                    j, i, idx,
                                    len_pair.first, len_pair.second,
-                                   len_pair.third, len_pair.fourth, GTF_TX,
+                                   len_pair.third, len_pair.fourth,
+                                   event_tx_type,
                                    includes_novel_ss)
     else:
         increased_inc_skp_len = (
@@ -1555,7 +1584,16 @@ cdef void update_alt35_right_flank_event(const string& gID, const Gene& gene,
             includes_novel_ss
             and (not deref(ialt35).second.includes_novel_ss)
         )
-        if increased_inc_skp_len and not converts_to_novel_ss:
+        converts_to_annotated = (
+            event_tx_type == GTF_TX
+            and deref(ialt35).second.txtype == BAM_TX
+        )
+        maintains_tx_type = (
+            event_tx_type == deref(ialt35).second.txtype
+        )
+        if ((not converts_to_novel_ss)
+            and (converts_to_annotated
+                 or (increased_inc_skp_len and maintains_tx_type))):
             deref(ialt35).second.set(-1, gID, supInfo,
                                      gene.idx_exon[i].first-1, alt35_key.second,
                                      gene.idx_exon[i].first-1, alt35_key.first,
@@ -1563,15 +1601,8 @@ cdef void update_alt35_right_flank_event(const string& gID, const Gene& gene,
                                      j, i, idx,
                                      len_pair.first, len_pair.second,
                                      len_pair.third, len_pair.fourth,
-                                     deref(ialt35).second.txtype,
-                                     deref(ialt35).second.includes_novel_ss)
-
-    # Do not update the novelJunction status when handling novelSS
-    if not includes_novel_ss:
-        ialt35 = junction_35.find(alt35_key)
-        if (deref(ialt35).second.txtype == GTF_TX
-            and (all_novel_i or all_novel_j)):
-            deref(ialt35).second.txtype = BAM_TX
+                                     event_tx_type,
+                                     includes_novel_ss)
 
 
 @boundscheck(False)
@@ -1589,6 +1620,13 @@ cdef void update_alt35_left_flank_event(const string& gID, const Gene& gene,
     cdef:
         cmap[ALT35_key, ALT35_info].iterator ialt35
         int iid
+        cbool event_tx_type, increased_inc_skp_len, converts_to_novel_ss
+        cbool converts_to_annotated, maintains_tx_type
+
+    event_tx_type = GTF_TX
+    if ((not includes_novel_ss)
+        and (all_novel_i or all_novel_j)):
+        event_tx_type = BAM_TX
 
     ialt35 = junction_35.find(alt35_key)
     if ialt35 == junction_35.end():
@@ -1599,7 +1637,8 @@ cdef void update_alt35_left_flank_event(const string& gID, const Gene& gene,
                                    exon.first-1, exon.second,
                                    i, j, idx,
                                    len_pair.first, len_pair.second,
-                                   len_pair.third, len_pair.fourth, GTF_TX,
+                                   len_pair.third, len_pair.fourth,
+                                   event_tx_type,
                                    includes_novel_ss)
     else:
         increased_inc_skp_len = (
@@ -1611,7 +1650,16 @@ cdef void update_alt35_left_flank_event(const string& gID, const Gene& gene,
             includes_novel_ss
             and (not deref(ialt35).second.includes_novel_ss)
         )
-        if increased_inc_skp_len and not converts_to_novel_ss:
+        converts_to_annotated = (
+            event_tx_type == GTF_TX
+            and deref(ialt35).second.txtype == BAM_TX
+        )
+        maintains_tx_type = (
+            event_tx_type == deref(ialt35).second.txtype
+        )
+        if ((not converts_to_novel_ss)
+            and (converts_to_annotated
+                 or (increased_inc_skp_len and maintains_tx_type))):
             deref(ialt35).second.set(-1, gID, supInfo,
                                      alt35_key.second, gene.idx_exon[i].second,
                                      alt35_key.third, gene.idx_exon[i].second,
@@ -1619,15 +1667,8 @@ cdef void update_alt35_left_flank_event(const string& gID, const Gene& gene,
                                      i, j, idx,
                                      len_pair.first, len_pair.second,
                                      len_pair.third, len_pair.fourth,
-                                     deref(ialt35).second.txtype,
-                                     deref(ialt35).second.includes_novel_ss)
-
-    # Do not update the novelJunction status when handling novelSS
-    if not includes_novel_ss:
-        ialt35 = junction_35.find(alt35_key)
-        if (deref(ialt35).second.txtype == GTF_TX
-            and (all_novel_i or all_novel_j)):
-            deref(ialt35).second.txtype = BAM_TX
+                                     event_tx_type,
+                                     includes_novel_ss)
 
 
 @boundscheck(False)
@@ -1753,7 +1794,8 @@ cdef void detect_ri(const string& gID, Gene& gene, SupInfo& supInfo,
         RI_key ri_key
         Tetrad len_pair
         cmap[RI_key,RI_info].iterator iri
-        cbool found_any, all_novel
+        cbool found_any, all_novel, event_tx_type, increased_inc_skp_len
+        cbool converts_to_novel_ss, converts_to_annotated, maintains_tx_type
 
     ri_key.chrom = supInfo.chrom
 
@@ -1772,6 +1814,10 @@ cdef void detect_ri(const string& gID, Gene& gene, SupInfo& supInfo,
         if gene.exon_idx.find(tmp_pair) == gene.exon_idx.end():
             continue
 
+        event_tx_type = GTF_TX
+        if (not includes_novel_ss) and all_novel:
+            event_tx_type = BAM_TX
+
         iri = junction_ri.find(ri_key)
         ri_inclen(gene.idx_exon[i].first-1, exon.second,
                   gene.idx_exon[i].first-1, ri_key.first,
@@ -1784,7 +1830,8 @@ cdef void detect_ri(const string& gID, Gene& gene, SupInfo& supInfo,
                                     ri_key.second, exon.second,
                                     gene.exon_idx[tmp_pair], i, idx,
                                     len_pair.first, len_pair.second,
-                                    len_pair.third, len_pair.fourth, GTF_TX,
+                                    len_pair.third, len_pair.fourth,
+                                    event_tx_type,
                                     includes_novel_ss)
         else:
             increased_inc_skp_len = (
@@ -1796,7 +1843,16 @@ cdef void detect_ri(const string& gID, Gene& gene, SupInfo& supInfo,
                 includes_novel_ss
                 and (not deref(iri).second.includes_novel_ss)
             )
-            if increased_inc_skp_len and not converts_to_novel_ss:
+            converts_to_annotated = (
+                event_tx_type == GTF_TX
+                and deref(iri).second.txtype == BAM_TX
+            )
+            maintains_tx_type = (
+                event_tx_type == deref(iri).second.txtype
+            )
+            if ((not converts_to_novel_ss)
+                and (converts_to_annotated
+                     or (increased_inc_skp_len and maintains_tx_type))):
                 deref(iri).second.set(-1, gID, supInfo,
                                       gene.idx_exon[i].first-1, exon.second,
                                       gene.idx_exon[i].first-1, ri_key.first,
@@ -1804,14 +1860,8 @@ cdef void detect_ri(const string& gID, Gene& gene, SupInfo& supInfo,
                                       gene.exon_idx[tmp_pair], i, idx,
                                       len_pair.first, len_pair.second,
                                       len_pair.third, len_pair.fourth,
-                                      deref(iri).second.txtype,
-                                      deref(iri).second.includes_novel_ss)
-
-        # Do not update the novelJunction status when handling novelSS
-        if not includes_novel_ss:
-            iri = junction_ri.find(ri_key)
-            if deref(iri).second.txtype == GTF_TX and all_novel:
-                deref(iri).second.txtype = BAM_TX
+                                      event_tx_type,
+                                      includes_novel_ss)
 
 
 @boundscheck(False)
