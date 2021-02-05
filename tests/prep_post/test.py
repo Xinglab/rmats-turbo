@@ -470,7 +470,7 @@ class Test(tests.base_test.BaseTest):
                     quoted_test_gene_id: [{
                         'start_box': [401, 499],
                         'end_box': [401, 499],
-                        'counts': [1, 0]
+                        'count': 1
                     }]
                 }])
             else:
@@ -478,7 +478,7 @@ class Test(tests.base_test.BaseTest):
                     quoted_test_gene_id: [{
                         'start_box': [1, 99],
                         'end_box': [1, 99],
-                        'counts': [1, 0]
+                        'count': 1
                     }]
                 }])
 
@@ -536,7 +536,7 @@ class Test(tests.base_test.BaseTest):
                     quoted_test_gene_id: [{
                         'start_box': [401, 499],
                         'end_box': [401, 499],
-                        'counts': [1, 0]
+                        'count': 1
                     }]
                 }])
             else:
@@ -544,7 +544,7 @@ class Test(tests.base_test.BaseTest):
                     quoted_test_gene_id: [{
                         'start_box': [1, 99],
                         'end_box': [1, 99],
-                        'counts': [1, 0]
+                        'count': 1
                     }]
                 }])
 

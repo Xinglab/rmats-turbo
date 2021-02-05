@@ -667,7 +667,7 @@ cdef void parse_bam(long fidx, string bam,
                     unordered_map[string,Gene]& genes,
                     unordered_map[string,SupInfo]& supple,
                     unordered_map[string,vector[Triad]]& novel_juncs,
-                    unordered_map[string,cmap[Tetrad,pair[int,int]]]& exons,
+                    unordered_map[string,cmap[Tetrad,int]]& exons,
                     unordered_map[string,cmap[string,int]]& multis,
                     cbool issingle, int jld2, int readLength,
                     cbool variable_read_length, int dt, cbool& novelSS,
@@ -678,7 +678,6 @@ cdef void parse_bam(long fidx, string bam,
 
     """
     cdef:
-        cset[pair[int,int]] tmp_set
         cset[string].iterator cg
         cset[string] visited
         cbool ispaired = not issingle
@@ -737,6 +736,11 @@ cdef void parse_bam(long fidx, string bam,
             read_outcome_counts[filter_outcome] += 1
             continue
 
+        strand = check_strand(bread, ispaired, dt)
+        if dt != FRUNSTRANDED and strand == cdot:
+            read_outcome_counts[READ_NOT_EXPECTED_STRAND] += 1
+            continue
+
         any_exon_match = False
         any_multijunc_match = False
         exon_outcome = is_bam_exonread(
@@ -745,14 +749,9 @@ cdef void parse_bam(long fidx, string bam,
         multijunc_outcome = is_bam_multijunc(
             cigar_data_after_clipping, amount_clipped, readLength,
             variable_read_length)
+
         if exon_outcome == READ_USED:
             mc = bread.Position + 1 # position (1-based) where alignment starts
-
-            strand = check_strand(bread, ispaired, dt)
-            if dt != FRUNSTRANDED and strand == cdot:
-                read_outcome_counts[READ_NOT_EXPECTED_STRAND] += 1
-                continue
-
             mec = mc + cigar_data_after_clipping[0].Length - 1
             bref_name = refid2str[bread.RefID]
 
@@ -761,9 +760,10 @@ cdef void parse_bam(long fidx, string bam,
                 cg = geneGroup[i].begin()
                 while cg != geneGroup[i].end():
                     ## for each candidate gene
-
-                    if supple[deref(cg)].chrom != bref_name or\
-                        visited.find(deref(cg)) != visited.end():
+                    if ((supple[deref(cg)].chrom != bref_name
+                         or (supple[deref(cg)].strand != strand
+                             and dt != FRUNSTRANDED)
+                         or visited.find(deref(cg)) != visited.end())):
                         inc(cg)
                         continue
 
@@ -773,12 +773,7 @@ cdef void parse_bam(long fidx, string bam,
                     if (tetrad.first != -1 and tetrad.second != -1) or\
                             (tetrad.third != -1 and tetrad.fourth != -1):
                         any_exon_match = True
-                        if dt == FRUNSTRANDED:
-                            exons[deref(cg)][tetrad].first = exons[deref(cg)][tetrad].first + 1
-                        elif strand == plus_mark:
-                            exons[deref(cg)][tetrad].first = exons[deref(cg)][tetrad].first + 1
-                        elif strand == minus_mark:
-                            exons[deref(cg)][tetrad].second = exons[deref(cg)][tetrad].second + 1
+                        exons[deref(cg)][tetrad] += 1
 
                     inc(cg)
 
@@ -803,8 +798,10 @@ cdef void parse_bam(long fidx, string bam,
                     cg = geneGroup[j].begin()
                     while cg != geneGroup[j].end():
                         ## for each candidate gene
-                        if supple[deref(cg)].chrom != bref_name or\
-                                visited.find(deref(cg)) != visited.end():
+                        if ((supple[deref(cg)].chrom != bref_name
+                             or (supple[deref(cg)].strand != strand
+                                 and dt != FRUNSTRANDED)
+                             or visited.find(deref(cg)) != visited.end())):
                             inc(cg)
                             continue
 
@@ -815,7 +812,7 @@ cdef void parse_bam(long fidx, string bam,
 
                         if multiread.length() > 0:
                             any_multijunc_match = True
-                            multis[deref(cg)][multiread] = multis[deref(cg)][multiread] + 1
+                            multis[deref(cg)][multiread] += 1
                         if ntx.size() != 0:
                             any_multijunc_match = True
                             novel_juncs[deref(cg)].insert(novel_juncs[deref(cg)].begin(),
@@ -884,7 +881,7 @@ cdef void detect_novel(str bams, unordered_map[int,cset[string]]& geneGroup,
                        unordered_map[string,Gene]& genes,
                        unordered_map[string,SupInfo]& supple,
                        vector[unordered_map[string,vector[Triad]]]& novel_juncs,
-                       vector[unordered_map[string,cmap[Tetrad,pair[int,int]]]]& exons,
+                       vector[unordered_map[string,cmap[Tetrad,int]]]& exons,
                        vector[unordered_map[string,cmap[string,int]]]& multis, args):
     """TODO: Docstring for detect_novel.
     :returns: TODO
@@ -1820,17 +1817,17 @@ cdef void detect_ri(const string& gID, Gene& gene, SupInfo& supInfo,
 @boundscheck(False)
 @wraparound(False)
 cdef void count_se(cset[SE_info]& junction_se,
-                   vector[unordered_map[string,cmap[Tetrad,pair[int,int]]]]& exons,
+                   vector[unordered_map[string,cmap[Tetrad,int]]]& exons,
                    vector[unordered_map[string,cmap[vector[pair[long,long]],int]]]& juncs,
                    vector[Read_count_table]& jc_se, vector[Read_count_table]& jcec_se,
-                   vector[size_t]& residx, int& dt) nogil:
+                   vector[size_t]& residx) nogil:
     cdef:
-        int idx, count = 0
+        int idx
         size_t i, j, 
         Tetrad tetrad
-        cmap[Tetrad,pair[int,int]].iterator imap2
+        cmap[Tetrad,int].iterator imap2
         cmap[vector[pair[long,long]],int].iterator imap
-        unordered_map[string,cmap[Tetrad,pair[int,int]]].iterator iunmap2
+        unordered_map[string,cmap[Tetrad,int]].iterator iunmap2
         unordered_map[string,cmap[vector[pair[long,long]],int]].iterator iunmap
         cset[SE_info].iterator ise = junction_se.begin()
 
@@ -1871,16 +1868,10 @@ cdef void count_se(cset[SE_info]& junction_se,
             if iunmap2 != exons[i].end():
                 imap2 = deref(iunmap2).second.begin()
                 while imap2 != deref(iunmap2).second.end():
-                    if dt == FRUNSTRANDED:
-                        count = deref(imap2).second.first
-                    elif deref(ise).supInfo.strand == plus_mark:
-                        count = deref(imap2).second.first
-                    elif deref(ise).supInfo.strand == minus_mark:
-                        count = deref(imap2).second.second
                     if deref(imap2).first.first > deref(ise).ts and\
                             deref(imap2).first.fourth != -1 and\
                             deref(imap2).first.fourth <= deref(ise).te:
-                        jcec_se[idx].incv[i] += count
+                        jcec_se[idx].incv[i] += deref(imap2).second
                     inc(imap2)
 
         inc(ise)
@@ -1889,17 +1880,17 @@ cdef void count_se(cset[SE_info]& junction_se,
 @boundscheck(False)
 @wraparound(False)
 cdef void count_mxe(cset[MXE_info]& junction_mxe,
-                    vector[unordered_map[string,cmap[Tetrad,pair[int,int]]]]& exons,
+                    vector[unordered_map[string,cmap[Tetrad,int]]]& exons,
                     vector[unordered_map[string,cmap[vector[pair[long,long]],int]]]& juncs,
                     vector[Read_count_table]& jc_mxe, vector[Read_count_table]& jcec_mxe,
-                    vector[size_t]& residx, int& dt) nogil:
+                    vector[size_t]& residx) nogil:
     cdef:
-        int idx, count = 0
+        int idx
         size_t i, j
         Tetrad tetrad
-        cmap[Tetrad,pair[int,int]].iterator imap2
+        cmap[Tetrad,int].iterator imap2
         cmap[vector[pair[long,long]],int].iterator imap
-        unordered_map[string,cmap[Tetrad,pair[int,int]]].iterator iunmap2
+        unordered_map[string,cmap[Tetrad,int]].iterator iunmap2
         unordered_map[string,cmap[vector[pair[long,long]],int]].iterator iunmap
         cset[MXE_info].iterator imxe = junction_mxe.begin()
 
@@ -1951,20 +1942,14 @@ cdef void count_mxe(cset[MXE_info]& junction_mxe,
             if iunmap2 != exons[i].end():
                 imap2 = deref(iunmap2).second.begin()
                 while imap2 != deref(iunmap2).second.end():
-                    if dt == FRUNSTRANDED:
-                        count = deref(imap2).second.first
-                    elif deref(imxe).supInfo.strand == plus_mark:
-                        count = deref(imap2).second.first
-                    elif deref(imxe).supInfo.strand == minus_mark:
-                        count = deref(imap2).second.second
                     if deref(imap2).first.first > deref(imxe).ts and\
                             deref(imap2).first.fourth != -1 and\
                             deref(imap2).first.fourth <= deref(imxe).te:
-                        jcec_mxe[idx].incv[i] += count
+                        jcec_mxe[idx].incv[i] += deref(imap2).second
                     elif deref(imap2).first.first > deref(imxe).ss and\
                             deref(imap2).first.fourth != -1 and\
                             deref(imap2).first.fourth <= deref(imxe).se:
-                        jcec_mxe[idx].skpv[i] += count
+                        jcec_mxe[idx].skpv[i] += deref(imap2).second
 
                     inc(imap2)
 
@@ -1974,18 +1959,18 @@ cdef void count_mxe(cset[MXE_info]& junction_mxe,
 @boundscheck(False)
 @wraparound(False)
 cdef void count_alt3(cset[ALT35_info]& junction_3,
-                     vector[unordered_map[string,cmap[Tetrad,pair[int,int]]]]& exons,
+                     vector[unordered_map[string,cmap[Tetrad,int]]]& exons,
                      vector[unordered_map[string,cmap[vector[pair[long,long]],int]]]& juncs,
                      vector[Read_count_table]& jc_alt3, vector[Read_count_table]& jcec_alt3,
-                     int& jld2, int& rl, vector[size_t]& residx, int& dt) nogil:
+                     int& jld2, int& rl, vector[size_t]& residx) nogil:
     cdef:
-        int idx, count = 0
+        int idx
         size_t i, j
         int rl_jl = rl - jld2
         Tetrad tetrad
-        cmap[Tetrad,pair[int,int]].iterator imap2
+        cmap[Tetrad,int].iterator imap2
         cmap[vector[pair[long,long]],int].iterator imap
-        unordered_map[string,cmap[Tetrad,pair[int,int]]].iterator iunmap2
+        unordered_map[string,cmap[Tetrad,int]].iterator iunmap2
         unordered_map[string,cmap[vector[pair[long,long]],int]].iterator iunmap
         cset[ALT35_info].iterator ialt3 = junction_3.begin()
 
@@ -2023,23 +2008,17 @@ cdef void count_alt3(cset[ALT35_info]& junction_3,
                 if iunmap2 != exons[i].end():
                     imap2 = deref(iunmap2).second.begin()
                     while imap2 != deref(iunmap2).second.end():
-                        if dt == FRUNSTRANDED:
-                            count = deref(imap2).second.first
-                        elif deref(ialt3).supInfo.strand == plus_mark:
-                            count = deref(imap2).second.first
-                        elif deref(ialt3).supInfo.strand == minus_mark:
-                            count = deref(imap2).second.second
                         if deref(imap2).first.second <= deref(ialt3).se-rl_jl+1 and\
                                 deref(imap2).first.second != -1 and\
                                 deref(imap2).first.fourth != -1 and\
                                 deref(imap2).first.fourth <= deref(ialt3).le and\
                                 deref(imap2).first.third >= deref(ialt3).se+rl_jl:
-                            jc_alt3[idx].incv[i] += count
-                            jcec_alt3[idx].incv[i] += count
+                            jc_alt3[idx].incv[i] += deref(imap2).second
+                            jcec_alt3[idx].incv[i] += deref(imap2).second
                         if deref(imap2).first.first > deref(ialt3).se and\
                                 deref(imap2).first.fourth != -1 and\
                                 deref(imap2).first.fourth <= deref(ialt3).le:
-                            jcec_alt3[idx].incv[i] += count
+                            jcec_alt3[idx].incv[i] += deref(imap2).second
 
                         inc(imap2)
 
@@ -2074,22 +2053,16 @@ cdef void count_alt3(cset[ALT35_info]& junction_3,
                 if iunmap2 != exons[i].end():
                     imap2 = deref(iunmap2).second.begin()
                     while imap2 != deref(iunmap2).second.end():
-                        if dt == FRUNSTRANDED:
-                            count = deref(imap2).second.first
-                        elif deref(ialt3).supInfo.strand == plus_mark:
-                            count = deref(imap2).second.first
-                        elif deref(ialt3).supInfo.strand == minus_mark:
-                            count = deref(imap2).second.second
                         if deref(imap2).first.first > deref(ialt3).ls and\
                                 deref(imap2).first.second != -1 and\
                                 deref(imap2).first.second <= deref(ialt3).ss-rl_jl+1 and\
                                 deref(imap2).first.third >= deref(ialt3).ss+rl_jl:
-                            jc_alt3[idx].incv[i] += count
-                            jcec_alt3[idx].incv[i] += count
+                            jc_alt3[idx].incv[i] += deref(imap2).second
+                            jcec_alt3[idx].incv[i] += deref(imap2).second
                         if deref(imap2).first.first > deref(ialt3).ls and\
                                 deref(imap2).first.fourth != -1 and\
                                 deref(imap2).first.fourth <= deref(ialt3).ss:
-                            jcec_alt3[idx].incv[i] += count
+                            jcec_alt3[idx].incv[i] += deref(imap2).second
 
                         inc(imap2)
 
@@ -2099,18 +2072,18 @@ cdef void count_alt3(cset[ALT35_info]& junction_3,
 @boundscheck(False)
 @wraparound(False)
 cdef void count_alt5(cset[ALT35_info]& junction_5,
-                     vector[unordered_map[string,cmap[Tetrad,pair[int,int]]]]& exons,
+                     vector[unordered_map[string,cmap[Tetrad,int]]]& exons,
                      vector[unordered_map[string,cmap[vector[pair[long,long]],int]]]& juncs,
                      vector[Read_count_table]& jc_alt5, vector[Read_count_table]& jcec_alt5,
-                     int& jld2, int& rl, vector[size_t]& residx, int& dt) nogil:
+                     int& jld2, int& rl, vector[size_t]& residx) nogil:
     cdef:
-        int idx, count = 0
+        int idx
         size_t i, j
         long rl_jl = rl - jld2
         Tetrad tetrad
-        cmap[Tetrad,pair[int,int]].iterator imap2
+        cmap[Tetrad,int].iterator imap2
         cmap[vector[pair[long,long]],int].iterator imap
-        unordered_map[string,cmap[Tetrad,pair[int,int]]].iterator iunmap2
+        unordered_map[string,cmap[Tetrad,int]].iterator iunmap2
         unordered_map[string,cmap[vector[pair[long,long]],int]].iterator iunmap
         cset[ALT35_info].iterator ialt5 = junction_5.begin()
 
@@ -2148,23 +2121,17 @@ cdef void count_alt5(cset[ALT35_info]& junction_5,
                 if iunmap2 != exons[i].end():
                     imap2 = deref(iunmap2).second.begin()
                     while imap2 != deref(iunmap2).second.end():
-                        if dt == FRUNSTRANDED:
-                            count = deref(imap2).second.first
-                        elif deref(ialt5).supInfo.strand == plus_mark:
-                            count = deref(imap2).second.first
-                        elif deref(ialt5).supInfo.strand == minus_mark:
-                            count = deref(imap2).second.second
                         if deref(imap2).first.second <= deref(ialt5).se-rl_jl+1 and\
                                 deref(imap2).first.second != -1 and\
                                 deref(imap2).first.fourth != -1 and\
                                 deref(imap2).first.fourth <= deref(ialt5).le and\
                                 deref(imap2).first.third >= deref(ialt5).se+rl_jl:
-                            jc_alt5[idx].incv[i] += count
-                            jcec_alt5[idx].incv[i] += count
+                            jc_alt5[idx].incv[i] += deref(imap2).second
+                            jcec_alt5[idx].incv[i] += deref(imap2).second
                         if deref(imap2).first.first > deref(ialt5).se and\
                                 deref(imap2).first.fourth != -1 and\
                                 deref(imap2).first.fourth <= deref(ialt5).le:
-                            jcec_alt5[idx].incv[i] += count
+                            jcec_alt5[idx].incv[i] += deref(imap2).second
 
                         inc(imap2)
 
@@ -2199,22 +2166,16 @@ cdef void count_alt5(cset[ALT35_info]& junction_5,
                 if iunmap2 != exons[i].end():
                     imap2 = deref(iunmap2).second.begin()
                     while imap2 != deref(iunmap2).second.end():
-                        if dt == FRUNSTRANDED:
-                            count = deref(imap2).second.first
-                        elif deref(ialt5).supInfo.strand == plus_mark:
-                            count = deref(imap2).second.first
-                        elif deref(ialt5).supInfo.strand == minus_mark:
-                            count = deref(imap2).second.second
                         if deref(imap2).first.first > deref(ialt5).ls and\
                                 deref(imap2).first.second != -1 and\
                                 deref(imap2).first.second <= deref(ialt5).ss-rl_jl+1 and\
                                 deref(imap2).first.third >= deref(ialt5).ss+rl_jl:
-                            jc_alt5[idx].incv[i] += count
-                            jcec_alt5[idx].incv[i] += count
+                            jc_alt5[idx].incv[i] += deref(imap2).second
+                            jcec_alt5[idx].incv[i] += deref(imap2).second
                         if deref(imap2).first.first > deref(ialt5).ls and\
                                 deref(imap2).first.fourth != -1 and\
                                 deref(imap2).first.fourth <= deref(ialt5).ss:
-                            jcec_alt5[idx].incv[i] += count
+                            jcec_alt5[idx].incv[i] += deref(imap2).second
 
                         inc(imap2)
 
@@ -2224,18 +2185,18 @@ cdef void count_alt5(cset[ALT35_info]& junction_5,
 @boundscheck(False)
 @wraparound(False)
 cdef void count_ri(cset[RI_info]& junction_ri,
-                   vector[unordered_map[string,cmap[Tetrad,pair[int,int]]]]& exons,
+                   vector[unordered_map[string,cmap[Tetrad,int]]]& exons,
                    vector[unordered_map[string,cmap[vector[pair[long,long]],int]]]& juncs,
                    vector[Read_count_table]& jc_ri, vector[Read_count_table]& jcec_ri,
-                   int& jld2, int& rl, vector[size_t]& residx, int& dt) nogil:
+                   int& jld2, int& rl, vector[size_t]& residx) nogil:
     cdef:
-        int idx, count = 0
+        int idx
         size_t i, j
         long rl_jl = rl - jld2
         Tetrad tetrad
-        cmap[Tetrad,pair[int,int]].iterator imap2
+        cmap[Tetrad,int].iterator imap2
         cmap[vector[pair[long,long]],int].iterator imap
-        unordered_map[string,cmap[Tetrad,pair[int,int]]].iterator iunmap2
+        unordered_map[string,cmap[Tetrad,int]].iterator iunmap2
         unordered_map[string,cmap[vector[pair[long,long]],int]].iterator iunmap
         cset[RI_info].iterator iri = junction_ri.begin()
 
@@ -2273,12 +2234,6 @@ cdef void count_ri(cset[RI_info]& junction_ri,
                 imap2 = deref(iunmap2).second.begin()
 
                 while imap2 != deref(iunmap2).second.end():
-                    if dt == FRUNSTRANDED:
-                        count = deref(imap2).second.first
-                    elif deref(iri).supInfo.strand == plus_mark:
-                        count = deref(imap2).second.first
-                    elif deref(iri).supInfo.strand == minus_mark:
-                        count = deref(imap2).second.second
                     if (deref(imap2).first.second <= deref(iri).ue-rl_jl+1 and\
                             deref(imap2).first.second != -1 and\
                             deref(imap2).first.third >= deref(iri).ue+rl_jl)\
@@ -2286,12 +2241,12 @@ cdef void count_ri(cset[RI_info]& junction_ri,
                        (deref(imap2).first.second != -1 and\
                             deref(imap2).first.second <= deref(iri).ds-rl_jl+1 and\
                             deref(imap2).first.third >= deref(iri).ds+rl_jl):
-                        jc_ri[idx].incv[i] += count
-                        jcec_ri[idx].incv[i] += count
+                        jc_ri[idx].incv[i] += deref(imap2).second
+                        jcec_ri[idx].incv[i] += deref(imap2).second
                     if deref(imap2).first.first > deref(iri).ue and\
                             deref(imap2).first.fourth != -1 and\
                             deref(imap2).first.fourth <= deref(iri).ds:
-                        jcec_ri[idx].incv[i] += count
+                        jcec_ri[idx].incv[i] += deref(imap2).second
 
                     inc(imap2)
 
@@ -2304,7 +2259,7 @@ cdef count_occurrence(str bams, list dot_rmats_paths, str od,
                       cset[SE_info]& se, cset[MXE_info]& mxe,
                       cset[ALT35_info]& alt3, cset[ALT35_info]& alt5,
                       cset[RI_info]& ri, int sam1len, int& jld2, int& rl,
-                      int& nthread, int& dt, cbool stat):
+                      int& nthread, cbool stat):
     cdef:
         size_t idx = 0
         list vbams = bams.split(',')
@@ -2324,7 +2279,7 @@ cdef count_occurrence(str bams, list dot_rmats_paths, str od,
         vector[Read_count_table] jcec_alt3 = vector[Read_count_table](alt3.size())
         vector[Read_count_table] jcec_alt5 = vector[Read_count_table](alt5.size())
         vector[Read_count_table] jcec_ri = vector[Read_count_table](ri.size())
-        vector[unordered_map[string,cmap[Tetrad,pair[int,int]]]] exons
+        vector[unordered_map[string,cmap[Tetrad,int]]] exons
         vector[unordered_map[string,cmap[vector[pair[long,long]],int]]] juncs
         vector[vector[size_t]] resindice
 
@@ -2404,11 +2359,11 @@ cdef count_occurrence(str bams, list dot_rmats_paths, str od,
         with gil:
             resindice[fidx] = load_read(bams, dot_rmats_paths[fidx], exons, juncs)
 
-        count_se(se, exons, juncs, jc_se, jcec_se, resindice[fidx], dt)
-        count_mxe(mxe, exons, juncs, jc_mxe, jcec_mxe, resindice[fidx], dt)
-        count_alt3(alt3, exons, juncs, jc_alt3, jcec_alt3, jld2, rl, resindice[fidx], dt)
-        count_alt5(alt5, exons, juncs, jc_alt5, jcec_alt5, jld2, rl, resindice[fidx], dt)
-        count_ri(ri, exons, juncs, jc_ri, jcec_ri, jld2, rl, resindice[fidx], dt)
+        count_se(se, exons, juncs, jc_se, jcec_se, resindice[fidx])
+        count_mxe(mxe, exons, juncs, jc_mxe, jcec_mxe, resindice[fidx])
+        count_alt3(alt3, exons, juncs, jc_alt3, jcec_alt3, jld2, rl, resindice[fidx])
+        count_alt5(alt5, exons, juncs, jc_alt5, jcec_alt5, jld2, rl, resindice[fidx])
+        count_ri(ri, exons, juncs, jc_ri, jcec_ri, jld2, rl, resindice[fidx])
 
         for idx in resindice[fidx]:
             exons[idx].clear()
@@ -3376,11 +3331,11 @@ cdef save_nj(fp, unordered_map[string,vector[Triad]]& novel_juncs):
 
 @boundscheck(False)
 @wraparound(False)
-cdef save_exons(fp, unordered_map[string,cmap[Tetrad,pair[int,int]]]& exons):
+cdef save_exons(fp, unordered_map[string,cmap[Tetrad,int]]& exons):
     cdef:
         string line
-        unordered_map[string,cmap[Tetrad,pair[int,int]]].iterator iexons
-        cmap[Tetrad,pair[int,int]].iterator imap
+        unordered_map[string,cmap[Tetrad,int]].iterator iexons
+        cmap[Tetrad,int].iterator imap
 
     line = '%d\n' % (exons.size())
     fp.write(line)
@@ -3390,10 +3345,9 @@ cdef save_exons(fp, unordered_map[string,cmap[Tetrad,pair[int,int]]]& exons):
         line = deref(iexons).first
         imap = deref(iexons).second.begin()
         while imap != deref(iexons).second.end():
-            line = '%s;%d,%d,%d,%d,%d,%d' % (line, deref(imap).first.first,
+            line = '%s;%d,%d,%d,%d,%d' % (line, deref(imap).first.first,
                     deref(imap).first.second, deref(imap).first.third,
-                    deref(imap).first.fourth, deref(imap).second.first,
-                    deref(imap).second.second)
+                    deref(imap).first.fourth, deref(imap).second)
             inc(imap)
 
         fp.write(line)
@@ -3430,7 +3384,7 @@ cdef save_multis(fp, unordered_map[string,cmap[string,int]]& multis):
 cdef save_job(str bams, const string& tmp_dir, str prep_prefix,
               const int& readLength,
               vector[unordered_map[string,vector[Triad]]]& novel_juncs,
-              vector[unordered_map[string,cmap[Tetrad,pair[int,int]]]]& exons,
+              vector[unordered_map[string,cmap[Tetrad,int]]]& exons,
               vector[unordered_map[string,cmap[string,int]]]& multis):
     cdef:
         int bam_i
@@ -3472,7 +3426,7 @@ cdef int try_get_index(list values, object value, cbool* found):
 @wraparound(False)
 cdef size_t _load_job(str rmatsf, list vbams, list prep_counts_by_bam,
                       vector[unordered_map[string,vector[Triad]]]& novel_juncs,
-                      vector[unordered_map[string,cmap[Tetrad,pair[int,int]]]]& exons,
+                      vector[unordered_map[string,cmap[Tetrad,int]]]& exons,
                       vector[unordered_map[string,cmap[vector[pair[long,long]],int]]]& juncs,
                       int mode):
     cdef:
@@ -3548,8 +3502,7 @@ cdef size_t _load_job(str rmatsf, list vbams, list prep_counts_by_bam,
                 for line in eles[1:]:
                     ele = [int(s) for s in line.split(',')]
                     tetrad.set(ele[0], ele[1], ele[2], ele[3])
-                    exons[idx][gene_id][tetrad].first = ele[4]
-                    exons[idx][gene_id][tetrad].second = ele[5]
+                    exons[idx][gene_id][tetrad] = ele[4]
 
         # processing junction reads
         for i in range(len(bams)):
@@ -3586,7 +3539,7 @@ cdef load_sg(str bams, list dot_rmats_paths,
         int num = 0, num_file = 0
         list vbams = bams.split(',')
         list prep_counts_by_bam
-        vector[unordered_map[string,cmap[Tetrad,pair[int,int]]]] exons
+        vector[unordered_map[string,cmap[Tetrad,int]]] exons
         vector[unordered_map[string,cmap[vector[pair[long,long]],int]]] juncs
 
     num = len(vbams)
@@ -3732,7 +3685,7 @@ cdef dict split_sg_files_by_bam(str bams, str tmp_dir, str out_dir,
 @boundscheck(False)
 @wraparound(False)
 cdef vector[size_t] load_read(str bams, str fn,
-                              vector[unordered_map[string,cmap[Tetrad,pair[int,int]]]]& exons,
+                              vector[unordered_map[string,cmap[Tetrad,int]]]& exons,
                               vector[unordered_map[string,cmap[vector[pair[long,long]],int]]]& juncs):
     cdef:
         int num = 0, num_file = 0
@@ -3760,7 +3713,7 @@ def run_pipe(args):
         unordered_map[string,Gene] genes
         unordered_map[string,SupInfo] supple
         vector[unordered_map[string,vector[Triad]]] novel_juncs
-        vector[unordered_map[string,cmap[Tetrad,pair[int,int]]]] exons
+        vector[unordered_map[string,cmap[Tetrad,int]]] exons
         vector[unordered_map[string,cmap[string,int]]] multis
         cset[SE_info] se,
         cset[MXE_info] mxe,
@@ -3825,7 +3778,7 @@ def run_pipe(args):
         start = time.time()
         count_occurrence(args.bams, dot_rmats_file_paths, args.od, se, mxe,
                          alt3, alt5, ri, sam1len, jld2,
-                         args.readLength, args.nthread, args.dt, args.stat)
+                         args.readLength, args.nthread, args.stat)
         print 'count:', time.time() - start
 
         shutil.rmtree(split_dot_rmats_dir_path)

@@ -110,14 +110,14 @@ def _parse_novel_junc(novel_junc_str):
 
 
 def _parse_exons(exon_str):
-    exon_ints, error = _parse_n_separated_ints(6, ',', exon_str)
+    exon_ints, error = _parse_n_separated_ints(5, ',', exon_str)
     if error:
         return None, error
 
     return {
         'start_box': exon_ints[0:2],
         'end_box': exon_ints[2:4],
-        'counts': exon_ints[4:6]
+        'count': exon_ints[4]
     }, None
 
 
