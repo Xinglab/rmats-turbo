@@ -45,13 +45,23 @@ function set_script_dir() {
 function create_and_activate_conda_env() {
   local CONDA_ENV_PATH="${SCRIPT_DIR}/conda_envs/rmats"
 
-  conda create --prefix "${CONDA_ENV_PATH}" python=3.6 || return 1
+  conda create --prefix "${CONDA_ENV_PATH}" || return 1
   conda activate "${CONDA_ENV_PATH}" || return 1
 }
 
-function install_python_dependencies() {
-  local REQUIREMENTS="${SCRIPT_DIR}/python_requirements.txt"
-  conda install --file "${REQUIREMENTS}" || return 1
+function install_conda_dependencies() {
+  # Combine all requirements into a single file so the dependencies can
+  # be resolved all at once.
+  local ALL_REQUIREMENTS="${SCRIPT_DIR}/conda_requirements.txt"
+  local PYTHON_REQUIREMENTS="${SCRIPT_DIR}/python_conda_requirements.txt"
+  local R_REQUIREMENTS="${SCRIPT_DIR}/r_conda_requirements.txt"
+  cp "${PYTHON_REQUIREMENTS}" "${ALL_REQUIREMENTS}" || return 1
+
+  if [[ "${USE_PAIRED}" -eq 1 ]]; then
+    cat "${R_REQUIREMENTS}" >> "${ALL_REQUIREMENTS}" || return 1
+  fi
+
+  conda install -c conda-forge --file "${ALL_REQUIREMENTS}" || return 1
 }
 
 function build_rmats() {
@@ -63,10 +73,6 @@ function build_rmats() {
 }
 
 function install_pairadise() {
-  if [[ "${USE_CONDA}" -eq 1 ]]; then
-    conda install -c conda-forge r-base==3.6.2 || return 1
-  fi
-
   if [[ ! -d PAIRADISE ]]; then
     git clone https://github.com/Xinglab/PAIRADISE.git || return 1
   fi
@@ -81,7 +87,7 @@ function main() {
 
   if [[ "${USE_CONDA}" -eq 1 ]]; then
     create_and_activate_conda_env || return 1
-    install_python_dependencies || return 1
+    install_conda_dependencies || return 1
   fi
 
   build_rmats || return 1

@@ -1,0 +1,9 @@
+# Python 3 requirements
+Cython==0.29.21
+numpy==1.16.6
+python==3.6.12
+#
+# Python 2 requirements
+# Cython==0.29.15
+# numpy==1.16.5
+# python==2.7.15

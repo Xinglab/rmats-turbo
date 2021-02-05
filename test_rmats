@@ -23,12 +23,12 @@ function write_test_config() {
 function create_and_activate_conda_env() {
   local CONDA_ENV_PATH="${SCRIPT_DIR}/conda_envs/test_rmats"
 
-  conda create --prefix "${CONDA_ENV_PATH}" python=3.8 || return 1
+  conda create --prefix "${CONDA_ENV_PATH}" || return 1
   conda activate "${CONDA_ENV_PATH}" || return 1
 }
 
 function install_dependencies() {
-  conda install -c bioconda samtools=1.9 || return 1
+  conda install -c conda-forge -c bioconda python=3.8 samtools=1.9 || return 1
 }
 
 function main() {

@@ -3,6 +3,7 @@ import unittest
 import tests.allow_clipping.test as allow_clipping_test
 import tests.alternative_3_splice_site_novel.test as alternative_3_splice_site_novel_test
 import tests.alternative_5_splice_site_novel.test as alternative_5_splice_site_novel_test
+import tests.fixed_event_set.test as fixed_event_set_test
 import tests.mutually_exclusive_exons_novel.test as mutually_exclusive_exons_novel_test
 import tests.only_one_sample.test as only_one_sample_test
 import tests.overlapped_gene.test as overlapped_gene_test
@@ -11,6 +12,7 @@ import tests.prep_post.test as prep_post_test
 import tests.retained_intron_novel.test as retained_intron_novel_test
 import tests.skipped_exon_basic.test as skipped_exon_basic_test
 import tests.skipped_exon_novel.test as skipped_exon_novel_test
+import tests.stranded.test as stranded_test
 import tests.task_stat.test as task_stat_test
 import tests.variable_read_length.test as variable_read_length_test
 
@@ -23,6 +25,7 @@ def build_test_suite():
         loader.loadTestsFromModule(alternative_3_splice_site_novel_test))
     suite.addTest(
         loader.loadTestsFromModule(alternative_5_splice_site_novel_test))
+    suite.addTest(loader.loadTestsFromModule(fixed_event_set_test))
     suite.addTest(
         loader.loadTestsFromModule(mutually_exclusive_exons_novel_test))
     suite.addTest(loader.loadTestsFromModule(only_one_sample_test))
@@ -32,6 +35,7 @@ def build_test_suite():
     suite.addTest(loader.loadTestsFromModule(retained_intron_novel_test))
     suite.addTest(loader.loadTestsFromModule(skipped_exon_basic_test))
     suite.addTest(loader.loadTestsFromModule(skipped_exon_novel_test))
+    suite.addTest(loader.loadTestsFromModule(stranded_test))
     suite.addTest(loader.loadTestsFromModule(task_stat_test))
     suite.addTest(loader.loadTestsFromModule(variable_read_length_test))
     return suite

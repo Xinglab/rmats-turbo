@@ -69,7 +69,8 @@ class BaseTest(unittest.TestCase):
     def _create_gtf_from_transcripts(self,
                                      gtf_path,
                                      exons_by_transcript,
-                                     genes=None):
+                                     genes=None,
+                                     strands=None):
         gtf = tests.gtf.GTF()
         gtf.path = gtf_path
 
@@ -77,7 +78,11 @@ class BaseTest(unittest.TestCase):
         for i, exons_for_transcript in enumerate(exons_by_transcript):
             transcript = tests.gtf.Transcript()
             transcript.chromosome = '1'
-            transcript.strand = '+'
+            strand_i = '+'
+            if strands is not None:
+                strand_i = strands[i]
+
+            transcript.strand = strand_i
             gene_i = 1
             if genes is not None:
                 gene_i = genes[i]
@@ -98,7 +103,9 @@ class BaseTest(unittest.TestCase):
                                             chromosome_length,
                                             read_length,
                                             paired_read_coords,
-                                            clip_length=None):
+                                            clip_length=None,
+                                            is_reversed_1=False,
+                                            is_reversed_2=True):
         bam = tests.bam.BAM()
         bam.path = bam_path
 
@@ -116,7 +123,9 @@ class BaseTest(unittest.TestCase):
                 read_1_coords,
                 read_2_coords,
                 read_length,
-                clip_length=clip_length)
+                clip_length=clip_length,
+                is_reversed_1=is_reversed_1,
+                is_reversed_2=is_reversed_2)
             self.assertFalse(error)
             bam_reads.extend([paired_read_1, paired_read_2])
 
