@@ -2868,6 +2868,382 @@ cdef detect_ase(unordered_map[string,Gene]& genes,
 
 @boundscheck(False)
 @wraparound(False)
+cdef str copy_from_gtf(str src_dir, str dest_dir, str event):
+    cdef:
+        str from_gtf_base, src_gtf_path, path_of_copy
+        str from_gtf_template = 'fromGTF.{}.txt'
+
+    from_gtf_base = from_gtf_template.format(event)
+    src_gtf_path = join(src_dir, from_gtf_base)
+    path_of_copy = join(dest_dir, from_gtf_base)
+    shutil.copy(src_gtf_path, path_of_copy)
+
+    return path_of_copy
+
+
+@boundscheck(False)
+@wraparound(False)
+cdef read_event_sets(str fixed_event_set_dir, str out_dir, cset[SE_info]& se,
+                     cset[MXE_info]& mxe, cset[ALT35_info]& alt3,
+                     cset[ALT35_info]& alt5, cset[RI_info]& ri,
+                     const int jld2, const int rl):
+    cdef:
+        str copied_from_gtf_path
+        int rl_jl = rl-jld2
+
+    copied_from_gtf_path = copy_from_gtf(fixed_event_set_dir, out_dir, 'SE')
+    read_se_event_set(copied_from_gtf_path, jld2, rl, rl_jl, se)
+
+    copied_from_gtf_path = copy_from_gtf(fixed_event_set_dir, out_dir, 'MXE')
+    read_mxe_event_set(copied_from_gtf_path, jld2, rl, rl_jl, mxe)
+
+    copied_from_gtf_path = copy_from_gtf(fixed_event_set_dir, out_dir, 'A3SS')
+    read_alt35_event_set(copied_from_gtf_path, jld2, rl, rl_jl, alt3)
+
+    copied_from_gtf_path = copy_from_gtf(fixed_event_set_dir, out_dir, 'A5SS')
+    read_alt35_event_set(copied_from_gtf_path, jld2, rl, rl_jl, alt5)
+
+    copied_from_gtf_path = copy_from_gtf(fixed_event_set_dir, out_dir, 'RI')
+    read_ri_event_set(copied_from_gtf_path, jld2, rl, rl_jl, ri)
+
+
+cdef struct FromGtfSharedColIndices:
+    int event_id_index
+    int g_id_index
+    int g_sym_index
+    int chrom_index
+    int strand_index
+
+
+cdef struct FromGtfSharedColValues:
+    int event_id
+    string g_id
+    string g_sym
+    string chrom
+    string strand
+
+
+@boundscheck(False)
+@wraparound(False)
+cdef find_shared_col_indices(list expected_headers,
+                             FromGtfSharedColIndices* shared_col_indices):
+    shared_col_indices[0].event_id_index = expected_headers.index('ID')
+    shared_col_indices[0].g_id_index = expected_headers.index('GeneID')
+    shared_col_indices[0].g_sym_index = expected_headers.index('geneSymbol')
+    shared_col_indices[0].chrom_index = expected_headers.index('chr')
+    shared_col_indices[0].strand_index = expected_headers.index('strand')
+
+
+@boundscheck(False)
+@wraparound(False)
+cdef parse_shared_col_values(list col_vals,
+                             const FromGtfSharedColIndices& shared_col_indices,
+                             FromGtfSharedColValues* shared_col_values):
+    shared_col_values[0].event_id = int(
+        col_vals[shared_col_indices.event_id_index])
+    shared_col_values[0].g_id = col_vals[shared_col_indices.g_id_index]
+    shared_col_values[0].g_sym = col_vals[shared_col_indices.g_sym_index]
+    shared_col_values[0].chrom = col_vals[shared_col_indices.chrom_index]
+    shared_col_values[0].strand = col_vals[shared_col_indices.strand_index]
+
+
+@boundscheck(False)
+@wraparound(False)
+cdef read_se_event_set(str from_gtf_path, const int jld2, const int rl,
+                       const int rl_jl, cset[SE_info]& se):
+    cdef:
+        list expected_headers, col_vals
+        FromGtfSharedColIndices shared_col_indices
+        FromGtfSharedColValues shared_col_values
+        int ex_start_index, ex_end_index, up_start_index, up_end_index
+        int down_start_index, down_end_index
+        int ex_start, ex_end, up_start, up_end, down_start, down_end
+        int exon_i, up_i, down_i
+        int line_i
+        str line
+        cbool is_novel_junc, is_novel_ss
+        Tetrad inc_skip_lens
+        SupInfo sup_info
+        SE_info se_info
+
+    expected_headers = ['ID', 'GeneID', 'geneSymbol', 'chr', 'strand',
+                        'exonStart_0base', 'exonEnd', 'upstreamES',
+                        'upstreamEE', 'downstreamES', 'downstreamEE']
+    find_shared_col_indices(expected_headers, &shared_col_indices)
+    ex_start_index = expected_headers.index('exonStart_0base')
+    ex_end_index = expected_headers.index('exonEnd')
+    up_start_index = expected_headers.index('upstreamES')
+    up_end_index = expected_headers.index('upstreamEE')
+    down_start_index = expected_headers.index('downstreamES')
+    down_end_index = expected_headers.index('downstreamEE')
+
+    with open(from_gtf_path, 'rt') as f_handle:
+        for line_i, line in enumerate(f_handle):
+            col_vals = line.strip().split('\t')
+            if line_i == 0:
+                if col_vals != expected_headers:
+                    sys.exit('ERROR: unable to read event set from {}.'
+                             ' Expected headers to be {}, but saw {}'.format(
+                                 from_gtf_path, expected_headers, col_vals))
+
+                continue
+
+            parse_shared_col_values(col_vals, shared_col_indices,
+                                    &shared_col_values)
+            ex_start = int(col_vals[ex_start_index])
+            ex_end = int(col_vals[ex_end_index])
+            up_start = int(col_vals[up_start_index])
+            up_end = int(col_vals[up_end_index])
+            down_start = int(col_vals[down_start_index])
+            down_end = int(col_vals[down_end_index])
+
+            sup_info.set_info(shared_col_values.g_sym, shared_col_values.chrom,
+                              shared_col_values.strand)
+            sm_inclen(ex_start, ex_end, up_start, up_end, down_start, down_end,
+                      &inc_skip_lens, jld2, rl, rl_jl)
+            # exon_i, up_i, and down_i are required for se_info.set, but
+            # the values do not matter. They could be removed from SE_Info in
+            # a future update.
+            exon_i = 0
+            up_i = 0
+            down_i = 0
+            # The events are provided as input so are not considered novel here
+            is_novel_junc = False
+            is_novel_ss = False
+            se_info.set(shared_col_values.event_id, shared_col_values.g_id,
+                        sup_info, ex_start, ex_end, up_start, up_end,
+                        down_start, down_end, exon_i, up_i, down_i,
+                        inc_skip_lens.first, inc_skip_lens.second,
+                        inc_skip_lens.third, inc_skip_lens.fourth,
+                        is_novel_junc, is_novel_ss)
+            se.insert(se_info)
+
+
+@boundscheck(False)
+@wraparound(False)
+cdef read_mxe_event_set(str from_gtf_path, const int jld2, const int rl,
+                        const int rl_jl, cset[MXE_info]& mxe):
+    cdef:
+        list expected_headers, col_vals
+        FromGtfSharedColIndices shared_col_indices
+        FromGtfSharedColValues shared_col_values
+        int first_ex_start_index, first_ex_end_index, second_ex_start_index
+        int second_ex_end_index, up_start_index, up_end_index
+        int down_start_index, down_end_index
+        int first_ex_start, first_ex_end, second_ex_start, second_ex_end,
+        int up_start, up_end, down_start, down_end
+        int first_exon_i, second_exon_i, up_i, down_i
+        int line_i
+        str line
+        cbool is_novel_junc, is_novel_ss
+        Tetrad inc_skip_lens
+        SupInfo sup_info
+        MXE_info mxe_info
+
+    expected_headers = ['ID', 'GeneID', 'geneSymbol', 'chr', 'strand',
+                        '1stExonStart_0base', '1stExonEnd',
+                        '2ndExonStart_0base', '2ndExonEnd', 'upstreamES',
+                        'upstreamEE', 'downstreamES', 'downstreamEE']
+    find_shared_col_indices(expected_headers, &shared_col_indices)
+    first_ex_start_index = expected_headers.index('1stExonStart_0base')
+    first_ex_end_index = expected_headers.index('1stExonEnd')
+    second_ex_start_index = expected_headers.index('2ndExonStart_0base')
+    second_ex_end_index = expected_headers.index('2ndExonEnd')
+    up_start_index = expected_headers.index('upstreamES')
+    up_end_index = expected_headers.index('upstreamEE')
+    down_start_index = expected_headers.index('downstreamES')
+    down_end_index = expected_headers.index('downstreamEE')
+
+    with open(from_gtf_path, 'rt') as f_handle:
+        for line_i, line in enumerate(f_handle):
+            col_vals = line.strip().split('\t')
+            if line_i == 0:
+                if col_vals != expected_headers:
+                    sys.exit('ERROR: unable to read event set from {}.'
+                             ' Expected headers to be {}, but saw {}'.format(
+                                 from_gtf_path, expected_headers, col_vals))
+
+                continue
+
+            parse_shared_col_values(col_vals, shared_col_indices,
+                                    &shared_col_values)
+            first_ex_start = int(col_vals[first_ex_start_index])
+            first_ex_end = int(col_vals[first_ex_end_index])
+            second_ex_start = int(col_vals[second_ex_start_index])
+            second_ex_end = int(col_vals[second_ex_end_index])
+            up_start = int(col_vals[up_start_index])
+            up_end = int(col_vals[up_end_index])
+            down_start = int(col_vals[down_start_index])
+            down_end = int(col_vals[down_end_index])
+
+            sup_info.set_info(shared_col_values.g_sym, shared_col_values.chrom,
+                              shared_col_values.strand)
+            ms_inclen(first_ex_start, first_ex_end, second_ex_start,
+                      second_ex_end, up_start, up_end, down_start, down_end,
+                      &inc_skip_lens, jld2, rl, rl_jl)
+            # first_exon_i, second_exon_i, up_i, and down_i are required for
+            # mxe_info.set, but the values do not matter. They could be removed
+            # from MXE_Info in a future update.
+            first_exon_i = 0
+            second_exon_i = 0
+            up_i = 0
+            down_i = 0
+            is_novel_junc = False
+            is_novel_ss = False
+            mxe_info.set(shared_col_values.event_id, shared_col_values.g_id,
+                         sup_info, first_ex_start, first_ex_end,
+                         second_ex_start, second_ex_end, up_start, up_end,
+                         down_start, down_end, first_exon_i, second_exon_i,
+                         up_i, down_i, inc_skip_lens.first,
+                         inc_skip_lens.second, inc_skip_lens.third,
+                         inc_skip_lens.fourth, is_novel_junc, is_novel_ss)
+            mxe.insert(mxe_info)
+
+
+@boundscheck(False)
+@wraparound(False)
+cdef read_alt35_event_set(str from_gtf_path, const int jld2, const int rl,
+                          const int rl_jl, cset[ALT35_info]& alt35):
+    cdef:
+        list expected_headers, col_vals
+        FromGtfSharedColIndices shared_col_indices
+        FromGtfSharedColValues shared_col_values
+        int long_start_index, long_end_index, short_start_index
+        int short_end_index, flank_start_index, flank_end_index
+        int long_start, long_end, short_start, short_end, flank_start, flank_end
+        int long_i, short_i, flank_i
+        int line_i
+        str line
+        cbool is_novel_junc, is_novel_ss
+        Tetrad inc_skip_lens
+        SupInfo sup_info
+        ALT35_info alt35_info
+
+    expected_headers = ['ID', 'GeneID', 'geneSymbol', 'chr', 'strand',
+                        'longExonStart_0base', 'longExonEnd', 'shortES',
+                        'shortEE', 'flankingES', 'flankingEE']
+    find_shared_col_indices(expected_headers, &shared_col_indices)
+    long_start_index = expected_headers.index('longExonStart_0base')
+    long_end_index = expected_headers.index('longExonEnd')
+    short_start_index = expected_headers.index('shortES')
+    short_end_index = expected_headers.index('shortEE')
+    flank_start_index = expected_headers.index('flankingES')
+    flank_end_index = expected_headers.index('flankingEE')
+
+    with open(from_gtf_path, 'rt') as f_handle:
+        for line_i, line in enumerate(f_handle):
+            col_vals = line.strip().split('\t')
+            if line_i == 0:
+                if col_vals != expected_headers:
+                    sys.exit('ERROR: unable to read event set from {}.'
+                             ' Expected headers to be {}, but saw {}'.format(
+                                 from_gtf_path, expected_headers, col_vals))
+
+                continue
+
+            parse_shared_col_values(col_vals, shared_col_indices,
+                                    &shared_col_values)
+            long_start = int(col_vals[long_start_index])
+            long_end = int(col_vals[long_end_index])
+            short_start = int(col_vals[short_start_index])
+            short_end = int(col_vals[short_end_index])
+            flank_start = int(col_vals[flank_start_index])
+            flank_end = int(col_vals[flank_end_index])
+
+            sup_info.set_info(shared_col_values.g_sym, shared_col_values.chrom,
+                              shared_col_values.strand)
+            alt_inclen(long_start, long_end, short_start, short_end,
+                       flank_start, flank_end, &inc_skip_lens, jld2, rl, rl_jl)
+            # long_i, short_i, and flank_i are required for alt35_info.set, but
+            # the values do not matter. They could be removed from ALT35_Info
+            # in a future update.
+            long_i = 0
+            short_i = 0
+            flank_i = 0
+            is_novel_junc = False
+            is_novel_ss = False
+            alt35_info.set(shared_col_values.event_id, shared_col_values.g_id,
+                           sup_info, long_start, long_end, short_start,
+                           short_end, flank_start, flank_end, long_i, short_i,
+                           flank_i, inc_skip_lens.first, inc_skip_lens.second,
+                           inc_skip_lens.third, inc_skip_lens.fourth,
+                           is_novel_junc, is_novel_ss)
+            alt35.insert(alt35_info)
+
+
+@boundscheck(False)
+@wraparound(False)
+cdef read_ri_event_set(str from_gtf_path, const int jld2, const int rl,
+                       const int rl_jl, cset[RI_info]& ri):
+    cdef:
+        list expected_headers, col_vals
+        FromGtfSharedColIndices shared_col_indices
+        FromGtfSharedColValues shared_col_values
+        int ri_start_index, ri_end_index, up_start_index, up_end_index
+        int down_start_index, down_end_index
+        int ri_start, ri_end, up_start, up_end, down_start, down_end
+        int ri_i, up_i, down_i
+        int line_i
+        str line
+        cbool is_novel_junc, is_novel_ss
+        Tetrad inc_skip_lens
+        SupInfo sup_info
+        RI_info ri_info
+
+    expected_headers = ['ID', 'GeneID', 'geneSymbol', 'chr', 'strand',
+                        'riExonStart_0base', 'riExonEnd', 'upstreamES',
+                        'upstreamEE', 'downstreamES', 'downstreamEE']
+    find_shared_col_indices(expected_headers, &shared_col_indices)
+    ri_start_index = expected_headers.index('riExonStart_0base')
+    ri_end_index = expected_headers.index('riExonEnd')
+    up_start_index = expected_headers.index('upstreamES')
+    up_end_index = expected_headers.index('upstreamEE')
+    down_start_index = expected_headers.index('downstreamES')
+    down_end_index = expected_headers.index('downstreamEE')
+
+    with open(from_gtf_path, 'rt') as f_handle:
+        for line_i, line in enumerate(f_handle):
+            col_vals = line.strip().split('\t')
+            if line_i == 0:
+                if col_vals != expected_headers:
+                    sys.exit('ERROR: unable to read event set from {}.'
+                             ' Expected headers to be {}, but saw {}'.format(
+                                 from_gtf_path, expected_headers, col_vals))
+
+                continue
+
+            parse_shared_col_values(col_vals, shared_col_indices,
+                                    &shared_col_values)
+            ri_start = int(col_vals[ri_start_index])
+            ri_end = int(col_vals[ri_end_index])
+            up_start = int(col_vals[up_start_index])
+            up_end = int(col_vals[up_end_index])
+            down_start = int(col_vals[down_start_index])
+            down_end = int(col_vals[down_end_index])
+
+            sup_info.set_info(shared_col_values.g_sym, shared_col_values.chrom,
+                              shared_col_values.strand)
+            ri_inclen(ri_start, ri_end, up_start, up_end, down_start, down_end,
+                      &inc_skip_lens, jld2, rl, rl_jl)
+            # ri_i, up_i, and down_i are required for ri_info.set, but
+            # the values do not matter. They could be removed from RI_Info in
+            # a future update.
+            ri_i = 0
+            up_i = 0
+            down_i = 0
+            is_novel_junc = False
+            is_novel_ss = False
+            ri_info.set(shared_col_values.event_id, shared_col_values.g_id,
+                        sup_info, ri_start, ri_end, up_start, up_end,
+                        down_start, down_end, ri_i, up_i, down_i,
+                        inc_skip_lens.first, inc_skip_lens.second,
+                        inc_skip_lens.third, inc_skip_lens.fourth,
+                        is_novel_junc, is_novel_ss)
+            ri.insert(ri_info)
+
+
+@boundscheck(False)
+@wraparound(False)
 cdef void statistic(unordered_map[string,Gene]& genes,
                     unordered_map[int,cset[string]]& geneGroup):
     """TODO: Docstring for statistic.
@@ -3345,6 +3721,7 @@ def run_pipe(args):
         cset[ALT35_info] alt5,
         cset[RI_info] ri,
         int sam1len = len(args.b1.split(','))
+        int jld2
 
     start = time.time()
     parse_gtf(args.gtf, geneGroup, genes, supple)
@@ -3382,14 +3759,25 @@ def run_pipe(args):
         print 'loadsg:', time.time() - start
 
         start = time.time()
-        detect_ase(genes, supple, args.od, novel_juncs,
-                   se, mxe, alt3, alt5, ri,
-                   args.junctionLength/2, args.readLength, args.novelSS, args.mel)
+        jld2 = args.junctionLength/2
+        if args.fixed_event_set:
+            read_event_sets(args.fixed_event_set, args.od, se, mxe, alt3, alt5,
+                            ri, jld2, args.readLength)
+        else:
+            detect_ase(genes, supple, args.od, novel_juncs,
+                       se, mxe, alt3, alt5, ri,
+                       jld2, args.readLength, args.novelSS,
+                       args.mel)
+
+        # release memory
+        genes.clear()
+        supple.clear()
+        novel_juncs.clear()
         print 'ase:', time.time() - start
 
         start = time.time()
         count_occurrence(args.bams, dot_rmats_file_paths, args.od, se, mxe,
-                         alt3, alt5, ri, sam1len, args.junctionLength/2,
+                         alt3, alt5, ri, sam1len, jld2,
                          args.readLength, args.nthread, args.stat)
         print 'count:', time.time() - start
 

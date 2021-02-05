@@ -253,6 +253,7 @@ After all of the BAMs have been processed in this way, the output directory will
 - The full path of the BAM files given in `--b1` and `--b2` for the prep step must match the full paths given in the post step. Otherwise the lookup into the `.rmats` file(s) will fail. As an example, if the full `/path/to/1.bam` is used in the prep step, a relative path of just `1.bam` cannot be used in the post step.
 - If analyzing a small data set, `--task both` can be used to perform the prep and post steps in a single run.
 - `--novelSS` is an experimental feature that allows splicing events to be detected that involve an unannotated splice site.
+- `--fixed-event-set` can be set to a directory containing the `fromGTF.[AS].txt` files from a previous run of rMATS. The events in the provided files will be used directly instead of detecting events from the input reads. This can be used to run new data against the events detected from a previous rMATS run. The `fromGTF.[AS].txt` files can also be edited manually to specify a custom event set.
 
 ### All Arguments
 
@@ -330,6 +331,9 @@ optional arguments:
   --mel MEL             Maximum Exon Length. Only impacts --novelSS behavior.
                         Default: 500
   --allow-clipping      Allow alignments with soft or hard clipping to be used
+  --fixed-event-set FIXED_EVENT_SET
+                        A directory containing fromGTF.[AS].txt files to be
+                        used instead of detecting a new set of events
 ```
 
 ## Output
