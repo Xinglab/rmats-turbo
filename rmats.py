@@ -19,7 +19,7 @@ from datetime import datetime
 from rmatspipeline import run_pipe
 
 
-VERSION = 'v4.1.0'
+VERSION = 'v4.1.1'
 USAGE = '''%(prog)s [options]'''
 pipe_tasks = set(['prep', 'post', 'both',])
 
