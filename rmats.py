@@ -19,7 +19,7 @@ from datetime import datetime
 from rmatspipeline import run_pipe
 
 
-VERSION = 'v4.1.0'
+VERSION = 'v4.1.1'
 USAGE = '''%(prog)s [options]'''
 pipe_tasks = set(['prep', 'post', 'both',])
 
@@ -156,6 +156,7 @@ def get_args():
     parser.add_argument('--allow-clipping', action='store_true',
                         help='Allow alignments with soft or hard clipping to be used',
                         dest='allow_clipping')
+    parser.add_argument('--fixed-event-set', action='store', help='A directory containing fromGTF.[AS].txt files to be used instead of detecting a new set of events')
     # The help text for --imbalance ratio is not added to the parser
     # since the parameter is only intended for internal use and it
     # defaults to no filtering.
@@ -351,6 +352,7 @@ def process_counts(istat, tstat, counttype, ase, cstat, od, od_tmp, stat,
 
     """
     from_gtf_path = '%s/fromGTF.%s.txt' % (od, ase)
+
     indiv_counts_file_name = os.path.join(
         od, 'individualCounts.{}.txt'.format(ase))
     indiv_counts_temp_file_name = '{}.tmp'.format(indiv_counts_file_name)
@@ -806,7 +808,9 @@ def main():
     jcec_it = os.path.join(args.od, 'JCEC.raw.input.%s.txt')
 
     python_executable = get_python_executable()
-    root_dir = os.path.abspath(os.path.dirname(__file__))
+    # realpath is used here to support the conda install which creates a
+    # symlink for rmats.py
+    root_dir = os.path.abspath(os.path.dirname(os.path.realpath(__file__)))
 
     print('Processing count files.')
     for event_type in ['SE', 'MXE', 'A3SS', 'A5SS', 'RI']:

@@ -22,6 +22,11 @@ function main() {
 
   # Uncomment to use environment modules
   # load_modules || return 1
+
+  # Uncomment to set compiler paths
+  # export FC="$(which gfortran)" || return 1
+  # export CC="$(which gcc)" || return 1
+  # export CXX="$(which g++)" || return 1
 }
 
 main "$@"

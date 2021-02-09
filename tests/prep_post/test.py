@@ -33,12 +33,18 @@ class Test(tests.base_test.BaseTest):
                                                     'tmp_miss_input_bam')
         self._miss_prep_bam_tmp_dir = os.path.join(self._test_dir,
                                                    'tmp_miss_prep_bam')
+        self._extra_empty_dot_rmats_tmp_dir = os.path.join(
+            self._test_dir, 'tmp_extra_dot_rmats')
+        self._extra_empty_dot_rmats_out_dir = os.path.join(
+            self._test_dir, 'out_extra_dot_rmats')
 
         tests.util.recreate_dirs([
             self._generated_input_dir, self._out_dir, self._prep_1_tmp_dir,
             self._prep_2_tmp_dir, self._post_tmp_dir,
             self._dup_input_bam_tmp_dir, self._dup_prep_bam_tmp_dir,
             self._miss_input_bam_tmp_dir, self._miss_prep_bam_tmp_dir,
+            self._extra_empty_dot_rmats_out_dir,
+            self._extra_empty_dot_rmats_tmp_dir,
             self._command_output_dir()
         ])
 
@@ -72,6 +78,7 @@ class Test(tests.base_test.BaseTest):
             'duplicate_prep_bam',
             'missing_input_bam',
             'missing_prep_bam',
+            'extra_empty_dot_rmats',
         ]
         self._sub_step = None
 
@@ -88,8 +95,6 @@ class Test(tests.base_test.BaseTest):
         arguments = [
             '--gtf',
             self._gtf_path,
-            '--od',
-            self._out_dir,
             '-t',
             self._read_type,
             '--readLength',
@@ -98,6 +103,8 @@ class Test(tests.base_test.BaseTest):
 
         if self._sub_step == 'prep_1':
             arguments.extend([
+                '--od',
+                self._out_dir,
                 '--tmp',
                 self._prep_1_tmp_dir,
                 '--b1',
@@ -107,6 +114,8 @@ class Test(tests.base_test.BaseTest):
             ])
         elif self._sub_step == 'inte_1_fail':
             arguments.extend([
+                '--od',
+                self._out_dir,
                 '--tmp',
                 self._post_tmp_dir,
                 '--b1',
@@ -118,6 +127,8 @@ class Test(tests.base_test.BaseTest):
             ])
         elif self._sub_step == 'inte_1_pass':
             arguments.extend([
+                '--od',
+                self._out_dir,
                 '--tmp',
                 self._post_tmp_dir,
                 '--b1',
@@ -128,6 +139,8 @@ class Test(tests.base_test.BaseTest):
             ])
         elif self._sub_step == 'prep_2':
             arguments.extend([
+                '--od',
+                self._out_dir,
                 '--tmp',
                 self._prep_2_tmp_dir,
                 '--b1',
@@ -137,6 +150,8 @@ class Test(tests.base_test.BaseTest):
             ])
         elif self._sub_step == 'inte_2_fail':
             arguments.extend([
+                '--od',
+                self._out_dir,
                 '--tmp',
                 self._post_tmp_dir,
                 '--b1',
@@ -147,6 +162,8 @@ class Test(tests.base_test.BaseTest):
             ])
         elif self._sub_step == 'inte_2_pass':
             arguments.extend([
+                '--od',
+                self._out_dir,
                 '--tmp',
                 self._post_tmp_dir,
                 '--b1',
@@ -158,6 +175,8 @@ class Test(tests.base_test.BaseTest):
             ])
         elif self._sub_step == 'post':
             arguments.extend([
+                '--od',
+                self._out_dir,
                 '--tmp',
                 self._post_tmp_dir,
                 '--b1',
@@ -169,6 +188,8 @@ class Test(tests.base_test.BaseTest):
             ])
         elif self._sub_step == 'duplicate_input_bam':
             arguments.extend([
+                '--od',
+                self._out_dir,
                 '--tmp',
                 self._dup_input_bam_tmp_dir,
                 '--b1',
@@ -179,6 +200,8 @@ class Test(tests.base_test.BaseTest):
             ])
         elif self._sub_step == 'duplicate_prep_bam':
             arguments.extend([
+                '--od',
+                self._out_dir,
                 '--tmp',
                 self._dup_prep_bam_tmp_dir,
                 '--b1',
@@ -189,6 +212,8 @@ class Test(tests.base_test.BaseTest):
             ])
         elif self._sub_step == 'missing_input_bam':
             arguments.extend([
+                '--od',
+                self._out_dir,
                 '--tmp',
                 self._miss_input_bam_tmp_dir,
                 '--b1',
@@ -199,6 +224,8 @@ class Test(tests.base_test.BaseTest):
             ])
         elif self._sub_step == 'missing_prep_bam':
             arguments.extend([
+                '--od',
+                self._out_dir,
                 '--tmp',
                 self._miss_prep_bam_tmp_dir,
                 '--b1',
@@ -206,6 +233,19 @@ class Test(tests.base_test.BaseTest):
                 '--task',
                 'post',
                 '--statoff',
+            ])
+        elif self._sub_step == 'extra_empty_dot_rmats':
+            arguments.extend([
+                '--od',
+                self._extra_empty_dot_rmats_out_dir,
+                '--tmp',
+                self._extra_empty_dot_rmats_tmp_dir,
+                '--b1',
+                self._sample_1_bams_path,
+                '--b2',
+                self._sample_2_bams_path,
+                '--task',
+                'post',
             ])
 
         return arguments
@@ -219,6 +259,8 @@ class Test(tests.base_test.BaseTest):
             self._setup_miss_input_bam()
         elif self._sub_step == 'missing_prep_bam':
             self._setup_miss_prep_bam()
+        elif self._sub_step == 'extra_empty_dot_rmats':
+            self._setup_extra_empty_dot_rmats()
 
     def _setup_dup_input_bam(self):
         self._dup_input_bam_path = os.path.join(self._generated_input_dir,
@@ -253,6 +295,16 @@ class Test(tests.base_test.BaseTest):
         self._write_bams(bams, self._miss_prep_bam_path)
         self._cp_with_prefix('prep_1', self._prep_1_tmp_dir,
                              self._miss_prep_bam_tmp_dir)
+
+    def _setup_extra_empty_dot_rmats(self):
+        self._cp_with_prefix('prep_1', self._prep_1_tmp_dir,
+                             self._extra_empty_dot_rmats_tmp_dir)
+        self._cp_with_prefix('prep_2', self._prep_2_tmp_dir,
+                             self._extra_empty_dot_rmats_tmp_dir)
+        extra_dot_rmats_f_name = os.path.join(
+            self._extra_empty_dot_rmats_tmp_dir, 'extra_empty.rmats')
+        with open(extra_dot_rmats_f_name, 'wt'):
+            pass  # create empty file
 
     def _create_gtf(self, gtf_path):
         gtf = tests.gtf.GTF()
@@ -375,6 +427,8 @@ class Test(tests.base_test.BaseTest):
             self._check_results_miss_input_bam()
         elif self._sub_step == 'missing_prep_bam':
             self._check_results_miss_prep_bam()
+        elif self._sub_step == 'extra_empty_dot_rmats':
+            self._check_results_extra_empty_dot_rmats()
         else:
             self.fail('unexpected sub_step: {}'.format(self._sub_step))
 
@@ -416,7 +470,7 @@ class Test(tests.base_test.BaseTest):
                     quoted_test_gene_id: [{
                         'start_box': [401, 499],
                         'end_box': [401, 499],
-                        'counts': [1, 0]
+                        'count': 1
                     }]
                 }])
             else:
@@ -424,7 +478,7 @@ class Test(tests.base_test.BaseTest):
                     quoted_test_gene_id: [{
                         'start_box': [1, 99],
                         'end_box': [1, 99],
-                        'counts': [1, 0]
+                        'count': 1
                     }]
                 }])
 
@@ -482,7 +536,7 @@ class Test(tests.base_test.BaseTest):
                     quoted_test_gene_id: [{
                         'start_box': [401, 499],
                         'end_box': [401, 499],
-                        'counts': [1, 0]
+                        'count': 1
                     }]
                 }])
             else:
@@ -490,7 +544,7 @@ class Test(tests.base_test.BaseTest):
                     quoted_test_gene_id: [{
                         'start_box': [1, 99],
                         'end_box': [1, 99],
-                        'counts': [1, 0]
+                        'count': 1
                     }]
                 }])
 
@@ -544,7 +598,9 @@ class Test(tests.base_test.BaseTest):
 
     def _check_results_post(self):
         self._check_no_error_results()
+        self._check_results_post_shared(self._out_dir)
 
+    def _check_results_post_shared(self, out_dir):
         command_stdout_file_name = self._get_stdout_file_name()
         with open(command_stdout_file_name, 'rt') as out_f_h:
             out_lines = out_f_h.readlines()
@@ -552,7 +608,7 @@ class Test(tests.base_test.BaseTest):
         tests.util.assert_some_line_has(self, out_lines,
                                         'Processing count files')
 
-        from_gtf_se_path = os.path.join(self._out_dir, 'fromGTF.SE.txt')
+        from_gtf_se_path = os.path.join(out_dir, 'fromGTF.SE.txt')
         from_gtf_se_header, from_gtf_se_rows, error = output_parser.parse_from_gtf(
             from_gtf_se_path)
         self.assertFalse(error)
@@ -563,7 +619,7 @@ class Test(tests.base_test.BaseTest):
         self.assertEqual(from_gtf_se_row['exonStart_0base'], '200')
         self.assertEqual(from_gtf_se_row['exonEnd'], '300')
 
-        jc_raw_se_path = os.path.join(self._out_dir, 'JC.raw.input.SE.txt')
+        jc_raw_se_path = os.path.join(out_dir, 'JC.raw.input.SE.txt')
         jc_raw_se_header, jc_raw_se_rows, error = output_parser.parse_jc_raw(
             jc_raw_se_path)
         self.assertFalse(error)
@@ -575,7 +631,7 @@ class Test(tests.base_test.BaseTest):
         self.assertEqual(jc_raw_se_row['IJC_SAMPLE_2'], '0,0')
         self.assertEqual(jc_raw_se_row['SJC_SAMPLE_2'], '1,1')
 
-        se_mats_jc_path = os.path.join(self._out_dir, 'SE.MATS.JC.txt')
+        se_mats_jc_path = os.path.join(out_dir, 'SE.MATS.JC.txt')
         se_mats_jc_header, se_mats_jc_rows, error = output_parser.parse_mats_jc(
             se_mats_jc_path)
         self.assertFalse(error)
@@ -633,6 +689,21 @@ class Test(tests.base_test.BaseTest):
             miss_bam_path = bam.path
             expected_error = '{} not found in .rmats'.format(miss_bam_path)
             tests.util.assert_some_line_has(self, err_lines, expected_error)
+
+    def _check_results_extra_empty_dot_rmats(self):
+        self.assertEqual(self._rmats_return_code, 0)
+
+        command_stderr_file_name = self._get_stderr_file_name()
+        with open(command_stderr_file_name, 'rt') as err_f_h:
+            err_lines = err_f_h.readlines()
+
+        self.assertEqual(len(err_lines), 1)
+        self.assertIn(
+            'A .rmats file was found with no bams listed in it.'
+            ' Ignoring that file', err_lines[0])
+
+        # The extra empty file should not change the output
+        self._check_results_post_shared(self._extra_empty_dot_rmats_out_dir)
 
 
 if __name__ == '__main__':
