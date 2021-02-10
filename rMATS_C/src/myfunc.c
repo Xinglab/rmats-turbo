@@ -211,8 +211,6 @@ void myfunc_individual_der(const double x[], double res[], va_list argv) {
     double new_psi = inclu_len * x[0]/(inclu_len * x[0] + skip_len * (1 - x[0]));
     double new_psi_der = inclu_len * skip_len/pow(inclu_len * x[0] + skip_len * (1 - x[0]), 2);
 
-    // res[0] = -(I/new_psi * new_psi_der - S/(1 - new_psi) * new_psi_der - \
-    //          (logit(x[0]) - logit(beta))/(var * x[0] * (1 - x[0])) + 1/x[0] - 1/(1 - x[0]));
     res[0] = 1/x[0] + S/(1 - new_psi) * new_psi_der + \
              (logit(x[0]) - logit(beta))/(var * x[0] * (1 - x[0])) - (1/(1-x[0]) + I/new_psi * new_psi_der);
 

@@ -225,14 +225,14 @@ cdef void parse_gtf(str gtff, unordered_map[int,cset[string]]& geneGroup,
 @wraparound(False)
 cdef cbool read_has_nh_tag_1(const BamAlignment& bread) nogil:
     cdef:
-        char ttype
-        int8_t int8
-        int16_t int16
-        int32_t int32
-        uint8_t uint8
-        uint16_t uint16
-        uint32_t uint32
-        float ff
+        char ttype = '0'
+        int8_t int8 = 0
+        int16_t int16 = 0
+        int32_t int32 = 0
+        uint8_t uint8 = 0
+        uint16_t uint16 = 0
+        uint32_t uint32 = 0
+        float ff = 0
 
     if bread.GetTagType(NH, ttype):
         if ttype == BAM_TAG_TYPE_INT8:
@@ -676,7 +676,7 @@ cdef void parse_bam(long fidx, string bam,
                     unordered_map[string,Gene]& genes,
                     unordered_map[string,SupInfo]& supple,
                     unordered_map[string,vector[Triad]]& novel_juncs,
-                    unordered_map[string,cmap[Tetrad,pair[int,int]]]& exons,
+                    unordered_map[string,cmap[Tetrad,int]]& exons,
                     unordered_map[string,cmap[string,int]]& multis,
                     cbool issingle, int jld2, int readLength,
                     cbool variable_read_length, int dt, cbool& novelSS,
@@ -687,7 +687,6 @@ cdef void parse_bam(long fidx, string bam,
 
     """
     cdef:
-        cset[pair[int,int]] tmp_set
         cset[string].iterator cg
         cset[string] visited
         cbool ispaired = not issingle
@@ -746,6 +745,11 @@ cdef void parse_bam(long fidx, string bam,
             read_outcome_counts[filter_outcome] += 1
             continue
 
+        strand = check_strand(bread, ispaired, dt)
+        if dt != FRUNSTRANDED and strand == cdot:
+            read_outcome_counts[READ_NOT_EXPECTED_STRAND] += 1
+            continue
+
         any_exon_match = False
         any_multijunc_match = False
         exon_outcome = is_bam_exonread(
@@ -754,14 +758,9 @@ cdef void parse_bam(long fidx, string bam,
         multijunc_outcome = is_bam_multijunc(
             cigar_data_after_clipping, amount_clipped, readLength,
             variable_read_length)
+
         if exon_outcome == READ_USED:
             mc = bread.Position + 1 # position (1-based) where alignment starts
-
-            strand = check_strand(bread, ispaired, dt)
-            if dt != FRUNSTRANDED and strand == cdot:
-                read_outcome_counts[READ_NOT_EXPECTED_STRAND] += 1
-                continue
-
             mec = mc + cigar_data_after_clipping[0].Length - 1
             bref_name = refid2str[bread.RefID]
 
@@ -770,9 +769,10 @@ cdef void parse_bam(long fidx, string bam,
                 cg = geneGroup[i].begin()
                 while cg != geneGroup[i].end():
                     ## for each candidate gene
-
-                    if supple[deref(cg)].chrom != bref_name or\
-                        visited.find(deref(cg)) != visited.end():
+                    if ((supple[deref(cg)].chrom != bref_name
+                         or (supple[deref(cg)].strand != strand
+                             and dt != FRUNSTRANDED)
+                         or visited.find(deref(cg)) != visited.end())):
                         inc(cg)
                         continue
 
@@ -782,12 +782,7 @@ cdef void parse_bam(long fidx, string bam,
                     if (tetrad.first != -1 and tetrad.second != -1) or\
                             (tetrad.third != -1 and tetrad.fourth != -1):
                         any_exon_match = True
-                        if dt == FRUNSTRANDED:
-                            exons[deref(cg)][tetrad].first = exons[deref(cg)][tetrad].first + 1
-                        elif strand == plus_mark:
-                            exons[deref(cg)][tetrad].first = exons[deref(cg)][tetrad].first + 1
-                        elif strand == minus_mark:
-                            exons[deref(cg)][tetrad].second = exons[deref(cg)][tetrad].second + 1
+                        exons[deref(cg)][tetrad] += 1
 
                     inc(cg)
 
@@ -812,8 +807,10 @@ cdef void parse_bam(long fidx, string bam,
                     cg = geneGroup[j].begin()
                     while cg != geneGroup[j].end():
                         ## for each candidate gene
-                        if supple[deref(cg)].chrom != bref_name or\
-                                visited.find(deref(cg)) != visited.end():
+                        if ((supple[deref(cg)].chrom != bref_name
+                             or (supple[deref(cg)].strand != strand
+                                 and dt != FRUNSTRANDED)
+                             or visited.find(deref(cg)) != visited.end())):
                             inc(cg)
                             continue
 
@@ -824,7 +821,7 @@ cdef void parse_bam(long fidx, string bam,
 
                         if multiread.length() > 0:
                             any_multijunc_match = True
-                            multis[deref(cg)][multiread] = multis[deref(cg)][multiread] + 1
+                            multis[deref(cg)][multiread] += 1
                         if ntx.size() != 0:
                             any_multijunc_match = True
                             novel_juncs[deref(cg)].insert(novel_juncs[deref(cg)].begin(),
@@ -893,7 +890,7 @@ cdef void detect_novel(str bams, unordered_map[int,cset[string]]& geneGroup,
                        unordered_map[string,Gene]& genes,
                        unordered_map[string,SupInfo]& supple,
                        vector[unordered_map[string,vector[Triad]]]& novel_juncs,
-                       vector[unordered_map[string,cmap[Tetrad,pair[int,int]]]]& exons,
+                       vector[unordered_map[string,cmap[Tetrad,int]]]& exons,
                        vector[unordered_map[string,cmap[string,int]]]& multis, args):
     """TODO: Docstring for detect_novel.
     :returns: TODO
@@ -1336,6 +1333,11 @@ cdef void detect_se_mxe(const string& gID, Gene& gene, SupInfo& supInfo,
         cmap[SE_key,SE_info].iterator ise
         cmap[MXE_key,MXE_info].iterator imxe
         cbool found_any, all_novel_left, all_novel_right, all_novel_skip
+        cbool event_tx_type, increased_inc_skp_len, converts_to_novel_ss
+        cbool converts_to_annotated, maintains_tx_type
+        cbool found_mid_gtf_transcript, found_mid_bam_transcript
+        cbool found_mid_transcript, found_idx_gtf_transcript
+        cbool found_idx_bam_transcript, found_idx_transcript
 
     gtf_pair.second = GTF_TX
     bam_pair.second = BAM_TX
@@ -1385,6 +1387,13 @@ cdef void detect_se_mxe(const string& gID, Gene& gene, SupInfo& supInfo,
                     if not found_any:
                         continue
 
+                    event_tx_type = GTF_TX
+                    if ((not includes_novel_ss)
+                        and (all_novel_left
+                             or all_novel_right
+                             or all_novel_skip)):
+                        event_tx_type = BAM_TX
+
                     ise = junction_se.find(se_key)
                     if ise == junction_se.end():
                         iid = junction_se.size()
@@ -1396,7 +1405,8 @@ cdef void detect_se_mxe(const string& gID, Gene& gene, SupInfo& supInfo,
                                                 idx, left, right,
                                                 len_pair.first, len_pair.second,
                                                 len_pair.third, len_pair.fourth,
-                                                GTF_TX, includes_novel_ss)
+                                                event_tx_type,
+                                                includes_novel_ss)
                     else:
                         increased_inc_skp_len = (
                             len_pair.first > deref(ise).second.inc_len
@@ -1407,7 +1417,17 @@ cdef void detect_se_mxe(const string& gID, Gene& gene, SupInfo& supInfo,
                             includes_novel_ss
                             and (not deref(ise).second.includes_novel_ss)
                         )
-                        if increased_inc_skp_len and not converts_to_novel_ss:
+                        converts_to_annotated = (
+                            event_tx_type == GTF_TX
+                            and deref(ise).second.txtype == BAM_TX
+                        )
+                        maintains_tx_type = (
+                            event_tx_type == deref(ise).second.txtype
+                        )
+                        if ((not converts_to_novel_ss)
+                            and (converts_to_annotated
+                                 or (increased_inc_skp_len
+                                     and maintains_tx_type))):
                             deref(ise).second.set(-1, gID, supInfo,
                                                   exon.first-1, exon.second,
                                                   gene.idx_exon[left].first-1,
@@ -1416,18 +1436,8 @@ cdef void detect_se_mxe(const string& gID, Gene& gene, SupInfo& supInfo,
                                                   idx, left, right,
                                                   len_pair.first, len_pair.second,
                                                   len_pair.third, len_pair.fourth,
-                                                  deref(ise).second.txtype,
-                                                  deref(ise).second.includes_novel_ss)
-
-                    # Do not update the novelJunction status when
-                    # handling novelSS
-                    if not includes_novel_ss:
-                        ise = junction_se.find(se_key)
-                        if (deref(ise).second.txtype == GTF_TX
-                            and (all_novel_left
-                                 or all_novel_right
-                                 or all_novel_skip)):
-                            deref(ise).second.txtype = BAM_TX
+                                                  event_tx_type,
+                                                  includes_novel_ss)
 
                     break
                 else:
@@ -1461,6 +1471,15 @@ cdef void detect_se_mxe(const string& gID, Gene& gene, SupInfo& supInfo,
                 if not (found_mid_transcript and found_idx_transcript):
                     continue
 
+                # all_novel_left and all_novel_right do not need to be
+                # checked here since found_idx_bam_transcript would be
+                # True if either all_novel_left or all_novel_right was.
+                event_tx_type = GTF_TX
+                if ((not includes_novel_ss)
+                    and (found_mid_bam_transcript
+                         or found_idx_bam_transcript)):
+                    event_tx_type = BAM_TX
+
                 imxe = junction_mxe.find(mxe_key)
                 # TODO plus_mark: se_key.first,second == mxe_key.first.second
                 if supInfo.strand == minus_mark:
@@ -1478,7 +1497,7 @@ cdef void detect_se_mxe(const string& gID, Gene& gene, SupInfo& supInfo,
                                               idx, mid, left, right,
                                               len_pair.first, len_pair.second,
                                               len_pair.third, len_pair.fourth,
-                                              GTF_TX, includes_novel_ss)
+                                              event_tx_type, includes_novel_ss)
                 else:
                     increased_inc_skp_len = (
                         len_pair.first > deref(imxe).second.inc_len
@@ -1489,7 +1508,17 @@ cdef void detect_se_mxe(const string& gID, Gene& gene, SupInfo& supInfo,
                         includes_novel_ss
                         and (not deref(imxe).second.includes_novel_ss)
                     )
-                    if increased_inc_skp_len and not converts_to_novel_ss:
+                    converts_to_annotated = (
+                        event_tx_type == GTF_TX
+                        and deref(imxe).second.txtype == BAM_TX
+                    )
+                    maintains_tx_type = (
+                        event_tx_type == deref(imxe).second.txtype
+                    )
+                    if ((not converts_to_novel_ss)
+                        and (converts_to_annotated
+                             or (increased_inc_skp_len
+                                 and maintains_tx_type))):
                         deref(imxe).second.set(-1, gID, supInfo,
                                                exon.first-1, exon.second,
                                                gene.idx_exon[mid].first-1, gene.idx_exon[mid].second,
@@ -1498,19 +1527,8 @@ cdef void detect_se_mxe(const string& gID, Gene& gene, SupInfo& supInfo,
                                                idx, mid, left, right,
                                                len_pair.first, len_pair.second,
                                                len_pair.third, len_pair.fourth,
-                                               deref(imxe).second.txtype,
-                                               deref(imxe).second.includes_novel_ss)
-                imxe = junction_mxe.find(mxe_key)
-                # all_novel_left and all_novel_right do not need to be
-                # checked here since found_idx_bam_transcript would be
-                # True if either all_novel_left or all_novel_right was.
-                #
-                # Do not update the novelJunction status when handling novelSS
-                if not includes_novel_ss:
-                    if (deref(imxe).second.txtype == GTF_TX
-                        and (found_mid_bam_transcript
-                             or found_idx_bam_transcript)):
-                        deref(imxe).second.txtype = BAM_TX
+                                               event_tx_type,
+                                               includes_novel_ss)
 
 
 @boundscheck(False)
@@ -1545,6 +1563,13 @@ cdef void update_alt35_right_flank_event(const string& gID, const Gene& gene,
     cdef:
         cmap[ALT35_key, ALT35_info].iterator ialt35
         int iid
+        cbool event_tx_type, increased_inc_skp_len, converts_to_novel_ss
+        cbool converts_to_annotated, maintains_tx_type
+
+    event_tx_type = GTF_TX
+    if ((not includes_novel_ss)
+        and (all_novel_i or all_novel_j)):
+        event_tx_type = BAM_TX
 
     ialt35 = junction_35.find(alt35_key)
     if ialt35 == junction_35.end():
@@ -1555,7 +1580,8 @@ cdef void update_alt35_right_flank_event(const string& gID, const Gene& gene,
                                    exon.first-1, exon.second,
                                    j, i, idx,
                                    len_pair.first, len_pair.second,
-                                   len_pair.third, len_pair.fourth, GTF_TX,
+                                   len_pair.third, len_pair.fourth,
+                                   event_tx_type,
                                    includes_novel_ss)
     else:
         increased_inc_skp_len = (
@@ -1567,7 +1593,16 @@ cdef void update_alt35_right_flank_event(const string& gID, const Gene& gene,
             includes_novel_ss
             and (not deref(ialt35).second.includes_novel_ss)
         )
-        if increased_inc_skp_len and not converts_to_novel_ss:
+        converts_to_annotated = (
+            event_tx_type == GTF_TX
+            and deref(ialt35).second.txtype == BAM_TX
+        )
+        maintains_tx_type = (
+            event_tx_type == deref(ialt35).second.txtype
+        )
+        if ((not converts_to_novel_ss)
+            and (converts_to_annotated
+                 or (increased_inc_skp_len and maintains_tx_type))):
             deref(ialt35).second.set(-1, gID, supInfo,
                                      gene.idx_exon[i].first-1, alt35_key.second,
                                      gene.idx_exon[i].first-1, alt35_key.first,
@@ -1575,15 +1610,8 @@ cdef void update_alt35_right_flank_event(const string& gID, const Gene& gene,
                                      j, i, idx,
                                      len_pair.first, len_pair.second,
                                      len_pair.third, len_pair.fourth,
-                                     deref(ialt35).second.txtype,
-                                     deref(ialt35).second.includes_novel_ss)
-
-    # Do not update the novelJunction status when handling novelSS
-    if not includes_novel_ss:
-        ialt35 = junction_35.find(alt35_key)
-        if (deref(ialt35).second.txtype == GTF_TX
-            and (all_novel_i or all_novel_j)):
-            deref(ialt35).second.txtype = BAM_TX
+                                     event_tx_type,
+                                     includes_novel_ss)
 
 
 @boundscheck(False)
@@ -1601,6 +1629,13 @@ cdef void update_alt35_left_flank_event(const string& gID, const Gene& gene,
     cdef:
         cmap[ALT35_key, ALT35_info].iterator ialt35
         int iid
+        cbool event_tx_type, increased_inc_skp_len, converts_to_novel_ss
+        cbool converts_to_annotated, maintains_tx_type
+
+    event_tx_type = GTF_TX
+    if ((not includes_novel_ss)
+        and (all_novel_i or all_novel_j)):
+        event_tx_type = BAM_TX
 
     ialt35 = junction_35.find(alt35_key)
     if ialt35 == junction_35.end():
@@ -1611,7 +1646,8 @@ cdef void update_alt35_left_flank_event(const string& gID, const Gene& gene,
                                    exon.first-1, exon.second,
                                    i, j, idx,
                                    len_pair.first, len_pair.second,
-                                   len_pair.third, len_pair.fourth, GTF_TX,
+                                   len_pair.third, len_pair.fourth,
+                                   event_tx_type,
                                    includes_novel_ss)
     else:
         increased_inc_skp_len = (
@@ -1623,7 +1659,16 @@ cdef void update_alt35_left_flank_event(const string& gID, const Gene& gene,
             includes_novel_ss
             and (not deref(ialt35).second.includes_novel_ss)
         )
-        if increased_inc_skp_len and not converts_to_novel_ss:
+        converts_to_annotated = (
+            event_tx_type == GTF_TX
+            and deref(ialt35).second.txtype == BAM_TX
+        )
+        maintains_tx_type = (
+            event_tx_type == deref(ialt35).second.txtype
+        )
+        if ((not converts_to_novel_ss)
+            and (converts_to_annotated
+                 or (increased_inc_skp_len and maintains_tx_type))):
             deref(ialt35).second.set(-1, gID, supInfo,
                                      alt35_key.second, gene.idx_exon[i].second,
                                      alt35_key.third, gene.idx_exon[i].second,
@@ -1631,15 +1676,8 @@ cdef void update_alt35_left_flank_event(const string& gID, const Gene& gene,
                                      i, j, idx,
                                      len_pair.first, len_pair.second,
                                      len_pair.third, len_pair.fourth,
-                                     deref(ialt35).second.txtype,
-                                     deref(ialt35).second.includes_novel_ss)
-
-    # Do not update the novelJunction status when handling novelSS
-    if not includes_novel_ss:
-        ialt35 = junction_35.find(alt35_key)
-        if (deref(ialt35).second.txtype == GTF_TX
-            and (all_novel_i or all_novel_j)):
-            deref(ialt35).second.txtype = BAM_TX
+                                     event_tx_type,
+                                     includes_novel_ss)
 
 
 @boundscheck(False)
@@ -1765,7 +1803,8 @@ cdef void detect_ri(const string& gID, Gene& gene, SupInfo& supInfo,
         RI_key ri_key
         Tetrad len_pair
         cmap[RI_key,RI_info].iterator iri
-        cbool found_any, all_novel
+        cbool found_any, all_novel, event_tx_type, increased_inc_skp_len
+        cbool converts_to_novel_ss, converts_to_annotated, maintains_tx_type
 
     ri_key.chrom = supInfo.chrom
 
@@ -1784,6 +1823,10 @@ cdef void detect_ri(const string& gID, Gene& gene, SupInfo& supInfo,
         if gene.exon_idx.find(tmp_pair) == gene.exon_idx.end():
             continue
 
+        event_tx_type = GTF_TX
+        if (not includes_novel_ss) and all_novel:
+            event_tx_type = BAM_TX
+
         iri = junction_ri.find(ri_key)
         ri_inclen(gene.idx_exon[i].first-1, exon.second,
                   gene.idx_exon[i].first-1, ri_key.first,
@@ -1796,7 +1839,8 @@ cdef void detect_ri(const string& gID, Gene& gene, SupInfo& supInfo,
                                     ri_key.second, exon.second,
                                     gene.exon_idx[tmp_pair], i, idx,
                                     len_pair.first, len_pair.second,
-                                    len_pair.third, len_pair.fourth, GTF_TX,
+                                    len_pair.third, len_pair.fourth,
+                                    event_tx_type,
                                     includes_novel_ss)
         else:
             increased_inc_skp_len = (
@@ -1808,7 +1852,16 @@ cdef void detect_ri(const string& gID, Gene& gene, SupInfo& supInfo,
                 includes_novel_ss
                 and (not deref(iri).second.includes_novel_ss)
             )
-            if increased_inc_skp_len and not converts_to_novel_ss:
+            converts_to_annotated = (
+                event_tx_type == GTF_TX
+                and deref(iri).second.txtype == BAM_TX
+            )
+            maintains_tx_type = (
+                event_tx_type == deref(iri).second.txtype
+            )
+            if ((not converts_to_novel_ss)
+                and (converts_to_annotated
+                     or (increased_inc_skp_len and maintains_tx_type))):
                 deref(iri).second.set(-1, gID, supInfo,
                                       gene.idx_exon[i].first-1, exon.second,
                                       gene.idx_exon[i].first-1, ri_key.first,
@@ -1816,14 +1869,8 @@ cdef void detect_ri(const string& gID, Gene& gene, SupInfo& supInfo,
                                       gene.exon_idx[tmp_pair], i, idx,
                                       len_pair.first, len_pair.second,
                                       len_pair.third, len_pair.fourth,
-                                      deref(iri).second.txtype,
-                                      deref(iri).second.includes_novel_ss)
-
-        # Do not update the novelJunction status when handling novelSS
-        if not includes_novel_ss:
-            iri = junction_ri.find(ri_key)
-            if deref(iri).second.txtype == GTF_TX and all_novel:
-                deref(iri).second.txtype = BAM_TX
+                                      event_tx_type,
+                                      includes_novel_ss)
 
 
 @boundscheck(False)
@@ -1872,19 +1919,9 @@ cdef void count_se_junction(const vector[pair[long,long]]& junction_read,
 @boundscheck(False)
 @wraparound(False)
 cdef void count_se_exon(const Tetrad& exon_read,
-                        const pair[int,int]& count_by_strand,
-                        const SE_info& se_event, int dt,
+                        const int count,
+                        const SE_info& se_event,
                         SE_counts_for_event& se_counts) nogil:
-    cdef:
-        int count = 0
-
-    if dt == FRUNSTRANDED:
-        count = count_by_strand.first
-    elif se_event.supInfo.strand == plus_mark:
-        count = count_by_strand.first
-    elif se_event.supInfo.strand == minus_mark:
-        count = count_by_strand.second
-
     if ((exon_read.first > se_event.ts
          and exon_read.fourth != -1
          and exon_read.fourth <= se_event.te)):
@@ -1895,15 +1932,15 @@ cdef void count_se_exon(const Tetrad& exon_read,
 @boundscheck(False)
 @wraparound(False)
 cdef void count_se(cset[SE_info]& junction_se,
-                   unordered_map[string,cmap[Tetrad,pair[int,int]]]& exons,
+                   unordered_map[string,cmap[Tetrad,int]]& exons,
                    unordered_map[string,cmap[vector[pair[long,long]],int]]& juncs,
                    vector[SE_counts_for_event_by_bam]& se_counts,
-                   const int bam_i, int& dt) nogil:
+                   const int bam_i) nogil:
     cdef:
         int idx
-        cmap[Tetrad,pair[int,int]].iterator imap2
+        cmap[Tetrad,int].iterator imap2
         cmap[vector[pair[long,long]],int].iterator imap
-        unordered_map[string,cmap[Tetrad,pair[int,int]]].iterator iunmap2
+        unordered_map[string,cmap[Tetrad,int]].iterator iunmap2
         unordered_map[string,cmap[vector[pair[long,long]],int]].iterator iunmap
         cset[SE_info].iterator ise = junction_se.begin()
 
@@ -1923,7 +1960,7 @@ cdef void count_se(cset[SE_info]& junction_se,
             imap2 = deref(iunmap2).second.begin()
             while imap2 != deref(iunmap2).second.end():
                 count_se_exon(deref(imap2).first, deref(imap2).second,
-                              deref(ise), dt, se_counts[idx].counts[bam_i])
+                              deref(ise), se_counts[idx].counts[bam_i])
                 inc(imap2)
 
         inc(ise)
@@ -1997,19 +2034,9 @@ cdef void count_mxe_junction(const vector[pair[long,long]]& junction_read,
 @boundscheck(False)
 @wraparound(False)
 cdef void count_mxe_exon(const Tetrad& exon_read,
-                         const pair[int,int]& count_by_strand,
-                         const MXE_info& mxe_event, int dt,
+                         const int count,
+                         const MXE_info& mxe_event,
                          MXE_counts_for_event& mxe_counts) nogil:
-    cdef:
-        int count = 0
-
-    if dt == FRUNSTRANDED:
-        count = count_by_strand.first
-    elif mxe_event.supInfo.strand == plus_mark:
-        count = count_by_strand.first
-    elif mxe_event.supInfo.strand == minus_mark:
-        count = count_by_strand.second
-
     if ((exon_read.first > mxe_event.ts
          and exon_read.fourth != -1
          and exon_read.fourth <= mxe_event.te)):
@@ -2026,15 +2053,15 @@ cdef void count_mxe_exon(const Tetrad& exon_read,
 @boundscheck(False)
 @wraparound(False)
 cdef void count_mxe(cset[MXE_info]& junction_mxe,
-                    unordered_map[string,cmap[Tetrad,pair[int,int]]]& exons,
+                    unordered_map[string,cmap[Tetrad,int]]& exons,
                     unordered_map[string,cmap[vector[pair[long,long]],int]]& juncs,
                     vector[MXE_counts_for_event_by_bam]& mxe_counts,
-                    const int bam_i, int& dt) nogil:
+                    const int bam_i) nogil:
     cdef:
         int idx
-        cmap[Tetrad,pair[int,int]].iterator imap2
+        cmap[Tetrad,int].iterator imap2
         cmap[vector[pair[long,long]],int].iterator imap
-        unordered_map[string,cmap[Tetrad,pair[int,int]]].iterator iunmap2
+        unordered_map[string,cmap[Tetrad,int]].iterator iunmap2
         unordered_map[string,cmap[vector[pair[long,long]],int]].iterator iunmap
         cset[MXE_info].iterator imxe = junction_mxe.begin()
 
@@ -2054,7 +2081,7 @@ cdef void count_mxe(cset[MXE_info]& junction_mxe,
             imap2 = deref(iunmap2).second.begin()
             while imap2 != deref(iunmap2).second.end():
                 count_mxe_exon(deref(imap2).first, deref(imap2).second,
-                               deref(imxe), dt, mxe_counts[idx].counts[bam_i])
+                               deref(imxe), mxe_counts[idx].counts[bam_i])
                 inc(imap2)
 
         inc(imxe)
@@ -2097,19 +2124,9 @@ cdef void count_alt35_right_flank_junction(
 @wraparound(False)
 cdef void count_alt35_right_flank_exon(
     const Tetrad& exon_read,
-    const pair[int,int]& count_by_strand,
-    const ALT35_info& alt35_event, int dt, int rl_jl,
+    const int count,
+    const ALT35_info& alt35_event, int rl_jl,
     ALT35_counts_for_event& alt35_counts) nogil:
-
-    cdef:
-        int count = 0
-
-    if dt == FRUNSTRANDED:
-        count = count_by_strand.first
-    elif alt35_event.supInfo.strand == plus_mark:
-        count = count_by_strand.first
-    elif alt35_event.supInfo.strand == minus_mark:
-        count = count_by_strand.second
 
     if ((exon_read.second <= alt35_event.se-rl_jl+1
          and exon_read.second != -1
@@ -2163,19 +2180,9 @@ cdef void count_alt35_left_flank_junction(
 @wraparound(False)
 cdef void count_alt35_left_flank_exon(
     const Tetrad& exon_read,
-    const pair[int,int]& count_by_strand,
-    const ALT35_info& alt35_event, int dt, int rl_jl,
+    const int count,
+    const ALT35_info& alt35_event, int rl_jl,
     ALT35_counts_for_event& alt35_counts) nogil:
-
-    cdef:
-        int count = 0
-
-    if dt == FRUNSTRANDED:
-        count = count_by_strand.first
-    elif alt35_event.supInfo.strand == plus_mark:
-        count = count_by_strand.first
-    elif alt35_event.supInfo.strand == minus_mark:
-        count = count_by_strand.second
 
     if ((exon_read.first > alt35_event.ls
          and exon_read.second != -1
@@ -2194,16 +2201,16 @@ cdef void count_alt35_left_flank_exon(
 @boundscheck(False)
 @wraparound(False)
 cdef void count_alt35(cset[ALT35_info]& junction_35,
-                      unordered_map[string,cmap[Tetrad,pair[int,int]]]& exons,
+                      unordered_map[string,cmap[Tetrad,int]]& exons,
                       unordered_map[string,cmap[vector[pair[long,long]],int]]& juncs,
                       vector[ALT35_counts_for_event_by_bam]& alt35_counts,
-                      int& jld2, int& rl, const int bam_i, int& dt) nogil:
+                      int& jld2, int& rl, const int bam_i) nogil:
     cdef:
         int idx
         int rl_jl = rl - jld2
-        cmap[Tetrad,pair[int,int]].iterator imap2
+        cmap[Tetrad,int].iterator imap2
         cmap[vector[pair[long,long]],int].iterator imap
-        unordered_map[string,cmap[Tetrad,pair[int,int]]].iterator iunmap2
+        unordered_map[string,cmap[Tetrad,int]].iterator iunmap2
         unordered_map[string,cmap[vector[pair[long,long]],int]].iterator iunmap
         cset[ALT35_info].iterator ialt35 = junction_35.begin()
 
@@ -2227,7 +2234,7 @@ cdef void count_alt35(cset[ALT35_info]& junction_35,
                 while imap2 != deref(iunmap2).second.end():
                     count_alt35_right_flank_exon(
                         deref(imap2).first, deref(imap2).second,
-                        deref(ialt35), dt, rl_jl,
+                        deref(ialt35), rl_jl,
                         alt35_counts[idx].counts[bam_i])
                     inc(imap2)
         else:
@@ -2247,7 +2254,7 @@ cdef void count_alt35(cset[ALT35_info]& junction_35,
                 while imap2 != deref(iunmap2).second.end():
                     count_alt35_left_flank_exon(
                         deref(imap2).first, deref(imap2).second,
-                        deref(ialt35), dt, rl_jl,
+                        deref(ialt35), rl_jl,
                         alt35_counts[idx].counts[bam_i])
                     inc(imap2)
 
@@ -2289,19 +2296,11 @@ cdef void count_ri_junction(const vector[pair[long,long]]& junction_read,
 @boundscheck(False)
 @wraparound(False)
 cdef void count_ri_exon(const Tetrad& exon_read,
-                        const pair[int,int]& count_by_strand,
-                        const RI_info& ri_event, int dt, int rl_jl,
+                        const int count,
+                        const RI_info& ri_event, int rl_jl,
                         RI_counts_for_event& ri_counts) nogil:
     cdef:
-        int count = 0
         cbool counted = False
-
-    if dt == FRUNSTRANDED:
-        count = count_by_strand.first
-    elif ri_event.supInfo.strand == plus_mark:
-        count = count_by_strand.first
-    elif ri_event.supInfo.strand == minus_mark:
-        count = count_by_strand.second
 
     if ((exon_read.second <= ri_event.ue-rl_jl+1
          and exon_read.second != -1
@@ -2328,16 +2327,16 @@ cdef void count_ri_exon(const Tetrad& exon_read,
 @boundscheck(False)
 @wraparound(False)
 cdef void count_ri(cset[RI_info]& junction_ri,
-                   unordered_map[string,cmap[Tetrad,pair[int,int]]]& exons,
+                   unordered_map[string,cmap[Tetrad,int]]& exons,
                    unordered_map[string,cmap[vector[pair[long,long]],int]]& juncs,
                    vector[RI_counts_for_event_by_bam]& ri_counts,
-                   int& jld2, int& rl, const int bam_i, int& dt) nogil:
+                   int& jld2, int& rl, const int bam_i) nogil:
     cdef:
         int idx
         int rl_jl = rl - jld2
-        cmap[Tetrad,pair[int,int]].iterator imap2
+        cmap[Tetrad,int].iterator imap2
         cmap[vector[pair[long,long]],int].iterator imap
-        unordered_map[string,cmap[Tetrad,pair[int,int]]].iterator iunmap2
+        unordered_map[string,cmap[Tetrad,int]].iterator iunmap2
         unordered_map[string,cmap[vector[pair[long,long]],int]].iterator iunmap
         cset[RI_info].iterator iri = junction_ri.begin()
 
@@ -2359,7 +2358,7 @@ cdef void count_ri(cset[RI_info]& junction_ri,
 
             while imap2 != deref(iunmap2).second.end():
                 count_ri_exon(deref(imap2).first, deref(imap2).second,
-                              deref(iri), dt, rl_jl,
+                              deref(iri), rl_jl,
                               ri_counts[idx].counts[bam_i])
                 inc(imap2)
 
@@ -2372,7 +2371,7 @@ cdef count_occurrence(str bams, list dot_rmats_paths, str od,
                       cset[SE_info]& se, cset[MXE_info]& mxe,
                       cset[ALT35_info]& alt3, cset[ALT35_info]& alt5,
                       cset[RI_info]& ri, int sam1len, int& jld2, int& rl,
-                      int& nthread, int& dt, cbool stat):
+                      int& nthread, cbool stat):
     cdef:
         size_t idx = 0
         list vbams = bams.split(',')
@@ -2392,7 +2391,7 @@ cdef count_occurrence(str bams, list dot_rmats_paths, str od,
             vector[ALT35_counts_for_event_by_bam](alt5.size()))
         vector[RI_counts_for_event_by_bam] ri_counts = (
             vector[RI_counts_for_event_by_bam](ri.size()))
-        vector[unordered_map[string,cmap[Tetrad,pair[int,int]]]] exons
+        vector[unordered_map[string,cmap[Tetrad,int]]] exons
         vector[unordered_map[string,cmap[vector[pair[long,long]],int]]] juncs
 
     while ise != se.end():
@@ -2450,11 +2449,11 @@ cdef count_occurrence(str bams, list dot_rmats_paths, str od,
         with gil:
             bam_i = load_read(bams, dot_rmats_paths[fidx], exons, juncs)
 
-        count_se(se, exons[bam_i], juncs[bam_i], se_counts, bam_i, dt)
-        count_mxe(mxe, exons[bam_i], juncs[bam_i], mxe_counts, bam_i, dt)
-        count_alt35(alt3, exons[bam_i], juncs[bam_i], alt3_counts, jld2, rl, bam_i, dt)
-        count_alt35(alt5, exons[bam_i], juncs[bam_i], alt5_counts, jld2, rl, bam_i, dt)
-        count_ri(ri, exons[bam_i], juncs[bam_i], ri_counts, jld2, rl, bam_i, dt)
+        count_se(se, exons[bam_i], juncs[bam_i], se_counts, bam_i)
+        count_mxe(mxe, exons[bam_i], juncs[bam_i], mxe_counts, bam_i)
+        count_alt35(alt3, exons[bam_i], juncs[bam_i], alt3_counts, jld2, rl, bam_i)
+        count_alt35(alt5, exons[bam_i], juncs[bam_i], alt5_counts, jld2, rl, bam_i)
+        count_ri(ri, exons[bam_i], juncs[bam_i], ri_counts, jld2, rl, bam_i)
 
         exons[bam_i].clear()
         juncs[bam_i].clear()
@@ -3043,6 +3042,382 @@ cdef detect_ase(unordered_map[string,Gene]& genes,
 
 @boundscheck(False)
 @wraparound(False)
+cdef str copy_from_gtf(str src_dir, str dest_dir, str event):
+    cdef:
+        str from_gtf_base, src_gtf_path, path_of_copy
+        str from_gtf_template = 'fromGTF.{}.txt'
+
+    from_gtf_base = from_gtf_template.format(event)
+    src_gtf_path = join(src_dir, from_gtf_base)
+    path_of_copy = join(dest_dir, from_gtf_base)
+    shutil.copy(src_gtf_path, path_of_copy)
+
+    return path_of_copy
+
+
+@boundscheck(False)
+@wraparound(False)
+cdef read_event_sets(str fixed_event_set_dir, str out_dir, cset[SE_info]& se,
+                     cset[MXE_info]& mxe, cset[ALT35_info]& alt3,
+                     cset[ALT35_info]& alt5, cset[RI_info]& ri,
+                     const int jld2, const int rl):
+    cdef:
+        str copied_from_gtf_path
+        int rl_jl = rl-jld2
+
+    copied_from_gtf_path = copy_from_gtf(fixed_event_set_dir, out_dir, 'SE')
+    read_se_event_set(copied_from_gtf_path, jld2, rl, rl_jl, se)
+
+    copied_from_gtf_path = copy_from_gtf(fixed_event_set_dir, out_dir, 'MXE')
+    read_mxe_event_set(copied_from_gtf_path, jld2, rl, rl_jl, mxe)
+
+    copied_from_gtf_path = copy_from_gtf(fixed_event_set_dir, out_dir, 'A3SS')
+    read_alt35_event_set(copied_from_gtf_path, jld2, rl, rl_jl, alt3)
+
+    copied_from_gtf_path = copy_from_gtf(fixed_event_set_dir, out_dir, 'A5SS')
+    read_alt35_event_set(copied_from_gtf_path, jld2, rl, rl_jl, alt5)
+
+    copied_from_gtf_path = copy_from_gtf(fixed_event_set_dir, out_dir, 'RI')
+    read_ri_event_set(copied_from_gtf_path, jld2, rl, rl_jl, ri)
+
+
+cdef struct FromGtfSharedColIndices:
+    int event_id_index
+    int g_id_index
+    int g_sym_index
+    int chrom_index
+    int strand_index
+
+
+cdef struct FromGtfSharedColValues:
+    int event_id
+    string g_id
+    string g_sym
+    string chrom
+    string strand
+
+
+@boundscheck(False)
+@wraparound(False)
+cdef find_shared_col_indices(list expected_headers,
+                             FromGtfSharedColIndices* shared_col_indices):
+    shared_col_indices[0].event_id_index = expected_headers.index('ID')
+    shared_col_indices[0].g_id_index = expected_headers.index('GeneID')
+    shared_col_indices[0].g_sym_index = expected_headers.index('geneSymbol')
+    shared_col_indices[0].chrom_index = expected_headers.index('chr')
+    shared_col_indices[0].strand_index = expected_headers.index('strand')
+
+
+@boundscheck(False)
+@wraparound(False)
+cdef parse_shared_col_values(list col_vals,
+                             const FromGtfSharedColIndices& shared_col_indices,
+                             FromGtfSharedColValues* shared_col_values):
+    shared_col_values[0].event_id = int(
+        col_vals[shared_col_indices.event_id_index])
+    shared_col_values[0].g_id = col_vals[shared_col_indices.g_id_index]
+    shared_col_values[0].g_sym = col_vals[shared_col_indices.g_sym_index]
+    shared_col_values[0].chrom = col_vals[shared_col_indices.chrom_index]
+    shared_col_values[0].strand = col_vals[shared_col_indices.strand_index]
+
+
+@boundscheck(False)
+@wraparound(False)
+cdef read_se_event_set(str from_gtf_path, const int jld2, const int rl,
+                       const int rl_jl, cset[SE_info]& se):
+    cdef:
+        list expected_headers, col_vals
+        FromGtfSharedColIndices shared_col_indices
+        FromGtfSharedColValues shared_col_values
+        int ex_start_index, ex_end_index, up_start_index, up_end_index
+        int down_start_index, down_end_index
+        int ex_start, ex_end, up_start, up_end, down_start, down_end
+        int exon_i, up_i, down_i
+        int line_i
+        str line
+        cbool is_novel_junc, is_novel_ss
+        Tetrad inc_skip_lens
+        SupInfo sup_info
+        SE_info se_info
+
+    expected_headers = ['ID', 'GeneID', 'geneSymbol', 'chr', 'strand',
+                        'exonStart_0base', 'exonEnd', 'upstreamES',
+                        'upstreamEE', 'downstreamES', 'downstreamEE']
+    find_shared_col_indices(expected_headers, &shared_col_indices)
+    ex_start_index = expected_headers.index('exonStart_0base')
+    ex_end_index = expected_headers.index('exonEnd')
+    up_start_index = expected_headers.index('upstreamES')
+    up_end_index = expected_headers.index('upstreamEE')
+    down_start_index = expected_headers.index('downstreamES')
+    down_end_index = expected_headers.index('downstreamEE')
+
+    with open(from_gtf_path, 'rt') as f_handle:
+        for line_i, line in enumerate(f_handle):
+            col_vals = line.strip().split('\t')
+            if line_i == 0:
+                if col_vals != expected_headers:
+                    sys.exit('ERROR: unable to read event set from {}.'
+                             ' Expected headers to be {}, but saw {}'.format(
+                                 from_gtf_path, expected_headers, col_vals))
+
+                continue
+
+            parse_shared_col_values(col_vals, shared_col_indices,
+                                    &shared_col_values)
+            ex_start = int(col_vals[ex_start_index])
+            ex_end = int(col_vals[ex_end_index])
+            up_start = int(col_vals[up_start_index])
+            up_end = int(col_vals[up_end_index])
+            down_start = int(col_vals[down_start_index])
+            down_end = int(col_vals[down_end_index])
+
+            sup_info.set_info(shared_col_values.g_sym, shared_col_values.chrom,
+                              shared_col_values.strand)
+            sm_inclen(ex_start, ex_end, up_start, up_end, down_start, down_end,
+                      &inc_skip_lens, jld2, rl, rl_jl)
+            # exon_i, up_i, and down_i are required for se_info.set, but
+            # the values do not matter. They could be removed from SE_Info in
+            # a future update.
+            exon_i = 0
+            up_i = 0
+            down_i = 0
+            # The events are provided as input so are not considered novel here
+            is_novel_junc = False
+            is_novel_ss = False
+            se_info.set(shared_col_values.event_id, shared_col_values.g_id,
+                        sup_info, ex_start, ex_end, up_start, up_end,
+                        down_start, down_end, exon_i, up_i, down_i,
+                        inc_skip_lens.first, inc_skip_lens.second,
+                        inc_skip_lens.third, inc_skip_lens.fourth,
+                        is_novel_junc, is_novel_ss)
+            se.insert(se_info)
+
+
+@boundscheck(False)
+@wraparound(False)
+cdef read_mxe_event_set(str from_gtf_path, const int jld2, const int rl,
+                        const int rl_jl, cset[MXE_info]& mxe):
+    cdef:
+        list expected_headers, col_vals
+        FromGtfSharedColIndices shared_col_indices
+        FromGtfSharedColValues shared_col_values
+        int first_ex_start_index, first_ex_end_index, second_ex_start_index
+        int second_ex_end_index, up_start_index, up_end_index
+        int down_start_index, down_end_index
+        int first_ex_start, first_ex_end, second_ex_start, second_ex_end,
+        int up_start, up_end, down_start, down_end
+        int first_exon_i, second_exon_i, up_i, down_i
+        int line_i
+        str line
+        cbool is_novel_junc, is_novel_ss
+        Tetrad inc_skip_lens
+        SupInfo sup_info
+        MXE_info mxe_info
+
+    expected_headers = ['ID', 'GeneID', 'geneSymbol', 'chr', 'strand',
+                        '1stExonStart_0base', '1stExonEnd',
+                        '2ndExonStart_0base', '2ndExonEnd', 'upstreamES',
+                        'upstreamEE', 'downstreamES', 'downstreamEE']
+    find_shared_col_indices(expected_headers, &shared_col_indices)
+    first_ex_start_index = expected_headers.index('1stExonStart_0base')
+    first_ex_end_index = expected_headers.index('1stExonEnd')
+    second_ex_start_index = expected_headers.index('2ndExonStart_0base')
+    second_ex_end_index = expected_headers.index('2ndExonEnd')
+    up_start_index = expected_headers.index('upstreamES')
+    up_end_index = expected_headers.index('upstreamEE')
+    down_start_index = expected_headers.index('downstreamES')
+    down_end_index = expected_headers.index('downstreamEE')
+
+    with open(from_gtf_path, 'rt') as f_handle:
+        for line_i, line in enumerate(f_handle):
+            col_vals = line.strip().split('\t')
+            if line_i == 0:
+                if col_vals != expected_headers:
+                    sys.exit('ERROR: unable to read event set from {}.'
+                             ' Expected headers to be {}, but saw {}'.format(
+                                 from_gtf_path, expected_headers, col_vals))
+
+                continue
+
+            parse_shared_col_values(col_vals, shared_col_indices,
+                                    &shared_col_values)
+            first_ex_start = int(col_vals[first_ex_start_index])
+            first_ex_end = int(col_vals[first_ex_end_index])
+            second_ex_start = int(col_vals[second_ex_start_index])
+            second_ex_end = int(col_vals[second_ex_end_index])
+            up_start = int(col_vals[up_start_index])
+            up_end = int(col_vals[up_end_index])
+            down_start = int(col_vals[down_start_index])
+            down_end = int(col_vals[down_end_index])
+
+            sup_info.set_info(shared_col_values.g_sym, shared_col_values.chrom,
+                              shared_col_values.strand)
+            ms_inclen(first_ex_start, first_ex_end, second_ex_start,
+                      second_ex_end, up_start, up_end, down_start, down_end,
+                      &inc_skip_lens, jld2, rl, rl_jl)
+            # first_exon_i, second_exon_i, up_i, and down_i are required for
+            # mxe_info.set, but the values do not matter. They could be removed
+            # from MXE_Info in a future update.
+            first_exon_i = 0
+            second_exon_i = 0
+            up_i = 0
+            down_i = 0
+            is_novel_junc = False
+            is_novel_ss = False
+            mxe_info.set(shared_col_values.event_id, shared_col_values.g_id,
+                         sup_info, first_ex_start, first_ex_end,
+                         second_ex_start, second_ex_end, up_start, up_end,
+                         down_start, down_end, first_exon_i, second_exon_i,
+                         up_i, down_i, inc_skip_lens.first,
+                         inc_skip_lens.second, inc_skip_lens.third,
+                         inc_skip_lens.fourth, is_novel_junc, is_novel_ss)
+            mxe.insert(mxe_info)
+
+
+@boundscheck(False)
+@wraparound(False)
+cdef read_alt35_event_set(str from_gtf_path, const int jld2, const int rl,
+                          const int rl_jl, cset[ALT35_info]& alt35):
+    cdef:
+        list expected_headers, col_vals
+        FromGtfSharedColIndices shared_col_indices
+        FromGtfSharedColValues shared_col_values
+        int long_start_index, long_end_index, short_start_index
+        int short_end_index, flank_start_index, flank_end_index
+        int long_start, long_end, short_start, short_end, flank_start, flank_end
+        int long_i, short_i, flank_i
+        int line_i
+        str line
+        cbool is_novel_junc, is_novel_ss
+        Tetrad inc_skip_lens
+        SupInfo sup_info
+        ALT35_info alt35_info
+
+    expected_headers = ['ID', 'GeneID', 'geneSymbol', 'chr', 'strand',
+                        'longExonStart_0base', 'longExonEnd', 'shortES',
+                        'shortEE', 'flankingES', 'flankingEE']
+    find_shared_col_indices(expected_headers, &shared_col_indices)
+    long_start_index = expected_headers.index('longExonStart_0base')
+    long_end_index = expected_headers.index('longExonEnd')
+    short_start_index = expected_headers.index('shortES')
+    short_end_index = expected_headers.index('shortEE')
+    flank_start_index = expected_headers.index('flankingES')
+    flank_end_index = expected_headers.index('flankingEE')
+
+    with open(from_gtf_path, 'rt') as f_handle:
+        for line_i, line in enumerate(f_handle):
+            col_vals = line.strip().split('\t')
+            if line_i == 0:
+                if col_vals != expected_headers:
+                    sys.exit('ERROR: unable to read event set from {}.'
+                             ' Expected headers to be {}, but saw {}'.format(
+                                 from_gtf_path, expected_headers, col_vals))
+
+                continue
+
+            parse_shared_col_values(col_vals, shared_col_indices,
+                                    &shared_col_values)
+            long_start = int(col_vals[long_start_index])
+            long_end = int(col_vals[long_end_index])
+            short_start = int(col_vals[short_start_index])
+            short_end = int(col_vals[short_end_index])
+            flank_start = int(col_vals[flank_start_index])
+            flank_end = int(col_vals[flank_end_index])
+
+            sup_info.set_info(shared_col_values.g_sym, shared_col_values.chrom,
+                              shared_col_values.strand)
+            alt_inclen(long_start, long_end, short_start, short_end,
+                       flank_start, flank_end, &inc_skip_lens, jld2, rl, rl_jl)
+            # long_i, short_i, and flank_i are required for alt35_info.set, but
+            # the values do not matter. They could be removed from ALT35_Info
+            # in a future update.
+            long_i = 0
+            short_i = 0
+            flank_i = 0
+            is_novel_junc = False
+            is_novel_ss = False
+            alt35_info.set(shared_col_values.event_id, shared_col_values.g_id,
+                           sup_info, long_start, long_end, short_start,
+                           short_end, flank_start, flank_end, long_i, short_i,
+                           flank_i, inc_skip_lens.first, inc_skip_lens.second,
+                           inc_skip_lens.third, inc_skip_lens.fourth,
+                           is_novel_junc, is_novel_ss)
+            alt35.insert(alt35_info)
+
+
+@boundscheck(False)
+@wraparound(False)
+cdef read_ri_event_set(str from_gtf_path, const int jld2, const int rl,
+                       const int rl_jl, cset[RI_info]& ri):
+    cdef:
+        list expected_headers, col_vals
+        FromGtfSharedColIndices shared_col_indices
+        FromGtfSharedColValues shared_col_values
+        int ri_start_index, ri_end_index, up_start_index, up_end_index
+        int down_start_index, down_end_index
+        int ri_start, ri_end, up_start, up_end, down_start, down_end
+        int ri_i, up_i, down_i
+        int line_i
+        str line
+        cbool is_novel_junc, is_novel_ss
+        Tetrad inc_skip_lens
+        SupInfo sup_info
+        RI_info ri_info
+
+    expected_headers = ['ID', 'GeneID', 'geneSymbol', 'chr', 'strand',
+                        'riExonStart_0base', 'riExonEnd', 'upstreamES',
+                        'upstreamEE', 'downstreamES', 'downstreamEE']
+    find_shared_col_indices(expected_headers, &shared_col_indices)
+    ri_start_index = expected_headers.index('riExonStart_0base')
+    ri_end_index = expected_headers.index('riExonEnd')
+    up_start_index = expected_headers.index('upstreamES')
+    up_end_index = expected_headers.index('upstreamEE')
+    down_start_index = expected_headers.index('downstreamES')
+    down_end_index = expected_headers.index('downstreamEE')
+
+    with open(from_gtf_path, 'rt') as f_handle:
+        for line_i, line in enumerate(f_handle):
+            col_vals = line.strip().split('\t')
+            if line_i == 0:
+                if col_vals != expected_headers:
+                    sys.exit('ERROR: unable to read event set from {}.'
+                             ' Expected headers to be {}, but saw {}'.format(
+                                 from_gtf_path, expected_headers, col_vals))
+
+                continue
+
+            parse_shared_col_values(col_vals, shared_col_indices,
+                                    &shared_col_values)
+            ri_start = int(col_vals[ri_start_index])
+            ri_end = int(col_vals[ri_end_index])
+            up_start = int(col_vals[up_start_index])
+            up_end = int(col_vals[up_end_index])
+            down_start = int(col_vals[down_start_index])
+            down_end = int(col_vals[down_end_index])
+
+            sup_info.set_info(shared_col_values.g_sym, shared_col_values.chrom,
+                              shared_col_values.strand)
+            ri_inclen(ri_start, ri_end, up_start, up_end, down_start, down_end,
+                      &inc_skip_lens, jld2, rl, rl_jl)
+            # ri_i, up_i, and down_i are required for ri_info.set, but
+            # the values do not matter. They could be removed from RI_Info in
+            # a future update.
+            ri_i = 0
+            up_i = 0
+            down_i = 0
+            is_novel_junc = False
+            is_novel_ss = False
+            ri_info.set(shared_col_values.event_id, shared_col_values.g_id,
+                        sup_info, ri_start, ri_end, up_start, up_end,
+                        down_start, down_end, ri_i, up_i, down_i,
+                        inc_skip_lens.first, inc_skip_lens.second,
+                        inc_skip_lens.third, inc_skip_lens.fourth,
+                        is_novel_junc, is_novel_ss)
+            ri.insert(ri_info)
+
+
+@boundscheck(False)
+@wraparound(False)
 cdef void statistic(unordered_map[string,Gene]& genes,
                     unordered_map[int,cset[string]]& geneGroup):
     """TODO: Docstring for statistic.
@@ -3130,11 +3505,11 @@ cdef save_nj(fp, unordered_map[string,vector[Triad]]& novel_juncs):
 
 @boundscheck(False)
 @wraparound(False)
-cdef save_exons(fp, unordered_map[string,cmap[Tetrad,pair[int,int]]]& exons):
+cdef save_exons(fp, unordered_map[string,cmap[Tetrad,int]]& exons):
     cdef:
         string line
-        unordered_map[string,cmap[Tetrad,pair[int,int]]].iterator iexons
-        cmap[Tetrad,pair[int,int]].iterator imap
+        unordered_map[string,cmap[Tetrad,int]].iterator iexons
+        cmap[Tetrad,int].iterator imap
 
     line = '%d\n' % (exons.size())
     fp.write(line)
@@ -3144,10 +3519,9 @@ cdef save_exons(fp, unordered_map[string,cmap[Tetrad,pair[int,int]]]& exons):
         line = deref(iexons).first
         imap = deref(iexons).second.begin()
         while imap != deref(iexons).second.end():
-            line = '%s;%d,%d,%d,%d,%d,%d' % (line, deref(imap).first.first,
+            line = '%s;%d,%d,%d,%d,%d' % (line, deref(imap).first.first,
                     deref(imap).first.second, deref(imap).first.third,
-                    deref(imap).first.fourth, deref(imap).second.first,
-                    deref(imap).second.second)
+                    deref(imap).first.fourth, deref(imap).second)
             inc(imap)
 
         fp.write(line)
@@ -3184,7 +3558,7 @@ cdef save_multis(fp, unordered_map[string,cmap[string,int]]& multis):
 cdef save_job(str bams, const string& tmp_dir, str prep_prefix,
               const int& readLength,
               vector[unordered_map[string,vector[Triad]]]& novel_juncs,
-              vector[unordered_map[string,cmap[Tetrad,pair[int,int]]]]& exons,
+              vector[unordered_map[string,cmap[Tetrad,int]]]& exons,
               vector[unordered_map[string,cmap[string,int]]]& multis):
     cdef:
         int bam_i
@@ -3226,7 +3600,7 @@ cdef int try_get_index(list values, object value, cbool* found):
 @wraparound(False)
 cdef int _load_job(str rmatsf, list vbams,
                    vector[unordered_map[string,vector[Triad]]]& novel_juncs,
-                   vector[unordered_map[string,cmap[Tetrad,pair[int,int]]]]& exons,
+                   vector[unordered_map[string,cmap[Tetrad,int]]]& exons,
                    vector[unordered_map[string,cmap[vector[pair[long,long]],int]]]& juncs,
                    int mode):
     cdef:
@@ -3269,6 +3643,7 @@ cdef int _load_job(str rmatsf, list vbams,
         num = int(fp.readline())
         for i in range(num):
             line = fp.readline().strip()
+
             if mode == read_mode:
                 continue
 
@@ -3291,8 +3666,7 @@ cdef int _load_job(str rmatsf, list vbams,
             for line in eles[1:]:
                 ele = [int(s) for s in line.split(',')]
                 tetrad.set(ele[0], ele[1], ele[2], ele[3])
-                exons[idx][gene_id][tetrad].first = ele[4]
-                exons[idx][gene_id][tetrad].second = ele[5]
+                exons[idx][gene_id][tetrad] = ele[4]
 
         # processing junction reads
         num = int(fp.readline())
@@ -3321,7 +3695,7 @@ cdef load_sg(str bams, list dot_rmats_paths,
         int num = 0, bam_i
         list vbams = bams.split(',')
         list prep_counts_by_bam
-        vector[unordered_map[string,cmap[Tetrad,pair[int,int]]]] exons
+        vector[unordered_map[string,cmap[Tetrad,int]]] exons
         vector[unordered_map[string,cmap[vector[pair[long,long]],int]]] juncs
 
     num = len(vbams)
@@ -3398,6 +3772,12 @@ cdef dict split_sg_files_by_bam(str bams, str tmp_dir, str out_dir,
     for orig_i, orig_dot_rmats in enumerate(all_orig_dot_rmats):
         with open(orig_dot_rmats, 'r') as orig_handle:
             bams_from_file = orig_handle.readline().strip().split(',')
+            if bams_from_file == ['']:
+                sys.stderr.write(
+                    'WARNING: A .rmats file was found with no bams listed in'
+                    ' it. Ignoring that file: {}\n'.format(orig_dot_rmats))
+                continue
+
             read_length_from_file = int(orig_handle.readline().strip())
             if read_length_from_file != read_length:
                 print('WARNING: The post step should use the same read length'
@@ -3462,9 +3842,10 @@ cdef dict split_sg_files_by_bam(str bams, str tmp_dir, str out_dir,
 @boundscheck(False)
 @wraparound(False)
 cdef int load_read(str bams, str fn,
-                   vector[unordered_map[string,cmap[Tetrad,pair[int,int]]]]& exons,
+                   vector[unordered_map[string,cmap[Tetrad,int]]]& exons,
                    vector[unordered_map[string,cmap[vector[pair[long,long]],int]]]& juncs):
     cdef:
+        int bam_i
         list vbams = bams.split(',')
         vector[unordered_map[string,vector[Triad]]] novel_juncs
 
@@ -3482,7 +3863,7 @@ def run_pipe(args):
         unordered_map[string,Gene] genes
         unordered_map[string,SupInfo] supple
         vector[unordered_map[string,vector[Triad]]] novel_juncs
-        vector[unordered_map[string,cmap[Tetrad,pair[int,int]]]] exons
+        vector[unordered_map[string,cmap[Tetrad,int]]] exons
         vector[unordered_map[string,cmap[string,int]]] multis
         cset[SE_info] se,
         cset[MXE_info] mxe,
@@ -3490,6 +3871,7 @@ def run_pipe(args):
         cset[ALT35_info] alt5,
         cset[RI_info] ri,
         int sam1len = len(args.b1.split(','))
+        int jld2
 
     start = time.time()
     parse_gtf(args.gtf, geneGroup, genes, supple)
@@ -3527,15 +3909,26 @@ def run_pipe(args):
         print 'loadsg:', time.time() - start
 
         start = time.time()
-        detect_ase(genes, supple, args.od, novel_juncs,
-                   se, mxe, alt3, alt5, ri,
-                   args.junctionLength/2, args.readLength, args.novelSS, args.mel)
+        jld2 = args.junctionLength/2
+        if args.fixed_event_set:
+            read_event_sets(args.fixed_event_set, args.od, se, mxe, alt3, alt5,
+                            ri, jld2, args.readLength)
+        else:
+            detect_ase(genes, supple, args.od, novel_juncs,
+                       se, mxe, alt3, alt5, ri,
+                       jld2, args.readLength, args.novelSS,
+                       args.mel)
+
+        # release memory
+        genes.clear()
+        supple.clear()
+        novel_juncs.clear()
         print 'ase:', time.time() - start
 
         start = time.time()
         count_occurrence(args.bams, dot_rmats_file_paths, args.od, se, mxe,
-                         alt3, alt5, ri, sam1len, args.junctionLength/2,
-                         args.readLength, args.nthread, args.dt, args.stat)
+                         alt3, alt5, ri, sam1len, jld2,
+                         args.readLength, args.nthread, args.stat)
         print 'count:', time.time() - start
 
         shutil.rmtree(split_dot_rmats_dir_path)
