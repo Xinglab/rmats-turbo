@@ -39,6 +39,10 @@ def parse_jc_raw(jc_raw_path):
     return parse_tab_separated_value_file(jc_raw_path)
 
 
+def parse_jcec_raw(jcec_raw_path):
+    return parse_tab_separated_value_file(jcec_raw_path)
+
+
 def parse_mats_jc(mats_jc_path):
     return parse_tab_separated_value_file(mats_jc_path)
 
