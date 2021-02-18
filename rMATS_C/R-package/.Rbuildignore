@@ -1,7 +1,0 @@
-^.*\.Rproj$
-^\.Rproj\.user$
-\.o$
-\.so$
-\.dll$
-\.DS_Store
-README.md

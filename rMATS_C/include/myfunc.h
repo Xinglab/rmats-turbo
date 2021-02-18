@@ -10,8 +10,6 @@
 void mle_result_set(mle_result* mle, double sum, gsl_vector* psi1, gsl_vector* psi2,
                     double beta0, double beta1, double var1, double var2);
 
-void log_vector(gsl_vector *vec);
-
 double myfunc_multivar(const double x[], va_list argv);
 
 void myfunc_multivar_der(const double x[], double res[], va_list argv);
@@ -43,8 +41,6 @@ int MLE_marginal_iteration_constrain(gsl_vector* i1, gsl_vector* i2,
                                      mle_result* mle);
 
 void* thread_wrapper_for_LT(void* arg);
-
-void* batch_wrapper_for_LT(void* arg);
 
 double likelihood_test(gsl_vector *i1, gsl_vector *i2, gsl_vector *s1, gsl_vector *s2,
                         int inclu_len, int skip_len, int flag, char* id);

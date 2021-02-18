@@ -10,7 +10,6 @@
 #include "../include/util.h"
 #include "../include/myfunc.h"
 #include "../include/global.h"
-#include "../include/cthreadpool.h"
 
 
 extern double rho;
@@ -197,10 +196,6 @@ double myfunc_individual(const double x[], va_list argv) {
     // TODO This change the result.
     return pow((logit(x[0]) - logit(beta)), 2)/(2 * var) -
            (I * log(new_psi) + S * log(1 - new_psi) - log(x[0]) - log(1-x[0]));
-    // return -(I * log(new_psi) + S * log(1 - new_psi) -
-    //         pow((logit(x[0]) - logit(beta)), 2)/(2 * var) + log(x[0] - x[0]*x[0]));
-    // return -(I * log(new_psi) + S * log(1 - new_psi) -
-    //         pow((logit(x[0]) - logit(beta)), 2)/(2 * var) + log(x[0]) + log(1-x[0]));
 }
 
 
@@ -438,7 +433,6 @@ int MLE_marginal_iteration_constrain(gsl_vector* i1, gsl_vector* i2,
             iter_cutoff = fabs(prev_sum - cur_sum);
         }
         prev_sum = cur_sum;
-        // printf("%.12f, %.12f, %.12f, %.12f\n", beta0, beta1, iter_cutoff, prev_sum);
     }
 
     gsl_vector_free(psi1);
@@ -462,23 +456,6 @@ void* thread_wrapper_for_LT(void* arg) {
                            data->skp1, data->skp2,
                            data->inclu_len, data->skip_len,
                            data->flag, data->id);
-    return (void*)ret;
-}
-
-
-void* batch_wrapper_for_LT(void* arg) {
-    batch_datum *args = (batch_datum*)arg;
-    int batch_size = args->batch_size, i;
-    double *ret = (double*)malloc(sizeof(double)*batch_size);
-    odiff *datum = (odiff*)*args->datum;
-    odiff data;
-    for (i = 0; i < batch_size; ++i) {
-        data = datum[i];
-        ret[i] = likelihood_test(data.inc1, data.inc2,
-                                 data.skp1, data.skp2,
-                                 data.inclu_len, data.skip_len,
-                                 data.flag, data.id);
-    }
     return (void*)ret;
 }
 
