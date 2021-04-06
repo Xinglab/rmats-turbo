@@ -489,7 +489,7 @@ def claim_prep_prefix(task, tmp_dir):
     prep_prefix = None
     while True:
         prep_prefix = datetime.fromtimestamp(time.time()).strftime(
-            '%Y-%m-%d-%H:%M:%S_%f')
+            '%Y-%m-%d-%H_%M_%S_%f')
         file_path = file_name_template.format(prep_prefix)
         if not os.path.exists(file_path):
             with open(file_path, 'wt'):
