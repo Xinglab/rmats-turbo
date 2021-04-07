@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 ##
 # @file lite2.py
-# @brief 
+# @brief
 # @author Zhijie Xie
 # @date 2015-11-27
 
@@ -68,7 +68,7 @@ def doSTARMapping(args): ## do STAR mapping
                     cmd += ' --alignEndsType EndToEnd'
 
                 cmd += ' --runThreadN 4 --outSAMstrandField intronMotif --outSAMtype BAM SortedByCoordinate '
-                cmd += '--alignSJDBoverhangMin ' + str(args.tophatAnchor) + ' --alignIntronMax 299999 --genomeDir ' + args.bIndex + ' --sjdbGTFfile ' + args.gtf; 
+                cmd += '--alignSJDBoverhangMin ' + str(args.tophatAnchor) + ' --alignIntronMax 299999 --genomeDir ' + args.bIndex + ' --sjdbGTFfile ' + args.gtf;
                 cmd += ' --outFileNamePrefix ' + map_folder + '/ --readFilesIn ';
                 cmd += ' '.join(pair)
                 if pair[0].endswith('.gz'):
@@ -208,10 +208,17 @@ def get_args():
 
 
 def check_integrity(input_bams_string, tmp_dir):
-    """TODO: Docstring for check_integrity.
-    :returns: TODO
-
     """
+    Purpose: Iterates over the supplied string of bam filenames and checks every file in tmp_dir
+    to ensure every bam filename has exactly one prep file. Exits with appropriate errors if
+    there are one or more of the following: duplicate bam files, bam files with no prep,
+    bam files with multiple preps, or prep files with no corresponding bam. Otherwise, prints 'Ok.'
+
+    Positional arguments:
+    First: input_bams_string - A comma-delimited string of all the input bam filenames.
+    Second: tmp_dir - The location of the current rMATS instance's temporary directory, ostensibly containing the prep files for the input bams.
+    """
+
     input_bams = input_bams_string.split(',')
     duplicate_input_bams = list()
     prep_count_by_bam = dict()
@@ -491,7 +498,7 @@ def create_output_dirs(args):
     args.out_tmp_sub_dir = os.path.join(args.od, 'tmp')
     for dir_path in [args.od, args.out_tmp_sub_dir, args.tmp]:
         if not os.path.exists(dir_path):
-            os.makedirs(dir_path)   # python2: makedirs() got an unexpected keyword argument 'exist_ok' 
+            os.makedirs(dir_path)   # python2: makedirs() got an unexpected keyword argument 'exist_ok'
 
 
 def main():
