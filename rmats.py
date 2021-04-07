@@ -508,9 +508,14 @@ def create_output_dirs(args):
 
 
 def main():
-    """TODO: Docstring for main.
-    :returns: TODO
-
+    """Takes no arguments.
+    Processes arguments supplied when rmats.py was called using get_args().
+    If task argument is 'inte', checks BAM and prep file integrity.
+    If task argument is 'prep', 'post', or 'both', runs pipeline using seperate module in rmatspipeline.
+    If task argument is not valid, returns nothing.
+    For each splicing event type, processes counts and outputs files.
+    Generates output summary.
+    Prints 'Done processing count files.' and returns nothing.
     """
     args = get_args()
 
