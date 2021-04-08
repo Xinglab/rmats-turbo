@@ -91,7 +91,7 @@ def get_args():
     The function itself takes no arguments.
     Unless rMATS is called in stat mode, exits with appropriate errors if any of: sequence files, gtf, or readlength arguments are missing.
     If an output directory and/or a temporary directory aren't supplied, exits with appropriate errors.
-    Creates output directory. Cleans user supplied bam or fastq filenames to remove newlines if they follow a space and a comma.
+    Creates output directory. Cleans user supplied bam or fastq filenames to remove trailing newlines, spaces, and commas.
     If FASTQs are supplied but not BAMs, aligns FASTQs using STAR and sets the resultant BAM file locations as BAM file arguments.
     If tstat is not supplied, sets the tstat argument equal to the nthread argument or the nthread default, if nthread is also not supplied..
 
