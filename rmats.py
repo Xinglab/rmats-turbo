@@ -67,7 +67,7 @@ def doSTARMapping(args): ## do STAR mapping
                 if not args.allow_clipping:
                     cmd += ' --alignEndsType EndToEnd'
 
-                cmd += ' --runThreadN 4 --outSAMstrandField intronMotif --outSAMtype BAM SortedByCoordinate '
+                cmd += ' --runThreadN ' + str(max([4, args.nthread])) + ' --outSAMstrandField intronMotif --outSAMtype BAM SortedByCoordinate '
                 cmd += '--alignSJDBoverhangMin ' + str(args.tophatAnchor) + ' --alignIntronMax 299999 --genomeDir ' + args.bIndex + ' --sjdbGTFfile ' + args.gtf;
                 cmd += ' --outFileNamePrefix ' + map_folder + '/ --readFilesIn ';
                 cmd += ' '.join(pair)
