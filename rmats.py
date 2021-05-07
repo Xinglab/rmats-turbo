@@ -185,16 +185,16 @@ def get_args():
 
     if len(args.b1) > 0:
         with open(args.b1, 'r') as fp:
-            args.b1 = fp.read().strip(' ,\n')
+            args.b1 = fp.read().strip().strip(',')
     if len(args.b2) > 0:
         with open(args.b2, 'r') as fp:
-            args.b2 = fp.read().strip(' ,\n')
+            args.b2 = fp.read().strip().strip(',')
     if len(args.s1) > 0:
         with open(args.s1, 'r') as fp:
-            args.s1 = fp.read().strip(' ,\n')
+            args.s1 = fp.read().strip().strip(',')
     if len(args.s2) > 0:
         with open(args.s2, 'r') as fp:
-            args.s2 = fp.read().strip(' ,\n')
+            args.s2 = fp.read().strip().strip(',')
 
     create_output_dirs(args)
     args.prep_prefix = claim_prep_prefix(args.task, args.tmp)
