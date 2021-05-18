@@ -2,8 +2,7 @@
 
 function set_script_dir() {
   local REL_SCRIPT_DIR="$(dirname ${BASH_SOURCE[0]})" || return 1
-  cd "${REL_SCRIPT_DIR}" || return 1
-  SCRIPT_DIR="$(pwd)" || return 1
+  SCRIPT_DIR="$(cd "${REL_SCRIPT_DIR}" && pwd)" || return 1
 }
 
 # build_rmats can create a conda environment. Use it if it exists.
