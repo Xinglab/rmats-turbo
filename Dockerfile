@@ -4,6 +4,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
        ca-certificates \
        cmake \
+       curl \
        cython \
        g++ \
        gfortran \
@@ -40,7 +41,15 @@ RUN apt-get update \
     && mkdir rMATS_R \
     && cp /rmats_build/rmats-turbo/rMATS_R/*.R ./rMATS_R \
     # Remove build dir
-    && rm -rf /rmats_build
+    && rm -rf /rmats_build \
+    # Build STAR
+    && mkdir /star_build \
+    && cd /star_build \
+    && curl -L -O https://github.com/alexdobin/STAR/archive/refs/tags/2.7.9a.tar.gz \
+    && tar -xvf 2.7.9a.tar.gz \
+    && cd STAR-2.7.9a/source \
+    && make STAR \
+    && cp STAR /usr/local/bin
 
 # Set defaults for running the image
 WORKDIR /rmats
