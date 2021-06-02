@@ -1,3 +1,6 @@
-/first_strand/
-/second_strand/
-/unstranded/
+/paired_first_strand/
+/paired_second_strand/
+/paired_unstranded/
+/single_end_first_strand/
+/single_end_second_strand/
+/single_end_unstranded/

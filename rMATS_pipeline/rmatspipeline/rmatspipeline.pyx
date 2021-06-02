@@ -582,38 +582,109 @@ cdef void locate_multi(long& mc, vector[CigarOp]& cigars, int& rl_jl,
         multiread.clear()
 
 
+# In an fr-firststrand paired library, the second read in the pair is
+# aligned to the original strand and the first read is aligned to the
+# opposite strand.
+# In an fr-secondstrand paired library, the first read in the pair is
+# aligned to the original strand and the second read is aligned to the
+# opposite strand.
+@boundscheck(False)
+@wraparound(False)
+cdef char check_strand_paired_fr_first_strand(const BamAlignment& bread) nogil:
+    cdef:
+        cbool is_rev = bread.IsReverseStrand()
+        cbool is_mate_rev = bread.IsMateReverseStrand()
+        cbool is_first = bread.IsFirstMate()
+        cbool is_second = bread.IsSecondMate()
+        cbool one_mate_rev = is_rev ^ is_mate_rev
+        cbool either_first_or_second = is_first ^ is_second
+
+    if not (one_mate_rev and either_first_or_second):
+        # strand check failed
+        return cdot
+
+    if is_first:
+        if is_rev:
+            return plus_mark
+        else:
+            return minus_mark
+    else:
+        if is_rev:
+            return minus_mark
+        else:
+            return plus_mark
+
+
+@boundscheck(False)
+@wraparound(False)
+cdef char check_strand_paired_fr_second_strand(const BamAlignment& bread) nogil:
+    cdef:
+        cbool is_rev = bread.IsReverseStrand()
+        cbool is_mate_rev = bread.IsMateReverseStrand()
+        cbool is_first = bread.IsFirstMate()
+        cbool is_second = bread.IsSecondMate()
+        cbool one_mate_rev = is_rev ^ is_mate_rev
+        cbool either_first_or_second = is_first ^ is_second
+
+    if not (one_mate_rev and either_first_or_second):
+        # strand check failed
+        return cdot
+
+    if is_first:
+        if is_rev:
+            return minus_mark
+        else:
+            return plus_mark
+    else:
+        if is_rev:
+            return plus_mark
+        else:
+            return minus_mark
+
+
+# The single end checks are simplified since there is just one read.
+@boundscheck(False)
+@wraparound(False)
+cdef char check_strand_single_end_fr_first_strand(const BamAlignment& bread) nogil:
+    cdef:
+        cbool is_rev = bread.IsReverseStrand()
+
+    if is_rev:
+        return plus_mark
+    else:
+        return minus_mark
+
+
+@boundscheck(False)
+@wraparound(False)
+cdef char check_strand_single_end_fr_second_strand(const BamAlignment& bread) nogil:
+    cdef:
+        cbool is_rev = bread.IsReverseStrand()
+
+    if is_rev:
+        return minus_mark
+    else:
+        return plus_mark
+
+
 @boundscheck(False)
 @wraparound(False)
 cdef char check_strand(const BamAlignment& bread, const cbool& ispaired, const int& dt) nogil:
     if dt == FRFIRSTSTRAND:
         if ispaired:
-            if (bread.IsFirstMate() and bread.IsReverseStrand()) or\
-                    (bread.IsSecondMate() and bread.IsMateReverseStrand()):
-                return plus_mark
-            elif (bread.IsFirstMate() and bread.IsMateReverseStrand()) or\
-                    (bread.IsSecondMate() and bread.IsReverseStrand()):
-                return minus_mark
-        else:
-            if bread.IsReverseStrand():
-                return plus_mark
-            elif bread.IsMateReverseStrand():
-                return minus_mark
-    elif dt == FRSECONDSTRAND:
-        if ispaired:
-            if (bread.IsFirstMate() and bread.IsMateReverseStrand()) or\
-                    (bread.IsSecondMate() and bread.IsReverseStrand()):
-                return plus_mark
-            elif (bread.IsFirstMate() and bread.IsReverseStrand()) or\
-                    (bread.IsSecondMate() and bread.IsMateReverseStrand()):
-                return minus_mark
-        else:
-            if bread.IsMateReverseStrand():
-                return plus_mark
-            elif bread.IsReverseStrand():
-                return minus_mark
-    elif dt == FRUNSTRANDED:
-        pass
+            return check_strand_paired_fr_first_strand(bread)
 
+        return check_strand_single_end_fr_first_strand(bread)
+
+    if dt == FRSECONDSTRAND:
+        if ispaired:
+            return check_strand_paired_fr_second_strand(bread)
+
+        return check_strand_single_end_fr_second_strand(bread)
+
+    # FRUNSTRANDED is the last expected case.
+    # If the library type is anything else (should never happen) the read will
+    # be marked as READ_NOT_EXPECTED_STRAND.
     return cdot
 
 
