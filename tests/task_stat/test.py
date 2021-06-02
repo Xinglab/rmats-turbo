@@ -113,6 +113,10 @@ class Test(tests.base_test.BaseTest):
         orig_raw = os.path.join(self._out_dir_all, 'JC.raw.input.SE.txt')
         new_raw = os.path.join(self._out_dir_just_se, 'JC.raw.input.SE.txt')
         shutil.copy(orig_raw, new_raw)
+        orig_indiv = os.path.join(self._out_dir_all, 'individualCounts.SE.txt')
+        new_indiv = os.path.join(self._out_dir_just_se,
+                                 'individualCounts.SE.txt')
+        shutil.copy(orig_indiv, new_indiv)
 
     def _create_sample_1_bams(self, sample_1_bams_path,
                               sample_1_replicate_template):
@@ -286,6 +290,12 @@ class Test(tests.base_test.BaseTest):
                 self.assertEqual(self._read_floats(row['IncLevel2']),
                                  [1.0, 1.0])
                 self.assertEqual(float(row['IncLevelDifference']), -0.533)
+                self.assertEqual(row['upstream_to_target_count'],
+                                 '10,15,10,10')
+                self.assertEqual(row['target_to_downstream_count'], '0,0,0,0')
+                self.assertEqual(row['target_count'], '10,15,10,10')
+                self.assertEqual(row['upstream_to_downstream_count'],
+                                 '10,5,0,0')
             elif row['exonStart_0base'] == '800':
                 self.assertEqual(row['IJC_SAMPLE_1'], '10,10')
                 self.assertEqual(row['SJC_SAMPLE_1'], '0,0')
@@ -298,6 +308,12 @@ class Test(tests.base_test.BaseTest):
                 self.assertEqual(self._read_floats(row['IncLevel2']),
                                  [0.333, 0.6])
                 self.assertEqual(float(row['IncLevelDifference']), 0.533)
+                self.assertEqual(row['upstream_to_target_count'],
+                                 '10,10,10,15')
+                self.assertEqual(row['target_to_downstream_count'], '0,0,0,0')
+                self.assertEqual(row['target_count'], '10,10,10,15')
+                self.assertEqual(row['upstream_to_downstream_count'],
+                                 '0,0,10,5')
 
         se_mats_jcec_path = os.path.join(self._out_dir_all, 'SE.MATS.JCEC.txt')
         se_mats_jcec_header, se_mats_jcec_rows, error = (
@@ -319,6 +335,12 @@ class Test(tests.base_test.BaseTest):
                 self.assertEqual(self._read_floats(row['IncLevel2']),
                                  [1.0, 1.0])
                 self.assertEqual(float(row['IncLevelDifference']), -0.47)
+                self.assertEqual(row['upstream_to_target_count'],
+                                 '10,15,10,10')
+                self.assertEqual(row['target_to_downstream_count'], '0,0,0,0')
+                self.assertEqual(row['target_count'], '10,15,10,10')
+                self.assertEqual(row['upstream_to_downstream_count'],
+                                 '10,5,0,0')
 
         mxe_mats_jc_path = os.path.join(self._out_dir_all, 'MXE.MATS.JC.txt')
         mxe_mats_jc_header, mxe_mats_jc_rows, error = (
@@ -410,6 +432,10 @@ class Test(tests.base_test.BaseTest):
                 self.assertEqual(self._read_floats(row['IncLevel2']),
                                  [0.333, 1.0])
                 self.assertEqual(float(row['IncLevelDifference']), -0.067)
+                self.assertEqual(row['upstream_to_target_count'], '15,10,10')
+                self.assertEqual(row['target_to_downstream_count'], '0,0,0')
+                self.assertEqual(row['target_count'], '15,10,10')
+                self.assertEqual(row['upstream_to_downstream_count'], '5,10,0')
             elif row['exonStart_0base'] == '800':
                 self.assertEqual(row['IJC_SAMPLE_1'], '10')
                 self.assertEqual(row['SJC_SAMPLE_1'], '0')
@@ -422,6 +448,10 @@ class Test(tests.base_test.BaseTest):
                 self.assertEqual(self._read_floats(row['IncLevel2']),
                                  [1.0, 0.6])
                 self.assertEqual(float(row['IncLevelDifference']), 0.2)
+                self.assertEqual(row['upstream_to_target_count'], '10,10,15')
+                self.assertEqual(row['target_to_downstream_count'], '0,0,0')
+                self.assertEqual(row['target_count'], '10,10,15')
+                self.assertEqual(row['upstream_to_downstream_count'], '0,0,5')
 
         se_mats_jcec_path = os.path.join(self._out_dir_select,
                                          'SE.MATS.JCEC.txt')
@@ -444,6 +474,10 @@ class Test(tests.base_test.BaseTest):
                 self.assertEqual(self._read_floats(row['IncLevel2']),
                                  [0.397, 1.0])
                 self.assertEqual(float(row['IncLevelDifference']), -0.034)
+                self.assertEqual(row['upstream_to_target_count'], '15,10,10')
+                self.assertEqual(row['target_to_downstream_count'], '0,0,0')
+                self.assertEqual(row['target_count'], '15,10,10')
+                self.assertEqual(row['upstream_to_downstream_count'], '5,10,0')
 
         mxe_mats_jc_path = os.path.join(self._out_dir_select,
                                         'MXE.MATS.JC.txt')
@@ -581,6 +615,12 @@ class Test(tests.base_test.BaseTest):
                 self.assertEqual(self._read_floats(row['IncLevel2']),
                                  [1.0, 1.0])
                 self.assertEqual(float(row['IncLevelDifference']), -0.533)
+                self.assertEqual(row['upstream_to_target_count'],
+                                 '10,15,10,10')
+                self.assertEqual(row['target_to_downstream_count'], '0,0,0,0')
+                self.assertEqual(row['target_count'], '10,15,10,10')
+                self.assertEqual(row['upstream_to_downstream_count'],
+                                 '10,5,0,0')
 
         se_mats_jcec_path = os.path.join(self._out_dir_just_se,
                                          'SE.MATS.JCEC.txt')
@@ -633,6 +673,12 @@ class Test(tests.base_test.BaseTest):
                 self.assertEqual(self._read_floats(row['IncLevel2']),
                                  [1.0, 1.0])
                 self.assertEqual(float(row['IncLevelDifference']), -0.533)
+                self.assertEqual(row['upstream_to_target_count'],
+                                 '10,15,10,10')
+                self.assertEqual(row['target_to_downstream_count'], '0,0,0,0')
+                self.assertEqual(row['target_count'], '10,15,10,10')
+                self.assertEqual(row['upstream_to_downstream_count'],
+                                 '10,5,0,0')
             elif row['exonStart_0base'] == '800':
                 self.assertEqual(row['IJC_SAMPLE_1'], '10,10')
                 self.assertEqual(row['SJC_SAMPLE_1'], '0,0')
@@ -646,6 +692,12 @@ class Test(tests.base_test.BaseTest):
                 self.assertEqual(self._read_floats(row['IncLevel2']),
                                  [0.333, 0.6])
                 self.assertEqual(float(row['IncLevelDifference']), 0.533)
+                self.assertEqual(row['upstream_to_target_count'],
+                                 '10,10,10,15')
+                self.assertEqual(row['target_to_downstream_count'], '0,0,0,0')
+                self.assertEqual(row['target_count'], '10,10,10,15')
+                self.assertEqual(row['upstream_to_downstream_count'],
+                                 '0,0,10,5')
 
         se_mats_jcec_path = os.path.join(self._out_dir_all, 'SE.MATS.JCEC.txt')
         se_mats_jcec_header, se_mats_jcec_rows, error = (
@@ -668,6 +720,12 @@ class Test(tests.base_test.BaseTest):
                 self.assertEqual(self._read_floats(row['IncLevel2']),
                                  [1.0, 1.0])
                 self.assertEqual(float(row['IncLevelDifference']), -0.47)
+                self.assertEqual(row['upstream_to_target_count'],
+                                 '10,15,10,10')
+                self.assertEqual(row['target_to_downstream_count'], '0,0,0,0')
+                self.assertEqual(row['target_count'], '10,15,10,10')
+                self.assertEqual(row['upstream_to_downstream_count'],
+                                 '10,5,0,0')
 
         mxe_mats_jc_path = os.path.join(self._out_dir_all, 'MXE.MATS.JC.txt')
         mxe_mats_jc_header, mxe_mats_jc_rows, error = (
