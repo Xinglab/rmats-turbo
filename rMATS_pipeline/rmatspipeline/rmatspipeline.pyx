@@ -709,7 +709,7 @@ cdef void parse_bam(long fidx, string bam,
 
     if not br.Open(bam):
         with gil:
-            print 'Fail to open %s' % (bam)
+            print('Fail to open {}: {}'.format(bam, br.GetErrorString()))
         return
 
     refv = br.GetReferenceData()
