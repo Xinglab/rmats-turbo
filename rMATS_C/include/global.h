@@ -15,7 +15,6 @@
 #define mmax 10
 #define TITLE_ELEMENT_LEN 128
 #define COLUMN_LEN 8192
-#define LEN_OF_NT 1
 
 
 #define MAXTHREAD 1000

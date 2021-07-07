@@ -2,8 +2,6 @@ from libcpp cimport bool as cbool
 from libcpp.pair cimport pair
 from libcpp.string cimport string
 from libcpp.vector cimport vector
-from libcpp.unordered_map cimport unordered_map
-from libc.string cimport strcmp, strlen
 from libc.stdint cimport *
 
 
