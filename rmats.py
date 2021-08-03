@@ -68,17 +68,17 @@ def doSTARMapping(args): ## do STAR mapping
                     cmd += ' --alignEndsType EndToEnd'
 
                 cmd += ' --runThreadN ' + str(max([4, args.nthread])) + ' --outSAMstrandField intronMotif --outSAMtype BAM SortedByCoordinate '
-                cmd += '--alignSJDBoverhangMin ' + str(args.tophatAnchor) + ' --alignIntronMax 299999 --genomeDir ' + args.bIndex + ' --sjdbGTFfile ' + args.gtf;
-                cmd += ' --outFileNamePrefix ' + map_folder + '/ --readFilesIn ';
+                cmd += '--alignSJDBoverhangMin ' + str(args.tophatAnchor) + ' --alignIntronMax 299999 --genomeDir ' + args.bIndex + ' --sjdbGTFfile ' + args.gtf
+                cmd += ' --outFileNamePrefix ' + map_folder + '/ --readFilesIn '
                 cmd += ' '.join(pair)
                 if pair[0].endswith('.gz'):
-                    cmd += ' --readFilesCommand zcat';
+                    cmd += ' --readFilesCommand zcat'
                 status,output = getstatusoutput(cmd)
                 print("mapping sample_%d, %s is done with status %s" % (i, ' '.join(pair), status))
                 if (int(status)!=0): ## it did not go well
                     print("error in mapping sample_%d, %s: %s" % (i, ' '.join(pair),status))
                     print("error detail: %s" % output)
-                    raise Exception();
+                    raise Exception()
                 print(output)
                 bams[i].append(os.path.join(map_folder, 'Aligned.sortedByCoord.out.bam'))
 
