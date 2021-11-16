@@ -14,7 +14,7 @@ def _write_read_line(read, f_handle):
         read.cigar,
         read.next_ref_seq_name,
         str(read.next_start_coord),
-        str(read.signed_template_len()),
+        str(read.template_len),
         read.read_sequence,
         read.read_quality,
         'NH:i:{}'.format(read.number_of_alignments),
@@ -218,7 +218,7 @@ def make_read_pair(read_1, read_2):
     read_2.next_ref_seq_name = '='
     read_1.next_start_coord = read_2.start_coord
     read_2.next_start_coord = read_1.start_coord
-    read_2.template_len = read_1.template_len
+    read_2.template_len = -read_1.template_len
     read_1.has_multiple_segments = True
     read_2.has_multiple_segments = True
     read_1.all_segments_aligned = ((not read_1.segment_unmapped)
@@ -232,6 +232,56 @@ def make_read_pair(read_1, read_2):
     read_2.is_first_segment = False
     read_1.is_last_segment = False
     read_2.is_last_segment = True
+
+
+def set_single_end_read_from_intervals(read,
+                                       intervals,
+                                       read_length,
+                                       clip_length=None,
+                                       is_reversed=False):
+    cigar = list()
+    remaining_length = read_length
+    prev_end = None
+    for start, end in intervals:
+        if remaining_length == 0:
+            return 'not enough read_length for all read intervals'
+
+        if prev_end is not None:
+            skip_len = (start - prev_end) - 1
+            cigar.append([skip_len, 'N'])
+
+        length = (end - start) + 1
+        if length >= remaining_length:
+            cigar.append([remaining_length, 'M'])
+            remaining_length = 0
+        else:
+            cigar.append([length, 'M'])
+            remaining_length -= length
+
+        prev_end = end
+
+    read_start = intervals[0][0]
+    read_end = prev_end
+    if clip_length:
+        read_start += clip_length
+        read_end -= clip_length
+        clip_error = _clip_length_from_cigar_ends(clip_length, cigar)
+        if clip_error:
+            return clip_error
+
+    read.start_coord = read_start
+    read.cigar = _string_from_cigar_ops(cigar)
+    read.template_len = 0  # only set for paired reads
+    read.is_reversed = is_reversed
+    read.next_ref_seq_name = '*'
+    read.next_start_coord = 0
+    read.has_multiple_segments = False
+    read.all_segments_aligned = not read.segment_unmapped
+    read.next_segment_unmapped = False
+    read.next_segment_is_reversed = False
+    read.is_first_segment = True
+    read.is_last_segment = True
+    return None
 
 
 class Read(object):
@@ -277,9 +327,3 @@ class Read(object):
             flags_int += 128
 
         return flags_int
-
-    def signed_template_len(self):
-        if self.is_reversed:
-            return -self.template_len
-
-        return self.template_len
