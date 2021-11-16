@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 
-import csv
 import argparse
 
 
@@ -38,11 +37,10 @@ def main():
     with open(args.i, 'r') as ifp:
         with open(args.o1, 'w') as ofp1:
             with open(args.o2, 'w') as ofp2:
-                reader = csv.reader(ifp, delimiter='\t')
-                for line in reader:
-                    line = list(map(str, line))
-                    ofp1.write(line[0]+'\n')
-                    ofp2.write('\t'.join(line[1:])+'\n')
+                for line in ifp:
+                    columns = line.strip().split('\t')
+                    ofp1.write(columns[0]+'\n')
+                    ofp2.write('\t'.join(columns[1:])+'\n')
 
     return
 

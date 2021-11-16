@@ -70,7 +70,7 @@ int parse_title(char* str, char** output) {
     int idx = 0;
     char *token = strtok(str, " \t\r\n\v\f");
     while(token) {
-        output[idx] = (char*)malloc(sizeof(char)*TITLE_ELEMENT_LEN);
+        output[idx] = (char*)malloc(sizeof(char)*(strlen(token) + 1));
         strcpy(output[idx++], token);
         token = strtok(NULL, " \t\r\n\v\f");
     }
@@ -112,24 +112,33 @@ int str_to_vector(char* input, gsl_vector** vec) {
 }
 
 
-int parse_line(char* str, char* id, gsl_vector** inc1, gsl_vector** skp1,
-               gsl_vector** inc2, gsl_vector** skp2,
+int parse_line(char* str, char** id, size_t* id_n, gsl_vector** inc1,
+               gsl_vector** skp1, gsl_vector** inc2, gsl_vector** skp2,
                int* inclu_len, int* skip_len) {
     int idx = 0;
-    char output[7][COLUMN_LEN];
+    size_t found_id_len = 0;
+    char *output[7];
 
     char *token = strtok(str, " \t\r\n\v\f");
     while(token) {
-        strcpy(output[idx++], token);
+        output[idx++] = token;
         token = strtok(NULL, " \t\r\n\v\f");
     }
 
-    strcpy(id, output[0]);
+    found_id_len = strlen(output[0]);
+    if ((*id_n) <= found_id_len) {
+        *id_n = found_id_len + 1;
+        if ((*id) != NULL) {
+            free(*id);
+        }
+        *id = (char*)malloc(sizeof(char)*(*id_n));
+    }
+    strcpy(*id, output[0]);
     if (str_to_vector(output[1], inc1) == -1 ||
         str_to_vector(output[2], skp1) == -1 ||
         str_to_vector(output[3], inc2) == -1 ||
         str_to_vector(output[4], skp2) == -1) {
-        printf("An error occured. rMATS cannot handle missing value. Sample Id: %s\n", id);
+        printf("An error occured. rMATS cannot handle missing value. Sample Id: %s\n", *id);
         printf("Exiting.\n");
         exit(0);
         
@@ -143,9 +152,8 @@ int parse_line(char* str, char* id, gsl_vector** inc1, gsl_vector** skp1,
 
 int parse_file(const char* filename, diff_list_node* list, char** title_element_list) {
     FILE *ifp;
-    size_t olen = MAX_LINE;
-    char *str_line = (char*)malloc(sizeof(char)*olen);
-    char title[TITLE_LEN], id[MAX_LINE];
+    char *str_line = NULL, *id = NULL;
+    size_t str_line_n = 0, id_n = 0;
     int row_num=0, inclu_len, skip_len;
     gsl_vector *inc1 = NULL, *skp1 = NULL, *inc2 = NULL, *skp2 = NULL;
 
@@ -153,12 +161,16 @@ int parse_file(const char* filename, diff_list_node* list, char** title_element_
         printf("Fail to open!");
         return 0;
     }
-    fgets(title, TITLE_LEN, ifp);
-    parse_title(title, title_element_list);
+    if (getline(&str_line, &str_line_n, ifp) == -1) {
+        printf("Failed to read first line of input file.\n");
+        printf("Exiting\n");
+        exit(0);
+    }
+    parse_title(str_line, title_element_list);
 
-    while (getline(&str_line, &olen, ifp) != -1) {
+    while (getline(&str_line, &str_line_n, ifp) != -1) {
         ++row_num;
-        parse_line(str_line, id, &inc1, &skp1, &inc2, &skp2, &inclu_len, &skip_len);
+        parse_line(str_line, &id, &id_n, &inc1, &skp1, &inc2, &skp2, &inclu_len, &skip_len);
         if (inc1->size != skp1->size || inc2->size != skp2->size) {
             printf("An error occured. The length of the pair of vector should be equal. Sample Id: %s\n", id);
             printf("Size of vector: %ld, %ld, %ld, %ld\n", inc1->size, skp1->size, inc2->size, skp2->size);
@@ -183,7 +195,12 @@ int parse_file(const char* filename, diff_list_node* list, char** title_element_
             diff_append(list, diff_alloc(inc1, inc2, skp1, skp2, inclu_len, skip_len, 1, id));
         }
     }
-    free(str_line);
+    if (str_line != NULL) {
+        free(str_line);
+    }
+    if (id != NULL) {
+        free(id);
+    }
     fclose(ifp);
 
     return row_num;

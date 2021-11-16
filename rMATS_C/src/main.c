@@ -19,9 +19,10 @@ clock_t dur = 0;
 
 
 int main(int argc, char *argv[]) {
-    char *inputf = "input.txt", *outputf = (char*)malloc(sizeof(char)*MAX_CHAR);
-    char str_line[MAX_LINE], *title_element_list[100];
+    char *inputf = "input.txt", *outputf = NULL;
+    char *str_line = NULL, *title_element_list[100];
     int nthread = 1, opt, row_num = 0, i = 0;
+    size_t str_line_n = 0;
 
     while ((opt = getopt(argc, argv, "t:bc:o:i:")) != -1) {
         switch (opt) {
@@ -35,7 +36,8 @@ int main(int argc, char *argv[]) {
             cutoff = atof(optarg);
             break;
         case 'o':
-            outputf = optarg;
+            outputf = (char*)malloc(sizeof(char)*(strlen(optarg) + 1));
+            strcpy(outputf, optarg);
             break;
         case 'i':
             inputf = optarg;
@@ -90,23 +92,29 @@ int main(int argc, char *argv[]) {
 
     FILE *ifp = NULL, *ofp = NULL;
     if ((ifp = fopen(inputf, "r")) == NULL) {
-        printf("Fail to open %s!", inputf);
+        printf("Fail to open %s!\n", inputf);
         return -1;
     }
     if ((ofp = fopen(outputf, "w")) == NULL) {
-        printf("Fail to open %s!", outputf);
+        printf("Fail to open %s!\n", outputf);
         return -1;
     }
 
     // original comment: analyze the title of the inputed data file to find the
     //                   information of how much simulation are involved
-    fgets(str_line, MAX_LINE, ifp);
-    str_line[strlen(str_line)-1] = 0;
-    fprintf(ofp, "%s\tPValue\n", str_line);
+    if (getline(&str_line, &str_line_n, ifp) == -1) {
+        printf("Failed to read first line of input file\n");
+        return -1;
+    }
+    str_line[strlen(str_line)-1] = 0; // overwrite the old newline
+    fprintf(ofp, "%s\tPValue\n", str_line); // append PValue header to old headers
     for (i = 0; i < row_num; ++i) {
-        fgets(str_line, MAX_LINE, ifp);
-        str_line[strlen(str_line)-1] = 0;
-        fprintf(ofp, "%s\t%.12g\n", str_line, *prob[i]);
+        if (getline(&str_line, &str_line_n, ifp) == -1) {
+            printf("Failed to read row %d of input file\n", i);
+            return -1;
+        }
+        str_line[strlen(str_line)-1] = 0; // overwrite old newline
+        fprintf(ofp, "%s\t%.12g\n", str_line, *prob[i]); // append PValue
     }
     fclose(ifp);
     fclose(ofp);
@@ -114,6 +122,8 @@ int main(int argc, char *argv[]) {
     msec = dur * 1000 / CLOCKS_PER_SEC;
     printf("Time for func(single thread): %d seconds %d milliseconds\n", msec/1000, msec%1000);
 
+    free(str_line);
+    free(outputf);
     free(datum);
     free(prob);
     return 0;
