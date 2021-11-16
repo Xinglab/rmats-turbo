@@ -30,8 +30,8 @@ int parse_title(char* str, char** output);
 
 int str_to_vector(char* str, gsl_vector** vec);
 
-int parse_line(char* str, char* id, gsl_vector** inc1, gsl_vector** skp1,
-               gsl_vector** inc2, gsl_vector** skp2,
+int parse_line(char* str, char** id, size_t* id_n, gsl_vector** inc1,
+               gsl_vector** skp1, gsl_vector** inc2, gsl_vector** skp2,
                int* inclu_len, int* skip_len);
 
 int parse_file(const char* filename, diff_list_node* list, char** title);
