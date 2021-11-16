@@ -20,8 +20,16 @@ def myorder(p,reverse):
 
 def mycummin(p):
 	res=[];
-	for i in range(len(p)):
-		res.append(min(p[:(i+1)]));
+	if len(p) == 0:
+		return res;
+
+	current_min = p[0];
+	for value in p:
+		if value < current_min:
+			current_min = value;
+
+		res.append(current_min);
+
 	return(res);
 
 def myFDR(p):
