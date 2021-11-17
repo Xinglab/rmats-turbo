@@ -13,12 +13,6 @@ def vec2float(vec):
 		res.append(float(i));
 	return(res);
 
-def vecprod(vec):
-	res=1;
-	for i in vec:
-		res=res*i;
-	return(res);
-
 def vec2psi(inc,skp,effective_inclusion_length,effective_skipping_length):
 	psi=[];
 	inclusion_length=effective_inclusion_length;

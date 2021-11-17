@@ -7,7 +7,6 @@
 #define SIXTY 60
 #define nmax 1024
 #define mmax 10
-#define LEN_OF_NT 1
 
 
 #define MAXTHREAD 1000

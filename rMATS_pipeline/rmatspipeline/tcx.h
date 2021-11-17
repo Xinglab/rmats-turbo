@@ -9,7 +9,6 @@
 #include <string>
 #include <utility>
 #include <sstream>
-#include <unordered_set>
 #include <unordered_map>
 #include <iostream>
 
@@ -50,9 +49,6 @@ namespace rmats {
         long ue;
         long ds;
         long de;
-        size_t tidx;
-        size_t uidx;
-        size_t didx;
         int inc_len;
         int skp_len;
         int inc_len_jcec;
@@ -61,8 +57,7 @@ namespace rmats {
         bool includes_novel_ss;
         void set(const int& iiid, const std::string& igID, const SupInfo& isupInfo,
                  const long& its, const long& ite, const long& ius, const long& iue,
-                 const long& ids, const long& ide, const size_t& itidx,
-                 const size_t& iuidx, const size_t& ididx, const int& il,
+                 const long& ids, const long& ide, const int& il,
                  const int& sl, const int& iljcec, const int& sljcec,
                  const bool& itxtype, const bool iincludes_novel_ss) {
             if (iiid >= 0) {
@@ -76,9 +71,6 @@ namespace rmats {
             this->ue = iue;
             this->ds = ids;
             this->de = ide;
-            this->tidx = itidx;
-            this->uidx = iuidx;
-            this->didx = ididx;
             this->inc_len = il;
             this->skp_len = sl;
             this->inc_len_jcec = iljcec;
@@ -118,10 +110,6 @@ namespace rmats {
         long ue;
         long ds;
         long de;
-        size_t tidx;
-        size_t sidx;
-        size_t uidx;
-        size_t didx;
         int inc_len;
         int skp_len;
         int inc_len_jcec;
@@ -131,8 +119,7 @@ namespace rmats {
         void set(const int& iiid, const std::string& igID, const SupInfo& isupInfo,
                  const long& its, const long& ite, const long& iss, const long& ise,
                  const long& ius, const long& iue, const long& ids, const long& ide,
-                 const size_t& itidx, const size_t& isidx, const size_t& iuidx,
-                 const size_t& ididx, const int& il, const int& sl,
+                 const int& il, const int& sl,
                  const int& iljcec, const int& sljcec, const bool& itxtype,
                  const bool iincludes_novel_ss) {
             if (iiid >= 0) {
@@ -148,10 +135,6 @@ namespace rmats {
             this->ue = iue;
             this->ds = ids;
             this->de = ide;
-            this->tidx = itidx;
-            this->sidx = isidx;
-            this->uidx = iuidx;
-            this->didx = ididx;
             this->inc_len = il;
             this->skp_len = sl;
             this->inc_len_jcec = iljcec;
@@ -186,9 +169,6 @@ namespace rmats {
         long se;
         long fs;
         long fe;
-        size_t lidx;
-        size_t sidx;
-        size_t fidx;
         int inc_len;
         int skp_len;
         int inc_len_jcec;
@@ -197,8 +177,7 @@ namespace rmats {
         bool includes_novel_ss;
         void set(const int& iiid, const std::string& igID, const SupInfo& isupInfo,
                  const long& ils, const long& ile, const long& iss, const long& ise,
-                 const long& ifs, const long& ife, const size_t& ilidx,
-                 const size_t& isidx, const size_t& ifidx, const int& il,
+                 const long& ifs, const long& ife, const int& il,
                  const int& sl, const int& iljcec, const int& sljcec,
                  const bool& itxtype, const bool iincludes_novel_ss) {
             if (iiid >= 0) {
@@ -212,9 +191,6 @@ namespace rmats {
             this->se = ise;
             this->fs = ifs;
             this->fe = ife;
-            this->lidx = ilidx;
-            this->sidx = isidx;
-            this->fidx = ifidx;
             this->inc_len = il;
             this->skp_len = sl;
             this->inc_len_jcec = iljcec;
@@ -248,9 +224,6 @@ namespace rmats {
         long ue;
         long ds;
         long de;
-        size_t ridx;
-        size_t uidx;
-        size_t didx;
         int inc_len;
         int skp_len;
         int inc_len_jcec;
@@ -259,8 +232,7 @@ namespace rmats {
         bool includes_novel_ss;
         void set(const int& iiid, const std::string& igID, const SupInfo& isupInfo,
                  const long& irs, const long& ire, const long& ius, const long& iue,
-                 const long& ids, const long& ide, const size_t& iridx,
-                 const size_t& iuidx, const size_t& ididx, const int& il,
+                 const long& ids, const long& ide, const int& il,
                  const int& sl, const int& iljcec, const int& sljcec,
                  const bool& itxtype, const bool iincludes_novel_ss) {
             if (iiid >= 0) {
@@ -274,9 +246,6 @@ namespace rmats {
             this->ue = iue;
             this->ds = ids;
             this->de = ide;
-            this->ridx = iridx;
-            this->uidx = iuidx;
-            this->didx = ididx;
             this->inc_len = il;
             this->skp_len = sl;
             this->inc_len_jcec = iljcec;
@@ -286,15 +255,6 @@ namespace rmats {
         }
         bool operator<(const RI_info& t) const {
             return std::tie(this->iid) < std::tie(t.iid);
-        }
-    };
-
-    struct Tuple
-    {
-        int first;
-        int second;
-        bool operator<(const Tuple& t) const {
-            return std::tie(this->first, this->second) < std::tie(t.first, t.second);
         }
     };
 
@@ -332,28 +292,6 @@ namespace rmats {
         }
     };
 
-    struct MNMNM
-    {
-        long coord1;
-        long coord2;
-        long coord3;
-        long coord4;
-        long coord5;
-        long coord6;
-        bool operator<(const MNMNM& t) const {
-            return std::tie(this->coord1, this->coord2, this->coord3, this->coord4, this->coord5, this->coord6) < std::tie(t.coord1, t.coord2, t.coord3, t.coord4, t.coord5, t.coord6);
-        }
-        void set(const long& i1, const long& i2, const long& i3, const long& i4, const long& i5, const long& i6) {
-            this->coord1 = i1;
-            this->coord2 = i2;
-            this->coord3 = i3;
-            this->coord4 = i4;
-            this->coord5 = i5;
-            this->coord6 = i6;
-            return;
-        }
-    };
-
     struct Transcript
     {
         std::vector<std::pair<long,long> > exons;
@@ -367,20 +305,6 @@ namespace rmats {
         std::vector<std::pair<long,long> > idx_exon;
         std::vector<std::vector<std::set<std::pair<size_t,bool> > > > sg;
         std::unordered_map<std::string,Transcript> trans;
-    };
-
-    struct Exon
-    {
-        char strand;
-        Tetrad tetrad;
-        bool operator<(const Exon& t) const {
-            return std::tie(this->tetrad, this->strand) < std::tie(t.tetrad, t.strand);
-        }
-        void set(const char& istrand, const long& ifirst, const long& isecond, const long& ithird, const long& ifourth) {
-            this->strand = istrand;
-            this->tetrad.set(ifirst, isecond, ithird, ifourth);
-            return;
-        }
     };
 
     struct Read_count_table
@@ -407,44 +331,6 @@ namespace rmats {
         }
     };
 
-    void insert_str_ptr(std::set<Str_ptr>& iset, std::set<std::string>::iterator first, std::set<std::string>::iterator last) {
-        std::set<std::string>::iterator tmp = first;
-        while (tmp != last) {
-            iset.insert(Str_ptr(*tmp));
-            ++tmp;
-        }
-    }
-
-    template <typename T>
-    void cprint(T t) {
-        std::cout << t << std::endl;
-    }
-
-
-    template <typename T1, typename T2, typename T3>
-    T3 at_map(std::map<T1, T2> imap, int idx) {
-        T3 iter = imap.begin();
-        return iter+idx;
-    }
-
-
-    std::vector<std::string>& split(const std::string &s, char delim, std::vector<std::string> &elems) {
-        std::stringstream ss(s);
-        std::string item;
-        while (std::getline(ss, item, delim)) {
-            elems.push_back(item);
-        }
-        return elems;
-    }
-
-
-    std::vector<std::string> split(const std::string &s, char delim) {
-        std::vector<std::string> elems;
-        split(s, delim, elems);
-        return elems;
-    }
-
-
     template <typename Iter>
     std::string cjoin(Iter begin, Iter end, const char& separator)
     {
@@ -456,55 +342,10 @@ namespace rmats {
         return result.str();
     }
 
-
-    template <typename T>
-    std::string join_cigar(long& mc, std::vector<T>& CigarData, char& sep) {
-        int i;
-        std::ostringstream result;
-
-        if (CigarData.size() > 0) {
-            result << mc;
-        }
-        for (i = 0; i < CigarData.size(); ++i) {
-            result << sep << CigarData[i].Length;
-        }
-        return result.str();
-    }
-
-
-    // is brittle (you must supply a large enough buffer), fast, and verbose; requires nothing (is standard C++); all platforms
-    char* join_tetrad(char* numstr, Tetrad& tetrad, char& sep) {
-        sprintf(numstr, "%ld%c%ld%c%ld%c%ld", tetrad.first, sep, tetrad.second, sep, tetrad.third, sep, tetrad.fourth);
-        return numstr;
-    }
-
-
     char* join_pair(char* numstr, long left, long right, char& sep) {
         sprintf(numstr, "%ld%c%ld", left, sep, right);
         return numstr;
     }
-
-
-    std::string join_pair_vector(std::vector<std::pair<long,long> >::iterator begin,
-                                 std::vector<std::pair<long,long> >::iterator end,
-                                 char& separator) {
-        std::ostringstream result;
-        if (begin != end) {
-            result << (*begin).first;
-            result << separator << (*begin++).second;
-        }
-        while (begin != end) {
-            result << separator << (*begin).first;
-            result << separator << (*begin++).second;
-        }
-        return result.str();
-    }
-
-
-    std::string to_novel_txname(std::string cg, std::string novel) {
-        return cg + ".n." + novel;
-    }
-
 
     template<typename T> std::string num2str(T Number) {
         std::ostringstream ss;
@@ -514,11 +355,6 @@ namespace rmats {
 
     template<class InputType, class InputIt>
     void insert_set(std::set<InputType>& iset, InputIt first,InputIt last) {
-        iset.insert(first, last);
-    }
-
-    template<class InputType, class InputIt>
-    void insert_unset(std::unordered_set<InputType>& iset, InputIt first,InputIt last) {
         iset.insert(first, last);
     }
 }

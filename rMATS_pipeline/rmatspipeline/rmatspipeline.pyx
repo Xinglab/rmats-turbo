@@ -1464,7 +1464,6 @@ cdef void detect_se_mxe(const string& gID, Gene& gene, SupInfo& supInfo,
                                                 gene.idx_exon[left].first-1,
                                                 se_key.first, se_key.second-1,
                                                 gene.idx_exon[right].second,
-                                                idx, left, right,
                                                 len_pair.first, len_pair.second,
                                                 len_pair.third, len_pair.fourth,
                                                 event_tx_type,
@@ -1495,7 +1494,6 @@ cdef void detect_se_mxe(const string& gID, Gene& gene, SupInfo& supInfo,
                                                   gene.idx_exon[left].first-1,
                                                   se_key.first, se_key.second-1,
                                                   gene.idx_exon[right].second,
-                                                  idx, left, right,
                                                   len_pair.first, len_pair.second,
                                                   len_pair.third, len_pair.fourth,
                                                   event_tx_type,
@@ -1556,7 +1554,6 @@ cdef void detect_se_mxe(const string& gID, Gene& gene, SupInfo& supInfo,
                                               gene.idx_exon[mid].first-1, gene.idx_exon[mid].second,
                                               gene.idx_exon[left].first-1, mxe_key.first,
                                               mxe_key.second-1, gene.idx_exon[right].second,
-                                              idx, mid, left, right,
                                               len_pair.first, len_pair.second,
                                               len_pair.third, len_pair.fourth,
                                               event_tx_type, includes_novel_ss)
@@ -1586,7 +1583,6 @@ cdef void detect_se_mxe(const string& gID, Gene& gene, SupInfo& supInfo,
                                                gene.idx_exon[mid].first-1, gene.idx_exon[mid].second,
                                                gene.idx_exon[left].first-1, mxe_key.first,
                                                mxe_key.second-1, gene.idx_exon[right].second,
-                                               idx, mid, left, right,
                                                len_pair.first, len_pair.second,
                                                len_pair.third, len_pair.fourth,
                                                event_tx_type,
@@ -1640,7 +1636,6 @@ cdef void update_alt35_right_flank_event(const string& gID, const Gene& gene,
                                    gene.idx_exon[i].first-1, alt35_key.second,
                                    gene.idx_exon[i].first-1, alt35_key.first,
                                    exon.first-1, exon.second,
-                                   j, i, idx,
                                    len_pair.first, len_pair.second,
                                    len_pair.third, len_pair.fourth,
                                    event_tx_type,
@@ -1669,7 +1664,6 @@ cdef void update_alt35_right_flank_event(const string& gID, const Gene& gene,
                                      gene.idx_exon[i].first-1, alt35_key.second,
                                      gene.idx_exon[i].first-1, alt35_key.first,
                                      exon.first-1, exon.second,
-                                     j, i, idx,
                                      len_pair.first, len_pair.second,
                                      len_pair.third, len_pair.fourth,
                                      event_tx_type,
@@ -1706,7 +1700,6 @@ cdef void update_alt35_left_flank_event(const string& gID, const Gene& gene,
                                    alt35_key.second, gene.idx_exon[i].second,
                                    alt35_key.third, gene.idx_exon[i].second,
                                    exon.first-1, exon.second,
-                                   i, j, idx,
                                    len_pair.first, len_pair.second,
                                    len_pair.third, len_pair.fourth,
                                    event_tx_type,
@@ -1735,7 +1728,6 @@ cdef void update_alt35_left_flank_event(const string& gID, const Gene& gene,
                                      alt35_key.second, gene.idx_exon[i].second,
                                      alt35_key.third, gene.idx_exon[i].second,
                                      exon.first-1, exon.second,
-                                     i, j, idx,
                                      len_pair.first, len_pair.second,
                                      len_pair.third, len_pair.fourth,
                                      event_tx_type,
@@ -1899,7 +1891,6 @@ cdef void detect_ri(const string& gID, Gene& gene, SupInfo& supInfo,
                                     gene.idx_exon[i].first-1, exon.second,
                                     gene.idx_exon[i].first-1, ri_key.first,
                                     ri_key.second, exon.second,
-                                    gene.exon_idx[tmp_pair], i, idx,
                                     len_pair.first, len_pair.second,
                                     len_pair.third, len_pair.fourth,
                                     event_tx_type,
@@ -1928,7 +1919,6 @@ cdef void detect_ri(const string& gID, Gene& gene, SupInfo& supInfo,
                                       gene.idx_exon[i].first-1, exon.second,
                                       gene.idx_exon[i].first-1, ri_key.first,
                                       ri_key.second, exon.second,
-                                      gene.exon_idx[tmp_pair], i, idx,
                                       len_pair.first, len_pair.second,
                                       len_pair.third, len_pair.fourth,
                                       event_tx_type,
@@ -3122,18 +3112,12 @@ cdef read_se_event_set(str from_gtf_path, const int jld2, const int rl,
                               shared_col_values.strand)
             sm_inclen(ex_start, ex_end, up_start, up_end, down_start, down_end,
                       &inc_skip_lens, jld2, rl, rl_jl)
-            # exon_i, up_i, and down_i are required for se_info.set, but
-            # the values do not matter. They could be removed from SE_Info in
-            # a future update.
-            exon_i = 0
-            up_i = 0
-            down_i = 0
             # The events are provided as input so are not considered novel here
             is_novel_junc = False
             is_novel_ss = False
             se_info.set(shared_col_values.event_id, shared_col_values.g_id,
                         sup_info, ex_start, ex_end, up_start, up_end,
-                        down_start, down_end, exon_i, up_i, down_i,
+                        down_start, down_end,
                         inc_skip_lens.first, inc_skip_lens.second,
                         inc_skip_lens.third, inc_skip_lens.fourth,
                         is_novel_junc, is_novel_ss)
@@ -3202,20 +3186,12 @@ cdef read_mxe_event_set(str from_gtf_path, const int jld2, const int rl,
             ms_inclen(first_ex_start, first_ex_end, second_ex_start,
                       second_ex_end, up_start, up_end, down_start, down_end,
                       &inc_skip_lens, jld2, rl, rl_jl)
-            # first_exon_i, second_exon_i, up_i, and down_i are required for
-            # mxe_info.set, but the values do not matter. They could be removed
-            # from MXE_Info in a future update.
-            first_exon_i = 0
-            second_exon_i = 0
-            up_i = 0
-            down_i = 0
             is_novel_junc = False
             is_novel_ss = False
             mxe_info.set(shared_col_values.event_id, shared_col_values.g_id,
                          sup_info, first_ex_start, first_ex_end,
                          second_ex_start, second_ex_end, up_start, up_end,
-                         down_start, down_end, first_exon_i, second_exon_i,
-                         up_i, down_i, inc_skip_lens.first,
+                         down_start, down_end, inc_skip_lens.first,
                          inc_skip_lens.second, inc_skip_lens.third,
                          inc_skip_lens.fourth, is_novel_junc, is_novel_ss)
             mxe.insert(mxe_info)
@@ -3275,18 +3251,12 @@ cdef read_alt35_event_set(str from_gtf_path, const int jld2, const int rl,
                               shared_col_values.strand)
             alt_inclen(long_start, long_end, short_start, short_end,
                        flank_start, flank_end, &inc_skip_lens, jld2, rl, rl_jl)
-            # long_i, short_i, and flank_i are required for alt35_info.set, but
-            # the values do not matter. They could be removed from ALT35_Info
-            # in a future update.
-            long_i = 0
-            short_i = 0
-            flank_i = 0
             is_novel_junc = False
             is_novel_ss = False
             alt35_info.set(shared_col_values.event_id, shared_col_values.g_id,
                            sup_info, long_start, long_end, short_start,
-                           short_end, flank_start, flank_end, long_i, short_i,
-                           flank_i, inc_skip_lens.first, inc_skip_lens.second,
+                           short_end, flank_start, flank_end,
+                           inc_skip_lens.first, inc_skip_lens.second,
                            inc_skip_lens.third, inc_skip_lens.fourth,
                            is_novel_junc, is_novel_ss)
             alt35.insert(alt35_info)
@@ -3346,17 +3316,11 @@ cdef read_ri_event_set(str from_gtf_path, const int jld2, const int rl,
                               shared_col_values.strand)
             ri_inclen(ri_start, ri_end, up_start, up_end, down_start, down_end,
                       &inc_skip_lens, jld2, rl, rl_jl)
-            # ri_i, up_i, and down_i are required for ri_info.set, but
-            # the values do not matter. They could be removed from RI_Info in
-            # a future update.
-            ri_i = 0
-            up_i = 0
-            down_i = 0
             is_novel_junc = False
             is_novel_ss = False
             ri_info.set(shared_col_values.event_id, shared_col_values.g_id,
                         sup_info, ri_start, ri_end, up_start, up_end,
-                        down_start, down_end, ri_i, up_i, down_i,
+                        down_start, down_end,
                         inc_skip_lens.first, inc_skip_lens.second,
                         inc_skip_lens.third, inc_skip_lens.fourth,
                         is_novel_junc, is_novel_ss)

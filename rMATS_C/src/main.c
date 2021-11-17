@@ -16,8 +16,6 @@
 double rho = 0.9;
 double cutoff = 0.0001;
 clock_t dur = 0;
-// char *optarg;
-// int optind = 0;
 
 
 int main(int argc, char *argv[]) {
