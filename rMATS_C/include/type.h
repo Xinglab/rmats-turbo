@@ -47,14 +47,6 @@ typedef struct dnode{
     struct dnode* end;
 } diff_list_node;
 
-
-typedef struct node {
-    void* data;
-    struct node* next;
-    struct node* end;
-} list_node;
-
-
 // we use fortran l_bfgs_b routine to solve the numerical optimization problem.
 // (i.e. f = 0.0 at the optimal solution.)
 // only the minimal intersection of C's and Fortran's many data types can be relied on:

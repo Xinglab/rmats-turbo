@@ -4,7 +4,6 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <gsl/gsl_vector.h>
-// #include "libiomp/omp.h"
 #include <omp.h>
 #include "../include/type.h"
 #include "../include/util.h"
@@ -14,28 +13,6 @@
 extern clock_t dur;
 extern char *optarg;
 extern int optind;
-
-
-char c_getopt(int argc, char *argv[], char *pattern) {
-    static size_t i = 0;
-    int j;
-    char ret;
-    ++optind;
-
-    if (optind > (int)strlen(pattern)) {
-        return -1;
-    }
-
-    ret = pattern[i++];
-
-    for (j = 0; j < argc; ++j) {
-        if (argv[j][0] == '-' && argv[j][1] == ret) {
-            optarg = argv[j+1];
-        }
-    }
-
-    return ret;
-}
 
 
 /**
@@ -61,56 +38,6 @@ odiff* diff_alloc(gsl_vector* inc1, gsl_vector* inc2,
     diff->flag = flag, diff->id = (char*)malloc(sizeof(char)*(strlen(id)+1));
     strcpy(diff->id, id);
     return diff;
-}
-
-
-/**
- * @brief performing unary operation on gsl_vector.
- * @param vec
- * @param fun
- */
-void unary_operate_vec(gsl_vector *vec, double (*fun) (double)) {
-    size_t i;
-    for (i = 0; i < vec->size; ++i) {
-        gsl_vector_set(vec, i, fun(gsl_vector_get(vec, i)));
-    }
-    return;
-}
-
-
-/**
- * @brief performing binary operation on gsl_vector.
- *
- * @param vec
- * @param pa
- * @param fun
- */
-void binary_operate_vec(gsl_vector *vec, double pa, double (*fun) (double, const double)) {
-    size_t i;
-    for (i = 0; i < vec->size; ++i) {
-        gsl_vector_set(vec, i, fun(gsl_vector_get(vec, i), pa));
-    }
-    return;
-}
-
-
-/**
- * @brief performing element-wise operation on gsl_vector.
- *
- * @param vec
- * @param fun
- * @param argc
- * @param ...
- */
-void element_wise_vec(gsl_vector *vec, double (*fun) (double, va_list), int argc, ...) {
-    va_list argv;
-    size_t i;
-    for (i = 0; i < vec->size; ++i) {
-        va_start(argv, argc);
-        gsl_vector_set(vec, i, fun(gsl_vector_get(vec, i), argv));
-        va_end(argv);
-    }
-    return;
 }
 
 
@@ -143,16 +70,10 @@ int parse_title(char* str, char** output) {
     int idx = 0;
     char *token = strtok(str, " \t\r\n\v\f");
     while(token) {
-        output[idx] = (char*)malloc(sizeof(char)*TITLE_ELEMENT_LEN);
+        output[idx] = (char*)malloc(sizeof(char)*(strlen(token) + 1));
         strcpy(output[idx++], token);
         token = strtok(NULL, " \t\r\n\v\f");
     }
-
-    // int base = 0;
-    // do {
-    //     base += idx? strlen(output[idx-1]) + LEN_OF_NT : 0;
-    //     output[idx] = (char*)malloc(sizeof(char)*TITLE_ELEMENT_LEN);
-    // } while(sscanf(str + base, "%s \t\n", output[idx++]) != EOF);
 
     return idx-1;
 }
@@ -169,7 +90,6 @@ int parse_title(char* str, char** output) {
 int str_to_vector(char* input, gsl_vector** vec) {
     int idx = 0, count = 1;
     size_t i = 0;
-    // gsl_vector_free(*vec);
 
     for (i = 0; i < strlen(input); ++i) {
         if (input[i] == ',') {
@@ -192,29 +112,33 @@ int str_to_vector(char* input, gsl_vector** vec) {
 }
 
 
-int parse_line(char* str, char* id, gsl_vector** inc1, gsl_vector** skp1,
-               gsl_vector** inc2, gsl_vector** skp2,
+int parse_line(char* str, char** id, size_t* id_n, gsl_vector** inc1,
+               gsl_vector** skp1, gsl_vector** inc2, gsl_vector** skp2,
                int* inclu_len, int* skip_len) {
     int idx = 0;
-    char output[7][COLUMN_LEN];
+    size_t found_id_len = 0;
+    char *output[7];
 
     char *token = strtok(str, " \t\r\n\v\f");
     while(token) {
-        strcpy(output[idx++], token);
+        output[idx++] = token;
         token = strtok(NULL, " \t\r\n\v\f");
     }
 
-    // int base = 0;
-    // do {
-    //     base += idx? strlen(output[idx-1]) + LEN_OF_NT : 0;
-    // } while(sscanf(str + base, "%s \t\n", output[idx++]) != EOF);
-
-    strcpy(id, output[0]);
+    found_id_len = strlen(output[0]);
+    if ((*id_n) <= found_id_len) {
+        *id_n = found_id_len + 1;
+        if ((*id) != NULL) {
+            free(*id);
+        }
+        *id = (char*)malloc(sizeof(char)*(*id_n));
+    }
+    strcpy(*id, output[0]);
     if (str_to_vector(output[1], inc1) == -1 ||
         str_to_vector(output[2], skp1) == -1 ||
         str_to_vector(output[3], inc2) == -1 ||
         str_to_vector(output[4], skp2) == -1) {
-        printf("An error occured. rMATS cannot handle missing value. Sample Id: %s\n", id);
+        printf("An error occured. rMATS cannot handle missing value. Sample Id: %s\n", *id);
         printf("Exiting.\n");
         exit(0);
         
@@ -228,9 +152,8 @@ int parse_line(char* str, char* id, gsl_vector** inc1, gsl_vector** skp1,
 
 int parse_file(const char* filename, diff_list_node* list, char** title_element_list) {
     FILE *ifp;
-    size_t olen = MAX_LINE;
-    char *str_line = (char*)malloc(sizeof(char)*olen);
-    char title[TITLE_LEN], id[MAX_LINE];
+    char *str_line = NULL, *id = NULL;
+    size_t str_line_n = 0, id_n = 0;
     int row_num=0, inclu_len, skip_len;
     gsl_vector *inc1 = NULL, *skp1 = NULL, *inc2 = NULL, *skp2 = NULL;
 
@@ -238,12 +161,16 @@ int parse_file(const char* filename, diff_list_node* list, char** title_element_
         printf("Fail to open!");
         return 0;
     }
-    fgets(title, TITLE_LEN, ifp);
-    parse_title(title, title_element_list);
+    if (getline(&str_line, &str_line_n, ifp) == -1) {
+        printf("Failed to read first line of input file.\n");
+        printf("Exiting\n");
+        exit(0);
+    }
+    parse_title(str_line, title_element_list);
 
-    while (getline(&str_line, &olen, ifp) != -1) {
+    while (getline(&str_line, &str_line_n, ifp) != -1) {
         ++row_num;
-        parse_line(str_line, id, &inc1, &skp1, &inc2, &skp2, &inclu_len, &skip_len);
+        parse_line(str_line, &id, &id_n, &inc1, &skp1, &inc2, &skp2, &inclu_len, &skip_len);
         if (inc1->size != skp1->size || inc2->size != skp2->size) {
             printf("An error occured. The length of the pair of vector should be equal. Sample Id: %s\n", id);
             printf("Size of vector: %ld, %ld, %ld, %ld\n", inc1->size, skp1->size, inc2->size, skp2->size);
@@ -268,18 +195,15 @@ int parse_file(const char* filename, diff_list_node* list, char** title_element_
             diff_append(list, diff_alloc(inc1, inc2, skp1, skp2, inclu_len, skip_len, 1, id));
         }
     }
-    free(str_line);
+    if (str_line != NULL) {
+        free(str_line);
+    }
+    if (id != NULL) {
+        free(id);
+    }
     fclose(ifp);
 
     return row_num;
-}
-
-
-void display_dvector(const gsl_vector* vec) {
-    size_t i;
-    for (i = 0; i < vec->size; ++i) {
-        printf("%.10f ", gsl_vector_get(vec, i));
-    }
 }
 
 
@@ -300,19 +224,6 @@ double logit(double i) {
     return log(i/(1-i));
 }
 
-
-/*
-double log_and_minus_x(const double i, va_list argv) {
-    double pa = va_arg(argv, double);
-    return logit(i) - logit(pa);
-}
-
-
-double rev_log_and_minus_x(const double i, va_list argv) {
-    double pa = va_arg(argv, double);
-    return pow(M_E, i + log(pa));
-}
-*/
 
 /**
  * @brief cumulative production of a gsl_vector.
@@ -341,7 +252,6 @@ double sum_for_multivar(const double i, va_list argv) {
 // for multivar_der, 1_der, 2_der
 double sum_for_multivar_der(const double i, va_list argv) {
     double pa = va_arg(argv, double);
-    // return -2 * (logit(i) - logit(pa))/(pa*(1-pa));
     return 2 * (logit(i) - logit(pa))/(pa*pa-pa);
 }
 
@@ -411,49 +321,6 @@ int diff_append(diff_list_node* header, odiff* data) {
     header->end = tmp;
 
     return 0;
-}
-
-int diff_insert(diff_list_node* header, odiff* data, int idx) {
-
-    return 6;
-}
-
-int diff_get_next(diff_list_node* header, odiff* data) {
-
-    return 6;
-}
-
-int diff_get_at(diff_list_node* header, odiff* data, int idx) {
-    int i;
-    diff_list_node* tmp = header;
-    for (i = 0; i <= idx; ++i) {
-        tmp = tmp->next;
-    }
-    *data = *(tmp->data);
-    return 0;
-}
-
-
-void split_data_list(int lenofl, int batch_size, diff_list_node* list, batch_datum *ret) {
-    int i = 0, group = lenofl/batch_size, carry = lenofl % batch_size;
-    diff_list_node *node = list;
-    odiff **datum = (odiff**)malloc(sizeof(odiff*)*(group+1));
-    for (i = 0; i < group+1; ++i) {
-        datum[i] = (odiff*)malloc(sizeof(odiff)*batch_size);
-    }
-
-    for (i = 0; i < lenofl; ++i) {
-        node = node->next;
-        datum[i/batch_size][i%batch_size] = *(node->data);
-    }
-    for (i = 0; i < group; ++i) {
-        ret[i].batch_size = batch_size;
-        ret[i].datum = (void**)&datum[i];
-    }
-    ret[group].batch_size = carry;
-    ret[group].datum = (void**)&datum[group];
-
-    return;
 }
 
 

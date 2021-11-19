@@ -25,7 +25,7 @@ Build
 Usage
 -----
 
-Suppose we have an input file ./rMATS_Code/input.txt:
+Suppose we have an input file ./test.txt:
 
     ./rMATSexe -i ./test.txt -t 1 -o ./test_output.txt -c 0.001
     

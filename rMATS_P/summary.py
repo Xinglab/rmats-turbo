@@ -1,7 +1,6 @@
 from __future__ import print_function
 
 import argparse
-import csv
 import math
 import os.path
 import sys
@@ -68,8 +67,13 @@ def count_events(file_path, args):
     sig_sample_2_higher = 0
     if os.path.exists(file_path):
         with open(file_path, 'rt') as file_handle:
-            reader = csv.DictReader(file_handle, delimiter='\t')
-            for row in reader:
+            for line_i, line in enumerate(file_handle):
+                columns = line.strip().split('\t')
+                if line_i == 0:
+                    headers = columns
+                    continue
+
+                row = dict(zip(headers, columns))
                 total += 1
                 p_value = parse_float(row['PValue'])
                 fdr = parse_float(row['FDR'])
