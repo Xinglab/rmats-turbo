@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 ##
 # @file lite2.py
-# @brief 
+# @brief
 # @author Zhijie Xie
 # @date 2015-11-27
 
@@ -67,18 +67,18 @@ def doSTARMapping(args): ## do STAR mapping
                 if not args.allow_clipping:
                     cmd += ' --alignEndsType EndToEnd'
 
-                cmd += ' --runThreadN 4 --outSAMstrandField intronMotif --outSAMtype BAM SortedByCoordinate '
-                cmd += '--alignSJDBoverhangMin ' + str(args.tophatAnchor) + ' --alignIntronMax 299999 --genomeDir ' + args.bIndex + ' --sjdbGTFfile ' + args.gtf; 
-                cmd += ' --outFileNamePrefix ' + map_folder + '/ --readFilesIn ';
+                cmd += ' --runThreadN ' + str(max([4, args.nthread])) + ' --outSAMstrandField intronMotif --outSAMtype BAM SortedByCoordinate '
+                cmd += '--alignSJDBoverhangMin ' + str(args.tophatAnchor) + ' --alignIntronMax 299999 --genomeDir ' + args.bIndex + ' --sjdbGTFfile ' + args.gtf
+                cmd += ' --outFileNamePrefix ' + map_folder + '/ --readFilesIn '
                 cmd += ' '.join(pair)
                 if pair[0].endswith('.gz'):
-                    cmd += ' --readFilesCommand zcat';
+                    cmd += ' --readFilesCommand zcat'
                 status,output = getstatusoutput(cmd)
                 print("mapping sample_%d, %s is done with status %s" % (i, ' '.join(pair), status))
                 if (int(status)!=0): ## it did not go well
                     print("error in mapping sample_%d, %s: %s" % (i, ' '.join(pair),status))
                     print("error detail: %s" % output)
-                    raise Exception();
+                    raise Exception()
                 print(output)
                 bams[i].append(os.path.join(map_folder, 'Aligned.sortedByCoord.out.bam'))
 
@@ -87,9 +87,15 @@ def doSTARMapping(args): ## do STAR mapping
 
 
 def get_args():
-    """TODO: Docstring for get_args.
-    :returns: TODO
+    """Supplies all the neccessary arguments to the argparse package, along with appropriate help, defaults, destinations, and choices.
+    The function itself takes no arguments.
+    Unless rMATS is called in stat mode, exits with appropriate errors if any of: sequence files, gtf, or readlength arguments are missing.
+    If an output directory and/or a temporary directory aren't supplied, exits with appropriate errors.
+    Creates output directory. Cleans user supplied bam or fastq filenames to remove trailing newlines, spaces, and commas.
+    If FASTQs are supplied but not BAMs, aligns FASTQs using STAR and sets the resultant BAM file locations as BAM file arguments.
+    If tstat is not supplied, sets the tstat argument equal to the nthread argument or the nthread default, if nthread is also not supplied..
 
+    Returns an arg object.
     """
     parser = argparse.ArgumentParser(usage=USAGE)
 
@@ -191,16 +197,16 @@ def get_args():
 
     if len(args.b1) > 0:
         with open(args.b1, 'r') as fp:
-            args.b1 = fp.read().strip(' ,\n')
+            args.b1 = fp.read().strip().strip(',')
     if len(args.b2) > 0:
         with open(args.b2, 'r') as fp:
-            args.b2 = fp.read().strip(' ,\n')
+            args.b2 = fp.read().strip().strip(',')
     if len(args.s1) > 0:
         with open(args.s1, 'r') as fp:
-            args.s1 = fp.read().strip(' ,\n')
+            args.s1 = fp.read().strip().strip(',')
     if len(args.s2) > 0:
         with open(args.s2, 'r') as fp:
-            args.s2 = fp.read().strip(' ,\n')
+            args.s2 = fp.read().strip().strip(',')
 
     create_output_dirs(args)
     args.prep_prefix = claim_prep_prefix(args.task, args.tmp)
@@ -220,10 +226,17 @@ def get_args():
 
 
 def check_integrity(input_bams_string, tmp_dir):
-    """TODO: Docstring for check_integrity.
-    :returns: TODO
-
     """
+    Purpose: Iterates over the supplied string of bam filenames and checks every file in tmp_dir
+    to ensure every bam filename has exactly one prep file. Exits with appropriate errors if
+    there are one or more of the following: duplicate bam files, bam files with no prep,
+    bam files with multiple preps, or prep files with no corresponding bam. Otherwise, prints 'Ok.'
+
+    Positional arguments:
+    First: input_bams_string - A comma-delimited string of all the input bam filenames.
+    Second: tmp_dir - The location of the current rMATS instance's temporary directory, ostensibly containing the prep files for the input bams.
+    """
+
     input_bams = input_bams_string.split(',')
     duplicate_input_bams = list()
     prep_count_by_bam = dict()
@@ -786,13 +799,18 @@ def create_output_dirs(args):
     args.out_tmp_sub_dir = os.path.join(args.od, 'tmp')
     for dir_path in [args.od, args.out_tmp_sub_dir, args.tmp]:
         if not os.path.exists(dir_path):
-            os.makedirs(dir_path)   # python2: makedirs() got an unexpected keyword argument 'exist_ok' 
+            os.makedirs(dir_path)   # python2: makedirs() got an unexpected keyword argument 'exist_ok'
 
 
 def main():
-    """TODO: Docstring for main.
-    :returns: TODO
-
+    """Takes no arguments.
+    Processes arguments supplied when rmats.py was called using get_args().
+    If task argument is 'inte', checks BAM and prep file integrity.
+    If task argument is 'prep', 'post', or 'both', runs pipeline using seperate module in rmatspipeline.
+    If task argument is not valid, returns nothing.
+    For each splicing event type, processes counts and outputs files.
+    Generates output summary.
+    Prints 'Done processing count files.' and returns nothing.
     """
     args = get_args()
 

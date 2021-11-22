@@ -13,6 +13,7 @@ import tests.prep_post.test as prep_post_test
 import tests.retained_intron_novel.test as retained_intron_novel_test
 import tests.skipped_exon_basic.test as skipped_exon_basic_test
 import tests.skipped_exon_novel.test as skipped_exon_novel_test
+import tests.stat_large_file.test as stat_large_file_test
 import tests.stranded.test as stranded_test
 import tests.task_stat.test as task_stat_test
 import tests.variable_read_length.test as variable_read_length_test
@@ -37,6 +38,7 @@ def build_test_suite():
     suite.addTest(loader.loadTestsFromModule(retained_intron_novel_test))
     suite.addTest(loader.loadTestsFromModule(skipped_exon_basic_test))
     suite.addTest(loader.loadTestsFromModule(skipped_exon_novel_test))
+    suite.addTest(loader.loadTestsFromModule(stat_large_file_test))
     suite.addTest(loader.loadTestsFromModule(stranded_test))
     suite.addTest(loader.loadTestsFromModule(task_stat_test))
     suite.addTest(loader.loadTestsFromModule(variable_read_length_test))

@@ -132,6 +132,34 @@ class BaseTest(unittest.TestCase):
         bam.reads = bam_reads
         return bam
 
+    def _create_bam_from_single_end_read_coords(self,
+                                                bam_path,
+                                                chromosome_length,
+                                                read_length,
+                                                single_end_read_coords,
+                                                clip_length=None,
+                                                is_reversed=False):
+        bam = tests.bam.BAM()
+        bam.path = bam_path
+
+        bam_reads = list()
+        for i, coords in enumerate(single_end_read_coords):
+            read = tests.bam.Read()
+            read.ref_seq_name = '1'  # chromosome
+            read.ref_seq_len = chromosome_length
+            read.template_name = tests.util.template_name_str([i])
+            error = tests.bam.set_single_end_read_from_intervals(
+                read,
+                coords,
+                read_length,
+                clip_length=clip_length,
+                is_reversed=is_reversed)
+            self.assertFalse(error)
+            bam_reads.append(read)
+
+        bam.reads = bam_reads
+        return bam
+
     def _from_gtf_base_headers(self):
         return ['ID', 'GeneID', 'geneSymbol', 'chr', 'strand']
 

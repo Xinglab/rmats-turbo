@@ -23,7 +23,6 @@ class StrandedBaseTest(tests.base_test.BaseTest):
             self._command_output_dir()
         ])
 
-        self._read_type = 'paired'
         self._read_length = 50
         self._chromosome_length = 2000
         self._task = 'both'
@@ -66,6 +65,144 @@ class StrandedBaseTest(tests.base_test.BaseTest):
             '--statoff',
         ]
 
+    def _exons_genes_and_strands_by_transcript(self):
+        exons_genes_and_strands = [
+            # SE gene 1 + strand
+            ([(1, 100), (201, 300), (401, 500)], [1], ['+']),
+            ([(1, 100), (401, 500)], [1], ['+']),
+            # SE gene 2 - strand
+            ([(1001, 1100), (1201, 1300), (1401, 1500)], [2], ['-']),
+            ([(1001, 1100), (1401, 1500)], [2], ['-']),
+        ]
+        exons_by_transcript = list()
+        genes_by_transcript = list()
+        strands_by_transcript = list()
+        for exons, genes, strands in exons_genes_and_strands:
+            for gene in genes:
+                for strand in strands:
+                    exons_by_transcript.append(exons)
+                    genes_by_transcript.append(gene)
+                    strands_by_transcript.append(strand)
+
+        return exons_by_transcript, genes_by_transcript, strands_by_transcript
+
+    def _check_results_first_strand(self):
+        self._check_no_error_results()
+
+        se_mats_jc_path = os.path.join(self._out_dir, 'SE.MATS.JC.txt')
+        se_mats_jc_header, se_mats_jc_rows, error = output_parser.parse_mats_jc(
+            se_mats_jc_path)
+        self.assertFalse(error)
+        self._check_se_mats_jc_header(se_mats_jc_header)
+        self.assertEqual(len(se_mats_jc_rows), 2)
+        for row in se_mats_jc_rows:
+            self.assertIn(row['exonStart_0base'], ['200', '1200'])
+            if row['exonStart_0base'] == '200':
+                self.assertEqual(row['IJC_SAMPLE_1'], '0,1')
+                self.assertEqual(row['SJC_SAMPLE_1'], '0,1')
+                self.assertEqual(row['strand'], '+')
+            elif row['exonStart_0base'] == '1200':
+                self.assertEqual(row['IJC_SAMPLE_1'], '1,0')
+                self.assertEqual(row['SJC_SAMPLE_1'], '1,0')
+                self.assertEqual(row['strand'], '-')
+
+        se_mats_jcec_path = os.path.join(self._out_dir, 'SE.MATS.JCEC.txt')
+        se_mats_jcec_header, se_mats_jcec_rows, error = (
+            output_parser.parse_mats_jcec(se_mats_jcec_path))
+        self.assertFalse(error)
+        self._check_se_mats_jcec_header(se_mats_jcec_header)
+        self.assertEqual(len(se_mats_jcec_rows), 2)
+        for row in se_mats_jcec_rows:
+            self.assertIn(row['exonStart_0base'], ['200', '1200'])
+            if row['exonStart_0base'] == '200':
+                self.assertEqual(row['IJC_SAMPLE_1'], '0,2')
+                self.assertEqual(row['SJC_SAMPLE_1'], '0,1')
+                self.assertEqual(row['strand'], '+')
+            elif row['exonStart_0base'] == '1200':
+                self.assertEqual(row['IJC_SAMPLE_1'], '2,0')
+                self.assertEqual(row['SJC_SAMPLE_1'], '1,0')
+                self.assertEqual(row['strand'], '-')
+
+    def _check_results_second_strand(self):
+        self._check_no_error_results()
+
+        se_mats_jc_path = os.path.join(self._out_dir, 'SE.MATS.JC.txt')
+        se_mats_jc_header, se_mats_jc_rows, error = output_parser.parse_mats_jc(
+            se_mats_jc_path)
+        self.assertFalse(error)
+        self._check_se_mats_jc_header(se_mats_jc_header)
+        self.assertEqual(len(se_mats_jc_rows), 2)
+        for row in se_mats_jc_rows:
+            self.assertIn(row['exonStart_0base'], ['200', '1200'])
+            if row['exonStart_0base'] == '200':
+                self.assertEqual(row['IJC_SAMPLE_1'], '1,0')
+                self.assertEqual(row['SJC_SAMPLE_1'], '1,0')
+                self.assertEqual(row['strand'], '+')
+            elif row['exonStart_0base'] == '1200':
+                self.assertEqual(row['IJC_SAMPLE_1'], '0,1')
+                self.assertEqual(row['SJC_SAMPLE_1'], '0,1')
+                self.assertEqual(row['strand'], '-')
+
+        se_mats_jcec_path = os.path.join(self._out_dir, 'SE.MATS.JCEC.txt')
+        se_mats_jcec_header, se_mats_jcec_rows, error = (
+            output_parser.parse_mats_jcec(se_mats_jcec_path))
+        self.assertFalse(error)
+        self._check_se_mats_jcec_header(se_mats_jcec_header)
+        self.assertEqual(len(se_mats_jcec_rows), 2)
+        for row in se_mats_jcec_rows:
+            self.assertIn(row['exonStart_0base'], ['200', '1200'])
+            if row['exonStart_0base'] == '200':
+                self.assertEqual(row['IJC_SAMPLE_1'], '2,0')
+                self.assertEqual(row['SJC_SAMPLE_1'], '1,0')
+                self.assertEqual(row['strand'], '+')
+            elif row['exonStart_0base'] == '1200':
+                self.assertEqual(row['IJC_SAMPLE_1'], '0,2')
+                self.assertEqual(row['SJC_SAMPLE_1'], '0,1')
+                self.assertEqual(row['strand'], '-')
+
+    def _check_results_unstranded(self):
+        self._check_no_error_results()
+
+        se_mats_jc_path = os.path.join(self._out_dir, 'SE.MATS.JC.txt')
+        se_mats_jc_header, se_mats_jc_rows, error = output_parser.parse_mats_jc(
+            se_mats_jc_path)
+        self.assertFalse(error)
+        self._check_se_mats_jc_header(se_mats_jc_header)
+        self.assertEqual(len(se_mats_jc_rows), 2)
+        for row in se_mats_jc_rows:
+            self.assertIn(row['exonStart_0base'], ['200', '1200'])
+            if row['exonStart_0base'] == '200':
+                self.assertEqual(row['IJC_SAMPLE_1'], '1,1')
+                self.assertEqual(row['SJC_SAMPLE_1'], '1,1')
+                self.assertEqual(row['strand'], '+')
+            elif row['exonStart_0base'] == '1200':
+                self.assertEqual(row['IJC_SAMPLE_1'], '1,1')
+                self.assertEqual(row['SJC_SAMPLE_1'], '1,1')
+                self.assertEqual(row['strand'], '-')
+
+        se_mats_jcec_path = os.path.join(self._out_dir, 'SE.MATS.JCEC.txt')
+        se_mats_jcec_header, se_mats_jcec_rows, error = (
+            output_parser.parse_mats_jcec(se_mats_jcec_path))
+        self.assertFalse(error)
+        self._check_se_mats_jcec_header(se_mats_jcec_header)
+        self.assertEqual(len(se_mats_jcec_rows), 2)
+        for row in se_mats_jcec_rows:
+            self.assertIn(row['exonStart_0base'], ['200', '1200'])
+            if row['exonStart_0base'] == '200':
+                self.assertEqual(row['IJC_SAMPLE_1'], '2,2')
+                self.assertEqual(row['SJC_SAMPLE_1'], '1,1')
+                self.assertEqual(row['strand'], '+')
+            elif row['exonStart_0base'] == '1200':
+                self.assertEqual(row['IJC_SAMPLE_1'], '2,2')
+                self.assertEqual(row['SJC_SAMPLE_1'], '1,1')
+                self.assertEqual(row['strand'], '-')
+
+
+class PairedStrandedBaseTest(StrandedBaseTest):
+    def setUp(self):
+        super().setUp()
+        self._read_type = 'paired'
+
     def _create_sample_1_bams(self, sample_1_bams_path,
                               sample_1_replicate_template):
         rep_1_bam_path = sample_1_replicate_template.format(1)
@@ -89,27 +226,6 @@ class StrandedBaseTest(tests.base_test.BaseTest):
         sample_1_bams = [rep_1_bam, rep_2_bam]
         self._write_bams(sample_1_bams, sample_1_bams_path)
         return sample_1_bams
-
-    def _exons_genes_and_strands_by_transcript(self):
-        exons_genes_and_strands = [
-            # SE gene 1 + strand
-            ([(1, 100), (201, 300), (401, 500)], [1], ['+']),
-            ([(1, 100), (401, 500)], [1], ['+']),
-            # SE gene 2 - strand
-            ([(1001, 1100), (1201, 1300), (1401, 1500)], [2], ['-']),
-            ([(1001, 1100), (1401, 1500)], [2], ['-']),
-        ]
-        exons_by_transcript = list()
-        genes_by_transcript = list()
-        strands_by_transcript = list()
-        for exons, genes, strands in exons_genes_and_strands:
-            for gene in genes:
-                for strand in strands:
-                    exons_by_transcript.append(exons)
-                    genes_by_transcript.append(gene)
-                    strands_by_transcript.append(strand)
-
-        return exons_by_transcript, genes_by_transcript, strands_by_transcript
 
     def _include_read_1(self):
         return ([[81, 100], [201, 300]], [[201, 300]])
@@ -140,9 +256,85 @@ class StrandedBaseTest(tests.base_test.BaseTest):
         ]
 
 
-class FirstStrandTest(StrandedBaseTest):
+class SingleEndStrandedBaseTest(StrandedBaseTest):
+    def setUp(self):
+        super().setUp()
+        self._read_type = 'single'
+
+    def _create_sample_1_bams(self, sample_1_bams_path,
+                              sample_1_replicate_template):
+        rep_1_bam_path = sample_1_replicate_template.format(1)
+        rep_1_bam = self._create_bam_from_single_end_read_coords(
+            rep_1_bam_path,
+            self._chromosome_length,
+            self._read_length,
+            self._single_end_read_coords_1_1(),
+            is_reversed=False)
+
+        rep_2_bam_path = sample_1_replicate_template.format(2)
+        rep_2_bam = self._create_bam_from_single_end_read_coords(
+            rep_2_bam_path,
+            self._chromosome_length,
+            self._read_length,
+            self._single_end_read_coords_1_2(),
+            is_reversed=True)
+
+        sample_1_bams = [rep_1_bam, rep_2_bam]
+        self._write_bams(sample_1_bams, sample_1_bams_path)
+        return sample_1_bams
+
+    def _include_read_1(self):
+        return [[81, 100], [201, 300]]
+
+    def _include_exon_read_1(self):
+        return [[201, 300]]
+
+    def _skip_read_1(self):
+        return [[81, 100], [401, 500]]
+
+    def _skip_exon_read_1(self):
+        return [[401, 500]]
+
+    def _include_read_2(self):
+        return [[1081, 1100], [1201, 1300]]
+
+    def _include_exon_read_2(self):
+        return [[1201, 1300]]
+
+    def _skip_read_2(self):
+        return [[1081, 1100], [1401, 1500]]
+
+    def _skip_exon_read_2(self):
+        return [[1401, 1500]]
+
+    def _single_end_read_coords_1_1(self):
+        return [
+            self._include_read_1(),
+            self._include_exon_read_1(),
+            self._skip_read_1(),
+            self._skip_exon_read_1(),
+            self._include_read_2(),
+            self._include_exon_read_2(),
+            self._skip_read_2(),
+            self._skip_exon_read_2(),
+        ]
+
+    def _single_end_read_coords_1_2(self):
+        return [
+            self._include_read_1(),
+            self._include_exon_read_1(),
+            self._skip_read_1(),
+            self._skip_exon_read_1(),
+            self._include_read_2(),
+            self._include_exon_read_2(),
+            self._skip_read_2(),
+            self._skip_exon_read_2(),
+        ]
+
+
+class PairedFirstStrandTest(PairedStrandedBaseTest):
     def _sub_test_name(self):
-        return 'first_strand'
+        return 'paired_first_strand'
 
     def test(self):
         self._run_test()
@@ -153,46 +345,12 @@ class FirstStrandTest(StrandedBaseTest):
         return arguments
 
     def _check_results(self):
-        self._check_no_error_results()
-
-        se_mats_jc_path = os.path.join(self._out_dir, 'SE.MATS.JC.txt')
-        se_mats_jc_header, se_mats_jc_rows, error = output_parser.parse_mats_jc(
-            se_mats_jc_path)
-        self.assertFalse(error)
-        self._check_se_mats_jc_header(se_mats_jc_header)
-        self.assertEqual(len(se_mats_jc_rows), 2)
-        for row in se_mats_jc_rows:
-            self.assertIn(row['exonStart_0base'], ['200', '1200'])
-            if row['exonStart_0base'] == '200':
-                self.assertEqual(row['IJC_SAMPLE_1'], '0,1')
-                self.assertEqual(row['SJC_SAMPLE_1'], '0,1')
-                self.assertEqual(row['strand'], '+')
-            elif row['exonStart_0base'] == '1200':
-                self.assertEqual(row['IJC_SAMPLE_1'], '1,0')
-                self.assertEqual(row['SJC_SAMPLE_1'], '1,0')
-                self.assertEqual(row['strand'], '-')
-
-        se_mats_jcec_path = os.path.join(self._out_dir, 'SE.MATS.JCEC.txt')
-        se_mats_jcec_header, se_mats_jcec_rows, error = (
-            output_parser.parse_mats_jcec(se_mats_jcec_path))
-        self.assertFalse(error)
-        self._check_se_mats_jcec_header(se_mats_jcec_header)
-        self.assertEqual(len(se_mats_jcec_rows), 2)
-        for row in se_mats_jcec_rows:
-            self.assertIn(row['exonStart_0base'], ['200', '1200'])
-            if row['exonStart_0base'] == '200':
-                self.assertEqual(row['IJC_SAMPLE_1'], '0,2')
-                self.assertEqual(row['SJC_SAMPLE_1'], '0,1')
-                self.assertEqual(row['strand'], '+')
-            elif row['exonStart_0base'] == '1200':
-                self.assertEqual(row['IJC_SAMPLE_1'], '2,0')
-                self.assertEqual(row['SJC_SAMPLE_1'], '1,0')
-                self.assertEqual(row['strand'], '-')
+        self._check_results_first_strand()
 
 
-class SecondStrandTest(StrandedBaseTest):
+class PairedSecondStrandTest(PairedStrandedBaseTest):
     def _sub_test_name(self):
-        return 'second_strand'
+        return 'paired_second_strand'
 
     def test(self):
         self._run_test()
@@ -203,46 +361,12 @@ class SecondStrandTest(StrandedBaseTest):
         return arguments
 
     def _check_results(self):
-        self._check_no_error_results()
-
-        se_mats_jc_path = os.path.join(self._out_dir, 'SE.MATS.JC.txt')
-        se_mats_jc_header, se_mats_jc_rows, error = output_parser.parse_mats_jc(
-            se_mats_jc_path)
-        self.assertFalse(error)
-        self._check_se_mats_jc_header(se_mats_jc_header)
-        self.assertEqual(len(se_mats_jc_rows), 2)
-        for row in se_mats_jc_rows:
-            self.assertIn(row['exonStart_0base'], ['200', '1200'])
-            if row['exonStart_0base'] == '200':
-                self.assertEqual(row['IJC_SAMPLE_1'], '1,0')
-                self.assertEqual(row['SJC_SAMPLE_1'], '1,0')
-                self.assertEqual(row['strand'], '+')
-            elif row['exonStart_0base'] == '1200':
-                self.assertEqual(row['IJC_SAMPLE_1'], '0,1')
-                self.assertEqual(row['SJC_SAMPLE_1'], '0,1')
-                self.assertEqual(row['strand'], '-')
-
-        se_mats_jcec_path = os.path.join(self._out_dir, 'SE.MATS.JCEC.txt')
-        se_mats_jcec_header, se_mats_jcec_rows, error = (
-            output_parser.parse_mats_jcec(se_mats_jcec_path))
-        self.assertFalse(error)
-        self._check_se_mats_jcec_header(se_mats_jcec_header)
-        self.assertEqual(len(se_mats_jcec_rows), 2)
-        for row in se_mats_jcec_rows:
-            self.assertIn(row['exonStart_0base'], ['200', '1200'])
-            if row['exonStart_0base'] == '200':
-                self.assertEqual(row['IJC_SAMPLE_1'], '2,0')
-                self.assertEqual(row['SJC_SAMPLE_1'], '1,0')
-                self.assertEqual(row['strand'], '+')
-            elif row['exonStart_0base'] == '1200':
-                self.assertEqual(row['IJC_SAMPLE_1'], '0,2')
-                self.assertEqual(row['SJC_SAMPLE_1'], '0,1')
-                self.assertEqual(row['strand'], '-')
+        self._check_results_second_strand()
 
 
-class UnstrandedTest(StrandedBaseTest):
+class PairedUnstrandedTest(PairedStrandedBaseTest):
     def _sub_test_name(self):
-        return 'unstranded'
+        return 'paired_unstranded'
 
     def test(self):
         self._run_test()
@@ -253,41 +377,55 @@ class UnstrandedTest(StrandedBaseTest):
         return arguments
 
     def _check_results(self):
-        self._check_no_error_results()
+        self._check_results_unstranded()
 
-        se_mats_jc_path = os.path.join(self._out_dir, 'SE.MATS.JC.txt')
-        se_mats_jc_header, se_mats_jc_rows, error = output_parser.parse_mats_jc(
-            se_mats_jc_path)
-        self.assertFalse(error)
-        self._check_se_mats_jc_header(se_mats_jc_header)
-        self.assertEqual(len(se_mats_jc_rows), 2)
-        for row in se_mats_jc_rows:
-            self.assertIn(row['exonStart_0base'], ['200', '1200'])
-            if row['exonStart_0base'] == '200':
-                self.assertEqual(row['IJC_SAMPLE_1'], '1,1')
-                self.assertEqual(row['SJC_SAMPLE_1'], '1,1')
-                self.assertEqual(row['strand'], '+')
-            elif row['exonStart_0base'] == '1200':
-                self.assertEqual(row['IJC_SAMPLE_1'], '1,1')
-                self.assertEqual(row['SJC_SAMPLE_1'], '1,1')
-                self.assertEqual(row['strand'], '-')
 
-        se_mats_jcec_path = os.path.join(self._out_dir, 'SE.MATS.JCEC.txt')
-        se_mats_jcec_header, se_mats_jcec_rows, error = (
-            output_parser.parse_mats_jcec(se_mats_jcec_path))
-        self.assertFalse(error)
-        self._check_se_mats_jcec_header(se_mats_jcec_header)
-        self.assertEqual(len(se_mats_jcec_rows), 2)
-        for row in se_mats_jcec_rows:
-            self.assertIn(row['exonStart_0base'], ['200', '1200'])
-            if row['exonStart_0base'] == '200':
-                self.assertEqual(row['IJC_SAMPLE_1'], '2,2')
-                self.assertEqual(row['SJC_SAMPLE_1'], '1,1')
-                self.assertEqual(row['strand'], '+')
-            elif row['exonStart_0base'] == '1200':
-                self.assertEqual(row['IJC_SAMPLE_1'], '2,2')
-                self.assertEqual(row['SJC_SAMPLE_1'], '1,1')
-                self.assertEqual(row['strand'], '-')
+class SingleEndFirstStrandTest(SingleEndStrandedBaseTest):
+    def _sub_test_name(self):
+        return 'single_end_first_strand'
+
+    def test(self):
+        self._run_test()
+
+    def _rmats_arguments(self):
+        arguments = super()._rmats_arguments()
+        arguments.extend(['--libType', 'fr-firststrand'])
+        return arguments
+
+    def _check_results(self):
+        self._check_results_first_strand()
+
+
+class SingleEndSecondStrandTest(SingleEndStrandedBaseTest):
+    def _sub_test_name(self):
+        return 'single_end_second_strand'
+
+    def test(self):
+        self._run_test()
+
+    def _rmats_arguments(self):
+        arguments = super()._rmats_arguments()
+        arguments.extend(['--libType', 'fr-secondstrand'])
+        return arguments
+
+    def _check_results(self):
+        self._check_results_second_strand()
+
+
+class SingleEndUnstrandedTest(SingleEndStrandedBaseTest):
+    def _sub_test_name(self):
+        return 'single_end_unstranded'
+
+    def test(self):
+        self._run_test()
+
+    def _rmats_arguments(self):
+        arguments = super()._rmats_arguments()
+        arguments.extend(['--libType', 'fr-unstranded'])
+        return arguments
+
+    def _check_results(self):
+        self._check_results_unstranded()
 
 
 if __name__ == '__main__':

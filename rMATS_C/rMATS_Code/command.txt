@@ -1,6 +1,0 @@
-python GLM_MS_unpaired.py input.txt ./ 1 1 1 0.001
-#input.txt is the input file
-#./ is the output folder. The output file 'rMATS_Result_P.txt' will be generated in the output folder with a few other temporary files.
-#"1 1 1" are two obsolete parameters that need not to be changed plus the last parameter specifies the number of instances used by the program.
-#"0.001" is a user defined cutoff ranging from 0 to 1. Change this parameter will affect the result.
-
