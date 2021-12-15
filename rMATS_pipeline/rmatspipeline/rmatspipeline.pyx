@@ -743,7 +743,7 @@ cdef void parse_bam(long fidx, string bam,
                     cbool issingle, int jld2, int readLength,
                     cbool variable_read_length, int dt, cbool& novelSS,
                     long& mil, long& mel, cbool allow_clipping,
-                    vector[int]& read_outcome_counts) nogil:
+                    vector[int64_t]& read_outcome_counts) nogil:
     """TODO: Docstring for parse_bam.
     :returns: TODO
 
@@ -909,13 +909,13 @@ cdef void parse_bam(long fidx, string bam,
 
 @boundscheck(False)
 @wraparound(False)
-cdef void output_read_outcomes(const vector[vector[int]]& read_outcome_counts,
+cdef void output_read_outcomes(const vector[vector[int64_t]]& read_outcome_counts,
                                const vector[string]& vbams, str tmp_dir,
                                str prep_prefix):
     cdef:
-        vector[int] aggregated_read_outcome_counts
-        int total_for_bam
-        int total
+        vector[int64_t] aggregated_read_outcome_counts
+        int64_t total_for_bam
+        int64_t total
 
     # initialize counts to zero
     aggregated_read_outcome_counts.resize(READ_ENUM_VALUE_COUNT)
@@ -968,7 +968,7 @@ cdef void detect_novel(str bams, unordered_map[int,cset[string]]& geneGroup,
         long mil = args.mil
         long mel = args.mel
         cbool allow_clipping = args.allow_clipping
-        vector[vector[int]] read_outcome_counts
+        vector[vector[int64_t]] read_outcome_counts
 
     dt = args.dt
     vlen = vbams.size()
