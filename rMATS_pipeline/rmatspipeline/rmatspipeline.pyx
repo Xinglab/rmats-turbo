@@ -2981,13 +2981,35 @@ cdef detect_ase(unordered_map[string,Gene]& genes,
 @wraparound(False)
 cdef str copy_from_gtf(str src_dir, str dest_dir, str event):
     cdef:
-        str from_gtf_base, src_gtf_path, path_of_copy
+        str from_gtf_base, src_gtf_path, path_of_copy, mapping_path
+        str mapping_path_template = 'id_mapping.{}.txt'
         str from_gtf_template = 'fromGTF.{}.txt'
+        int i, id_i
+        str line, mapped_line, orig_id, mapped_id
+        list values
 
     from_gtf_base = from_gtf_template.format(event)
     src_gtf_path = join(src_dir, from_gtf_base)
     path_of_copy = join(dest_dir, from_gtf_base)
-    shutil.copy(src_gtf_path, path_of_copy)
+    mapping_path = join(dest_dir, mapping_path_template.format(event))
+    with open(src_gtf_path, 'rt') as src_f:
+        with open(path_of_copy, 'wt') as dest_f:
+            with open(mapping_path, 'wt') as map_f:
+                for i, line in enumerate(src_f):
+                    values = line.strip().split('\t')
+                    if i == 0:
+                        id_i = values.index('ID')
+                        dest_f.write(line)
+                        mapped_line = '\t'.join(['original_id', 'mapped_id'])
+                        map_f.write('{}\n'.format(mapped_line))
+                        continue
+
+                    orig_id = values[id_i]
+                    # the mapped_id is (i-1) so that the first id is 0
+                    mapped_id = str(i - 1)
+                    values[id_i] = mapped_id
+                    dest_f.write('{}\n'.format('\t'.join(values)))
+                    map_f.write('{}\n'.format('\t'.join([orig_id, mapped_id])))
 
     return path_of_copy
 

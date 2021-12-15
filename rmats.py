@@ -507,6 +507,44 @@ def create_output_dirs(args):
             os.makedirs(dir_path)   # python2: makedirs() got an unexpected keyword argument 'exist_ok'
 
 
+def apply_id_mapping(event_type, out_dir):
+    id_to_orig = dict()
+    mapping_path = os.path.join(out_dir, 'id_mapping.{}.txt'.format(event_type))
+    with open(mapping_path, 'rt') as map_f:
+        for i, line in enumerate(map_f):
+            values = line.strip().split('\t')
+            if i == 0:
+                expected_mapping_headers = ['original_id', 'mapped_id']
+                if values != expected_mapping_headers:
+                    sys.exit('ERROR: expected headers in {} to be {}'
+                             ' but found {}'.format(
+                                 mapping_path, expected_mapping_headers, values))
+
+                continue
+
+            id_to_orig[values[1]] = values[0]
+
+    file_templates = ['fromGTF.{}.txt', 'JC.raw.input.{}.txt',
+                      'JCEC.raw.input.{}.txt']
+    for file_template in file_templates:
+        file_path = os.path.join(out_dir, file_template.format(event_type))
+        with open(file_path, 'rt') as in_f:
+            # using mapping_path as a temporary file which is then removed
+            with open(mapping_path, 'wt') as out_f:
+                for i, line in enumerate(in_f):
+                    values = line.strip().split('\t')
+                    if i == 0:
+                        id_i = values.index('ID')
+                        out_f.write(line)
+                        continue
+
+                    mapped_id = values[id_i]
+                    values[id_i] = id_to_orig[mapped_id]
+                    out_f.write('{}\n'.format('\t'.join(values)))
+
+        shutil.move(mapping_path, file_path)
+
+
 def main():
     """Takes no arguments.
     Processes arguments supplied when rmats.py was called using get_args().
@@ -537,6 +575,9 @@ def main():
 
     print('Processing count files.')
     for event_type in ['SE', 'MXE', 'A3SS', 'A5SS', 'RI']:
+        if args.fixed_event_set:
+            apply_id_mapping(event_type, args.od)
+
         process_counts(jc_it % (event_type), args.tstat, 'JC', event_type,
                        args.cstat, args.od, args.out_tmp_sub_dir, args.stat,
                        args.paired_stats, python_executable, root_dir)

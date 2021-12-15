@@ -19,10 +19,16 @@ class Test(tests.base_test.BaseTest):
         self._tmp_dir_orig = os.path.join(self._test_dir, 'tmp_orig')
         self._out_dir_fixed = os.path.join(self._test_dir, 'out_fixed')
         self._tmp_dir_fixed = os.path.join(self._test_dir, 'tmp_fixed')
+        self._out_dir_id_strings = os.path.join(self._test_dir,
+                                                'out_id_strings')
+        self._tmp_dir_id_strings = os.path.join(self._test_dir,
+                                                'tmp_id_strings')
+        self._id_strings_dir = os.path.join(self._test_dir, 'id_strings')
 
         tests.util.recreate_dirs([
             self._generated_input_dir, self._out_dir_orig, self._tmp_dir_orig,
-            self._out_dir_fixed, self._tmp_dir_fixed,
+            self._out_dir_fixed, self._tmp_dir_fixed, self._out_dir_id_strings,
+            self._tmp_dir_id_strings, self._id_strings_dir,
             self._command_output_dir()
         ])
 
@@ -55,12 +61,16 @@ class Test(tests.base_test.BaseTest):
         self._sub_steps = [
             'original',
             'fixed',
+            'id_strings',
         ]
         self._sub_step = None
 
     def test(self):
         for sub_step in self._sub_steps:
             self._sub_step = sub_step
+            if sub_step == 'id_strings':
+                self._setup_id_strings()
+
             self._run_test()
 
     def _command_output_dir(self):
@@ -84,8 +94,62 @@ class Test(tests.base_test.BaseTest):
                 self._sample_3_bams_path, '--fixed-event-set',
                 self._out_dir_orig
             ])
+        if self._sub_step == 'id_strings':
+            arguments.extend([
+                '--od', self._out_dir_id_strings, '--tmp',
+                self._tmp_dir_id_strings, '--b1', self._sample_1_bams_path,
+                '--b2', self._sample_3_bams_path, '--fixed-event-set',
+                self._id_strings_dir
+            ])
 
         return arguments
+
+    def _start_coord_to_id(self):
+        return {
+            '200': 'SE_1',
+            '1200': 'SE_2',
+            '3600': 'SE_MXE_1',
+            '4600': 'SE_MXE_2',
+            '3200': 'MXE_1',
+            '4200': 'MXE_2',
+            '6000': 'A5_1',
+            '7000': 'A5_2',
+            '9200': 'A3_1',
+            '10200': 'A3_2',
+            '12000': 'RI_1',
+            '13000': 'RI_2',
+        }
+
+    def _as_event_to_start_coord_header(self):
+        return {
+            'SE': 'exonStart_0base',
+            'MXE': '1stExonStart_0base',
+            'A3SS': 'longExonStart_0base',
+            'A5SS': 'longExonStart_0base',
+            'RI': 'riExonStart_0base'
+        }
+
+    def _setup_id_strings(self):
+        coord_to_id = self._start_coord_to_id()
+        event_to_coord_header = self._as_event_to_start_coord_header()
+        for as_event, coord_header in event_to_coord_header.items():
+            name = 'fromGTF.{}.txt'.format(as_event)
+            orig_path = os.path.join(self._out_dir_orig, name)
+            dest_path = os.path.join(self._id_strings_dir, name)
+            with open(orig_path, 'rt') as in_f:
+                with open(dest_path, 'wt') as out_f:
+                    for i, line in enumerate(in_f):
+                        values = line.strip().split('\t')
+                        if i == 0:
+                            headers = values
+                            id_i = headers.index('ID')
+                            coord_i = headers.index(coord_header)
+                            out_f.write(line)
+                            continue
+
+                        coord_val = values[coord_i]
+                        values[id_i] = coord_to_id[coord_val]
+                        out_f.write('{}\n'.format('\t'.join(values)))
 
     def _create_sample_1_bams(self, sample_1_bams_path,
                               sample_1_replicate_template):
@@ -332,11 +396,15 @@ class Test(tests.base_test.BaseTest):
             self._check_results_original()
         elif self._sub_step == 'fixed':
             self._check_results_fixed()
+        elif self._sub_step == 'id_strings':
+            self._check_results_id_strings()
         else:
             self.fail('unexpected sub_step: {}'.format(self._sub_step))
 
     def _check_results_original(self):
         self._check_no_error_results()
+
+        event_to_coord_header = self._as_event_to_start_coord_header()
 
         se_mats_jc_path = os.path.join(self._out_dir_orig, 'SE.MATS.JC.txt')
         se_mats_jc_header, se_mats_jc_rows, error = output_parser.parse_mats_jc(
@@ -344,18 +412,19 @@ class Test(tests.base_test.BaseTest):
         self.assertFalse(error)
         self._check_se_mats_jc_header(se_mats_jc_header)
         self.assertEqual(len(se_mats_jc_rows), 4)
+        se_coord_header = event_to_coord_header['SE']
         for row in se_mats_jc_rows:
             # 3600, 4600 are found from the transcripts intended for MXE
-            self.assertIn(row['exonStart_0base'],
+            self.assertIn(row[se_coord_header],
                           ['200', '1200', '3600', '4600'])
-            if row['exonStart_0base'] == '200':
+            if row[se_coord_header] == '200':
                 self.assertEqual(row['IJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['SJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['IJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['SJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['IncFormLen'], '98')
                 self.assertEqual(row['SkipFormLen'], '49')
-            if row['exonStart_0base'] == '1200':
+            if row[se_coord_header] == '1200':
                 self.assertEqual(row['IJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['SJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['IJC_SAMPLE_2'], '1,1')
@@ -369,16 +438,16 @@ class Test(tests.base_test.BaseTest):
         self._check_se_mats_jcec_header(se_mats_jcec_header)
         self.assertEqual(len(se_mats_jcec_rows), 4)
         for row in se_mats_jcec_rows:
-            self.assertIn(row['exonStart_0base'],
+            self.assertIn(row[se_coord_header],
                           ['200', '1200', '3600', '4600'])
-            if row['exonStart_0base'] == '200':
+            if row[se_coord_header] == '200':
                 self.assertEqual(row['IJC_SAMPLE_1'], '2,2')
                 self.assertEqual(row['SJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['IJC_SAMPLE_2'], '0,2')
                 self.assertEqual(row['SJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['IncFormLen'], '149')
                 self.assertEqual(row['SkipFormLen'], '49')
-            if row['exonStart_0base'] == '1200':
+            if row[se_coord_header] == '1200':
                 self.assertEqual(row['IJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['SJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['IJC_SAMPLE_2'], '2,2')
@@ -390,16 +459,17 @@ class Test(tests.base_test.BaseTest):
         self.assertFalse(error)
         self._check_mxe_mats_jc_header(mxe_mats_jc_header)
         self.assertEqual(len(mxe_mats_jc_rows), 2)
+        mxe_coord_header = event_to_coord_header['MXE']
         for row in mxe_mats_jc_rows:
-            self.assertIn(row['1stExonStart_0base'], ['3200', '4200'])
-            if row['1stExonStart_0base'] == '3200':
+            self.assertIn(row[mxe_coord_header], ['3200', '4200'])
+            if row[mxe_coord_header] == '3200':
                 self.assertEqual(row['IJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['SJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['IJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['SJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['IncFormLen'], '98')
                 self.assertEqual(row['SkipFormLen'], '98')
-            if row['1stExonStart_0base'] == '4200':
+            if row[mxe_coord_header] == '4200':
                 self.assertEqual(row['IJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['SJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['IJC_SAMPLE_2'], '1,1')
@@ -413,15 +483,15 @@ class Test(tests.base_test.BaseTest):
         self._check_mxe_mats_jcec_header(mxe_mats_jcec_header)
         self.assertEqual(len(mxe_mats_jcec_rows), 2)
         for row in mxe_mats_jcec_rows:
-            self.assertIn(row['1stExonStart_0base'], ['3200', '4200'])
-            if row['1stExonStart_0base'] == '3200':
+            self.assertIn(row[mxe_coord_header], ['3200', '4200'])
+            if row[mxe_coord_header] == '3200':
                 self.assertEqual(row['IJC_SAMPLE_1'], '2,2')
                 self.assertEqual(row['SJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['IJC_SAMPLE_2'], '0,2')
                 self.assertEqual(row['SJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['IncFormLen'], '149')
                 self.assertEqual(row['SkipFormLen'], '149')
-            if row['1stExonStart_0base'] == '4200':
+            if row[mxe_coord_header] == '4200':
                 self.assertEqual(row['IJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['SJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['IJC_SAMPLE_2'], '2,2')
@@ -434,16 +504,17 @@ class Test(tests.base_test.BaseTest):
         self.assertFalse(error)
         self._check_a35ss_mats_jc_header(a5ss_mats_jc_header)
         self.assertEqual(len(a5ss_mats_jc_rows), 2)
+        a5ss_coord_header = event_to_coord_header['A5SS']
         for row in a5ss_mats_jc_rows:
-            self.assertIn(row['longExonStart_0base'], ['6000', '7000'])
-            if row['longExonStart_0base'] == '6000':
+            self.assertIn(row[a5ss_coord_header], ['6000', '7000'])
+            if row[a5ss_coord_header] == '6000':
                 self.assertEqual(row['IJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['SJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['IJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['SJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['IncFormLen'], '98')
                 self.assertEqual(row['SkipFormLen'], '49')
-            if row['longExonStart_0base'] == '7000':
+            if row[a5ss_coord_header] == '7000':
                 self.assertEqual(row['IJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['SJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['IJC_SAMPLE_2'], '1,1')
@@ -457,15 +528,15 @@ class Test(tests.base_test.BaseTest):
         self._check_a35ss_mats_jcec_header(a5ss_mats_jcec_header)
         self.assertEqual(len(a5ss_mats_jcec_rows), 2)
         for row in a5ss_mats_jcec_rows:
-            self.assertIn(row['longExonStart_0base'], ['6000', '7000'])
-            if row['longExonStart_0base'] == '6000':
+            self.assertIn(row[a5ss_coord_header], ['6000', '7000'])
+            if row[a5ss_coord_header] == '6000':
                 self.assertEqual(row['IJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['SJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['IJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['SJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['IncFormLen'], '149')
                 self.assertEqual(row['SkipFormLen'], '49')
-            if row['longExonStart_0base'] == '7000':
+            if row[a5ss_coord_header] == '7000':
                 self.assertEqual(row['IJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['SJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['IJC_SAMPLE_2'], '1,1')
@@ -478,16 +549,17 @@ class Test(tests.base_test.BaseTest):
         self.assertFalse(error)
         self._check_a35ss_mats_jc_header(a3ss_mats_jc_header)
         self.assertEqual(len(a3ss_mats_jc_rows), 2)
+        a3ss_coord_header = event_to_coord_header['A3SS']
         for row in a3ss_mats_jc_rows:
-            self.assertIn(row['longExonStart_0base'], ['9200', '10200'])
-            if row['longExonStart_0base'] == '9200':
+            self.assertIn(row[a3ss_coord_header], ['9200', '10200'])
+            if row[a3ss_coord_header] == '9200':
                 self.assertEqual(row['IJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['SJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['IJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['SJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['IncFormLen'], '98')
                 self.assertEqual(row['SkipFormLen'], '49')
-            if row['longExonStart_0base'] == '10200':
+            if row[a3ss_coord_header] == '10200':
                 self.assertEqual(row['IJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['SJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['IJC_SAMPLE_2'], '1,1')
@@ -501,15 +573,15 @@ class Test(tests.base_test.BaseTest):
         self._check_a35ss_mats_jcec_header(a3ss_mats_jcec_header)
         self.assertEqual(len(a3ss_mats_jcec_rows), 2)
         for row in a3ss_mats_jcec_rows:
-            self.assertIn(row['longExonStart_0base'], ['9200', '10200'])
-            if row['longExonStart_0base'] == '9200':
+            self.assertIn(row[a3ss_coord_header], ['9200', '10200'])
+            if row[a3ss_coord_header] == '9200':
                 self.assertEqual(row['IJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['SJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['IJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['SJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['IncFormLen'], '149')
                 self.assertEqual(row['SkipFormLen'], '49')
-            if row['longExonStart_0base'] == '10200':
+            if row[a3ss_coord_header] == '10200':
                 self.assertEqual(row['IJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['SJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['IJC_SAMPLE_2'], '1,1')
@@ -521,16 +593,17 @@ class Test(tests.base_test.BaseTest):
         self.assertFalse(error)
         self._check_ri_mats_jc_header(ri_mats_jc_header)
         self.assertEqual(len(ri_mats_jc_rows), 2)
+        ri_coord_header = event_to_coord_header['RI']
         for row in ri_mats_jc_rows:
-            self.assertIn(row['riExonStart_0base'], ['12000', '13000'])
-            if row['riExonStart_0base'] == '12000':
+            self.assertIn(row[ri_coord_header], ['12000', '13000'])
+            if row[ri_coord_header] == '12000':
                 self.assertEqual(row['IJC_SAMPLE_1'], '2,2')
                 self.assertEqual(row['SJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['IJC_SAMPLE_2'], '0,2')
                 self.assertEqual(row['SJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['IncFormLen'], '98')
                 self.assertEqual(row['SkipFormLen'], '49')
-            if row['riExonStart_0base'] == '13000':
+            if row[ri_coord_header] == '13000':
                 self.assertEqual(row['IJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['SJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['IJC_SAMPLE_2'], '2,2')
@@ -544,241 +617,303 @@ class Test(tests.base_test.BaseTest):
         self._check_ri_mats_jcec_header(ri_mats_jcec_header)
         self.assertEqual(len(ri_mats_jcec_rows), 2)
         for row in ri_mats_jcec_rows:
-            self.assertIn(row['riExonStart_0base'], ['12000', '13000'])
-            if row['riExonStart_0base'] == '12000':
+            self.assertIn(row[ri_coord_header], ['12000', '13000'])
+            if row[ri_coord_header] == '12000':
                 self.assertEqual(row['IJC_SAMPLE_1'], '2,2')
                 self.assertEqual(row['SJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['IJC_SAMPLE_2'], '0,2')
                 self.assertEqual(row['SJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['IncFormLen'], '249')
                 self.assertEqual(row['SkipFormLen'], '49')
-            if row['riExonStart_0base'] == '13000':
+            if row[ri_coord_header] == '13000':
                 self.assertEqual(row['IJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['SJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['IJC_SAMPLE_2'], '2,2')
                 self.assertEqual(row['SJC_SAMPLE_2'], '1,1')
 
-    def _check_results_fixed(self):
+    def _check_row_id(self, row_id, coord, coord_to_id):
+        if coord_to_id is not None:
+            self.assertEqual(row_id, coord_to_id.get(coord))
+        else:
+            self.assertTrue(row_id.isdigit())
+
+    def _check_row_ids_match(self, as_event, out_dir, expected_ids):
+        name_templates_and_parsers = [
+            ('fromGTF.{}.txt', output_parser.parse_from_gtf),
+            ('JC.raw.input.{}.txt', output_parser.parse_jc_raw),
+            ('JCEC.raw.input.{}.txt', output_parser.parse_jcec_raw),
+        ]
+        for name_template, parser in name_templates_and_parsers:
+            path = os.path.join(out_dir, name_template.format(as_event))
+            header, rows, error = parser(path)
+            self.assertFalse(error)
+            for i, row in enumerate(rows):
+                self.assertEqual(row['ID'], expected_ids[i])
+
+    def _check_results_fixed_shared(self, out_dir, start_coord_to_id=None):
         self._check_no_error_results()
 
-        se_mats_jc_path = os.path.join(self._out_dir_fixed, 'SE.MATS.JC.txt')
+        event_to_coord_header = self._as_event_to_start_coord_header()
+
+        se_mats_jc_path = os.path.join(out_dir, 'SE.MATS.JC.txt')
         se_mats_jc_header, se_mats_jc_rows, error = output_parser.parse_mats_jc(
             se_mats_jc_path)
         self.assertFalse(error)
         self._check_se_mats_jc_header(se_mats_jc_header)
         self.assertEqual(len(se_mats_jc_rows), 4)
+        se_coord_header = event_to_coord_header['SE']
+        se_mats_row_ids = list()
         for row in se_mats_jc_rows:
-            self.assertIn(row['exonStart_0base'],
+            se_mats_row_ids.append(row['ID'])
+            self._check_row_id(row['ID'], row[se_coord_header],
+                               start_coord_to_id)
+            self.assertIn(row[se_coord_header],
                           ['200', '1200', '3600', '4600'])
-            if row['exonStart_0base'] == '200':
+            if row[se_coord_header] == '200':
                 self.assertEqual(row['IJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['SJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['IJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['SJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['IncFormLen'], '98')
                 self.assertEqual(row['SkipFormLen'], '49')
-            if row['exonStart_0base'] == '1200':
+            if row[se_coord_header] == '1200':
                 self.assertEqual(row['IJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['SJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['IJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['SJC_SAMPLE_2'], '0,0')
 
-        se_mats_jcec_path = os.path.join(self._out_dir_fixed,
-                                         'SE.MATS.JCEC.txt')
+        se_mats_jcec_path = os.path.join(out_dir, 'SE.MATS.JCEC.txt')
         se_mats_jcec_header, se_mats_jcec_rows, error = (
             output_parser.parse_mats_jcec(se_mats_jcec_path))
         self.assertFalse(error)
         self._check_se_mats_jcec_header(se_mats_jcec_header)
         self.assertEqual(len(se_mats_jcec_rows), 4)
-        for row in se_mats_jcec_rows:
-            self.assertIn(row['exonStart_0base'],
+        for i, row in enumerate(se_mats_jcec_rows):
+            self.assertEqual(row['ID'], se_mats_row_ids[i])
+            self.assertIn(row[se_coord_header],
                           ['200', '1200', '3600', '4600'])
-            if row['exonStart_0base'] == '200':
+            if row[se_coord_header] == '200':
                 self.assertEqual(row['IJC_SAMPLE_1'], '2,2')
                 self.assertEqual(row['SJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['IJC_SAMPLE_2'], '0,2')
                 self.assertEqual(row['SJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['IncFormLen'], '149')
                 self.assertEqual(row['SkipFormLen'], '49')
-            if row['exonStart_0base'] == '1200':
+            if row[se_coord_header] == '1200':
                 self.assertEqual(row['IJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['SJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['IJC_SAMPLE_2'], '0,2')
                 self.assertEqual(row['SJC_SAMPLE_2'], '0,0')
 
-        mxe_mats_jc_path = os.path.join(self._out_dir_fixed, 'MXE.MATS.JC.txt')
+        self._check_row_ids_match('SE', out_dir, se_mats_row_ids)
+
+        mxe_mats_jc_path = os.path.join(out_dir, 'MXE.MATS.JC.txt')
         mxe_mats_jc_header, mxe_mats_jc_rows, error = (
             output_parser.parse_mats_jc(mxe_mats_jc_path))
         self.assertFalse(error)
         self._check_mxe_mats_jc_header(mxe_mats_jc_header)
         self.assertEqual(len(mxe_mats_jc_rows), 2)
+        mxe_coord_header = event_to_coord_header['MXE']
+        mxe_mats_row_ids = list()
         for row in mxe_mats_jc_rows:
-            self.assertIn(row['1stExonStart_0base'], ['3200', '4200'])
-            if row['1stExonStart_0base'] == '3200':
+            mxe_mats_row_ids.append(row['ID'])
+            self._check_row_id(row['ID'], row[mxe_coord_header],
+                               start_coord_to_id)
+            self.assertIn(row[mxe_coord_header], ['3200', '4200'])
+            if row[mxe_coord_header] == '3200':
                 self.assertEqual(row['IJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['SJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['IJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['SJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['IncFormLen'], '98')
                 self.assertEqual(row['SkipFormLen'], '98')
-            if row['1stExonStart_0base'] == '4200':
+            if row[mxe_coord_header] == '4200':
                 self.assertEqual(row['IJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['SJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['IJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['SJC_SAMPLE_2'], '0,0')
 
-        mxe_mats_jcec_path = os.path.join(self._out_dir_fixed,
-                                          'MXE.MATS.JCEC.txt')
+        mxe_mats_jcec_path = os.path.join(out_dir, 'MXE.MATS.JCEC.txt')
         mxe_mats_jcec_header, mxe_mats_jcec_rows, error = (
             output_parser.parse_mats_jcec(mxe_mats_jcec_path))
         self.assertFalse(error)
         self._check_mxe_mats_jcec_header(mxe_mats_jcec_header)
         self.assertEqual(len(mxe_mats_jcec_rows), 2)
-        for row in mxe_mats_jcec_rows:
-            self.assertIn(row['1stExonStart_0base'], ['3200', '4200'])
-            if row['1stExonStart_0base'] == '3200':
+        for i, row in enumerate(mxe_mats_jcec_rows):
+            self.assertEqual(row['ID'], mxe_mats_row_ids[i])
+            self.assertIn(row[mxe_coord_header], ['3200', '4200'])
+            if row[mxe_coord_header] == '3200':
                 self.assertEqual(row['IJC_SAMPLE_1'], '2,2')
                 self.assertEqual(row['SJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['IJC_SAMPLE_2'], '0,2')
                 self.assertEqual(row['SJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['IncFormLen'], '149')
                 self.assertEqual(row['SkipFormLen'], '149')
-            if row['1stExonStart_0base'] == '4200':
+            if row[mxe_coord_header] == '4200':
                 self.assertEqual(row['IJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['SJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['IJC_SAMPLE_2'], '0,2')
                 self.assertEqual(row['SJC_SAMPLE_2'], '0,0')
 
-        a5ss_mats_jc_path = os.path.join(self._out_dir_fixed,
-                                         'A5SS.MATS.JC.txt')
+        self._check_row_ids_match('MXE', out_dir, mxe_mats_row_ids)
+
+        a5ss_mats_jc_path = os.path.join(out_dir, 'A5SS.MATS.JC.txt')
         a5ss_mats_jc_header, a5ss_mats_jc_rows, error = (
             output_parser.parse_mats_jc(a5ss_mats_jc_path))
         self.assertFalse(error)
         self._check_a35ss_mats_jc_header(a5ss_mats_jc_header)
         self.assertEqual(len(a5ss_mats_jc_rows), 2)
+        a5ss_coord_header = event_to_coord_header['A5SS']
+        a5ss_mats_row_ids = list()
         for row in a5ss_mats_jc_rows:
-            self.assertIn(row['longExonStart_0base'], ['6000', '7000'])
-            if row['longExonStart_0base'] == '6000':
+            a5ss_mats_row_ids.append(row['ID'])
+            self._check_row_id(row['ID'], row[a5ss_coord_header],
+                               start_coord_to_id)
+            self.assertIn(row[a5ss_coord_header], ['6000', '7000'])
+            if row[a5ss_coord_header] == '6000':
                 self.assertEqual(row['IJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['SJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['IJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['SJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['IncFormLen'], '98')
                 self.assertEqual(row['SkipFormLen'], '49')
-            if row['longExonStart_0base'] == '7000':
+            if row[a5ss_coord_header] == '7000':
                 self.assertEqual(row['IJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['SJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['IJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['SJC_SAMPLE_2'], '0,0')
 
-        a5ss_mats_jcec_path = os.path.join(self._out_dir_fixed,
-                                           'A5SS.MATS.JCEC.txt')
+        a5ss_mats_jcec_path = os.path.join(out_dir, 'A5SS.MATS.JCEC.txt')
         a5ss_mats_jcec_header, a5ss_mats_jcec_rows, error = (
             output_parser.parse_mats_jcec(a5ss_mats_jcec_path))
         self.assertFalse(error)
         self._check_a35ss_mats_jcec_header(a5ss_mats_jcec_header)
         self.assertEqual(len(a5ss_mats_jcec_rows), 2)
-        for row in a5ss_mats_jcec_rows:
-            self.assertIn(row['longExonStart_0base'], ['6000', '7000'])
-            if row['longExonStart_0base'] == '6000':
+        for i, row in enumerate(a5ss_mats_jcec_rows):
+            self.assertEqual(row['ID'], a5ss_mats_row_ids[i])
+            self.assertIn(row[a5ss_coord_header], ['6000', '7000'])
+            if row[a5ss_coord_header] == '6000':
                 self.assertEqual(row['IJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['SJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['IJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['SJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['IncFormLen'], '149')
                 self.assertEqual(row['SkipFormLen'], '49')
-            if row['longExonStart_0base'] == '7000':
+            if row[a5ss_coord_header] == '7000':
                 self.assertEqual(row['IJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['SJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['IJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['SJC_SAMPLE_2'], '0,0')
 
-        a3ss_mats_jc_path = os.path.join(self._out_dir_fixed,
-                                         'A3SS.MATS.JC.txt')
+        self._check_row_ids_match('A5SS', out_dir, a5ss_mats_row_ids)
+
+        a3ss_mats_jc_path = os.path.join(out_dir, 'A3SS.MATS.JC.txt')
         a3ss_mats_jc_header, a3ss_mats_jc_rows, error = (
             output_parser.parse_mats_jc(a3ss_mats_jc_path))
         self.assertFalse(error)
         self._check_a35ss_mats_jc_header(a3ss_mats_jc_header)
         self.assertEqual(len(a3ss_mats_jc_rows), 2)
+        a3ss_coord_header = event_to_coord_header['A3SS']
+        a3ss_mats_row_ids = list()
         for row in a3ss_mats_jc_rows:
-            self.assertIn(row['longExonStart_0base'], ['9200', '10200'])
-            if row['longExonStart_0base'] == '9200':
+            a3ss_mats_row_ids.append(row['ID'])
+            self._check_row_id(row['ID'], row[a3ss_coord_header],
+                               start_coord_to_id)
+            self.assertIn(row[a3ss_coord_header], ['9200', '10200'])
+            if row[a3ss_coord_header] == '9200':
                 self.assertEqual(row['IJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['SJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['IJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['SJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['IncFormLen'], '98')
                 self.assertEqual(row['SkipFormLen'], '49')
-            if row['longExonStart_0base'] == '10200':
+            if row[a3ss_coord_header] == '10200':
                 self.assertEqual(row['IJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['SJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['IJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['SJC_SAMPLE_2'], '0,0')
 
-        a3ss_mats_jcec_path = os.path.join(self._out_dir_fixed,
-                                           'A3SS.MATS.JCEC.txt')
+        a3ss_mats_jcec_path = os.path.join(out_dir, 'A3SS.MATS.JCEC.txt')
         a3ss_mats_jcec_header, a3ss_mats_jcec_rows, error = (
             output_parser.parse_mats_jcec(a3ss_mats_jcec_path))
         self.assertFalse(error)
         self._check_a35ss_mats_jcec_header(a3ss_mats_jcec_header)
         self.assertEqual(len(a3ss_mats_jcec_rows), 2)
-        for row in a3ss_mats_jcec_rows:
-            self.assertIn(row['longExonStart_0base'], ['9200', '10200'])
-            if row['longExonStart_0base'] == '9200':
+        for i, row in enumerate(a3ss_mats_jcec_rows):
+            self.assertEqual(row['ID'], a3ss_mats_row_ids[i])
+            self.assertIn(row[a3ss_coord_header], ['9200', '10200'])
+            if row[a3ss_coord_header] == '9200':
                 self.assertEqual(row['IJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['SJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['IJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['SJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['IncFormLen'], '149')
                 self.assertEqual(row['SkipFormLen'], '49')
-            if row['longExonStart_0base'] == '10200':
+            if row[a3ss_coord_header] == '10200':
                 self.assertEqual(row['IJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['SJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['IJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['SJC_SAMPLE_2'], '0,0')
 
-        ri_mats_jc_path = os.path.join(self._out_dir_fixed, 'RI.MATS.JC.txt')
+        self._check_row_ids_match('A3SS', out_dir, a3ss_mats_row_ids)
+
+        ri_mats_jc_path = os.path.join(out_dir, 'RI.MATS.JC.txt')
         ri_mats_jc_header, ri_mats_jc_rows, error = output_parser.parse_mats_jc(
             ri_mats_jc_path)
         self.assertFalse(error)
         self._check_ri_mats_jc_header(ri_mats_jc_header)
         self.assertEqual(len(ri_mats_jc_rows), 2)
+        ri_coord_header = event_to_coord_header['RI']
+        ri_mats_row_ids = list()
         for row in ri_mats_jc_rows:
-            self.assertIn(row['riExonStart_0base'], ['12000', '13000'])
-            if row['riExonStart_0base'] == '12000':
+            ri_mats_row_ids.append(row['ID'])
+            self._check_row_id(row['ID'], row[ri_coord_header],
+                               start_coord_to_id)
+            self.assertIn(row[ri_coord_header], ['12000', '13000'])
+            if row[ri_coord_header] == '12000':
                 self.assertEqual(row['IJC_SAMPLE_1'], '2,2')
                 self.assertEqual(row['SJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['IJC_SAMPLE_2'], '0,2')
                 self.assertEqual(row['SJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['IncFormLen'], '98')
                 self.assertEqual(row['SkipFormLen'], '49')
-            if row['riExonStart_0base'] == '13000':
+            if row[ri_coord_header] == '13000':
                 self.assertEqual(row['IJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['SJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['IJC_SAMPLE_2'], '0,2')
                 self.assertEqual(row['SJC_SAMPLE_2'], '0,0')
 
-        ri_mats_jcec_path = os.path.join(self._out_dir_fixed,
-                                         'RI.MATS.JCEC.txt')
+        ri_mats_jcec_path = os.path.join(out_dir, 'RI.MATS.JCEC.txt')
         ri_mats_jcec_header, ri_mats_jcec_rows, error = (
             output_parser.parse_mats_jcec(ri_mats_jcec_path))
         self.assertFalse(error)
         self._check_ri_mats_jcec_header(ri_mats_jcec_header)
         self.assertEqual(len(ri_mats_jcec_rows), 2)
-        for row in ri_mats_jcec_rows:
-            self.assertIn(row['riExonStart_0base'], ['12000', '13000'])
-            if row['riExonStart_0base'] == '12000':
+        for i, row in enumerate(ri_mats_jcec_rows):
+            self.assertEqual(row['ID'], ri_mats_row_ids[i])
+            self.assertIn(row[ri_coord_header], ['12000', '13000'])
+            if row[ri_coord_header] == '12000':
                 self.assertEqual(row['IJC_SAMPLE_1'], '2,2')
                 self.assertEqual(row['SJC_SAMPLE_1'], '1,1')
                 self.assertEqual(row['IJC_SAMPLE_2'], '0,2')
                 self.assertEqual(row['SJC_SAMPLE_2'], '0,1')
                 self.assertEqual(row['IncFormLen'], '249')
                 self.assertEqual(row['SkipFormLen'], '49')
-            if row['riExonStart_0base'] == '13000':
+            if row[ri_coord_header] == '13000':
                 self.assertEqual(row['IJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['SJC_SAMPLE_1'], '0,0')
                 self.assertEqual(row['IJC_SAMPLE_2'], '0,2')
                 self.assertEqual(row['SJC_SAMPLE_2'], '0,0')
+
+        self._check_row_ids_match('RI', out_dir, ri_mats_row_ids)
+
+    def _check_results_fixed(self):
+        self._check_results_fixed_shared(self._out_dir_fixed)
+
+    def _check_results_id_strings(self):
+        start_coord_to_id = self._start_coord_to_id()
+        self._check_results_fixed_shared(self._out_dir_id_strings,
+                                         start_coord_to_id=start_coord_to_id)
 
 
 if __name__ == '__main__':
