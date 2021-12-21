@@ -14,7 +14,6 @@
 
 extern double rho;
 extern double cutoff;
-extern clock_t dur;
 
 
 #define ITER_CUTOFF 0.01
