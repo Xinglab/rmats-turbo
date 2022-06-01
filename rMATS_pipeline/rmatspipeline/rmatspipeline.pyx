@@ -272,11 +272,12 @@ cdef cbool read_has_nh_tag_1(const BamAlignment& bread) nogil:
 
 @boundscheck(False)
 @wraparound(False)
-cdef int filter_read(const BamAlignment& bread, const cbool& ispaired) nogil:
+cdef int filter_read(const BamAlignment& bread, const cbool& ispaired,
+                     cbool allow_multimapping) nogil:
     if ispaired and not bread.IsProperPair():
         return READ_NOT_PAIRED
 
-    if not read_has_nh_tag_1(bread):
+    if not (allow_multimapping or read_has_nh_tag_1(bread)):
         return READ_NOT_NH_1
 
     return READ_USED
@@ -743,6 +744,7 @@ cdef void parse_bam(long fidx, string bam,
                     cbool issingle, int jld2, int readLength,
                     cbool variable_read_length, int dt, cbool& novelSS,
                     long& mil, long& mel, cbool allow_clipping,
+                    cbool allow_multimapping,
                     vector[int64_t]& read_outcome_counts) nogil:
     """TODO: Docstring for parse_bam.
     :returns: TODO
@@ -802,7 +804,7 @@ cdef void parse_bam(long fidx, string bam,
             read_outcome_counts[READ_CLIPPED] += 1
             continue
 
-        filter_outcome = filter_read(bread, ispaired)
+        filter_outcome = filter_read(bread, ispaired, allow_multimapping)
         if filter_outcome != READ_USED:
             read_outcome_counts[filter_outcome] += 1
             continue
@@ -968,6 +970,7 @@ cdef void detect_novel(str bams, unordered_map[int,cset[string]]& geneGroup,
         long mil = args.mil
         long mel = args.mel
         cbool allow_clipping = args.allow_clipping
+        cbool allow_multimapping = args.allow_multimapping
         vector[vector[int64_t]] read_outcome_counts
 
     dt = args.dt
@@ -988,7 +991,7 @@ cdef void detect_novel(str bams, unordered_map[int,cset[string]]& geneGroup,
         parse_bam(fidx, vbams[fidx], geneGroup, genes, supple, novel_juncs[fidx],
                   exons[fidx], multis[fidx], issingle, jld2, readLength,
                   variable_read_length, dt, novelSS, mil, mel, allow_clipping,
-                  read_outcome_counts[fidx])
+                  allow_multimapping, read_outcome_counts[fidx])
 
     output_read_outcomes(read_outcome_counts, vbams, args.tmp, args.prep_prefix)
 

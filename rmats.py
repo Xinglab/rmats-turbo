@@ -162,6 +162,9 @@ def get_args():
     parser.add_argument('--allow-clipping', action='store_true',
                         help='Allow alignments with soft or hard clipping to be used',
                         dest='allow_clipping')
+    parser.add_argument('--allow-multimapping', action='store_true',
+                        help='Allow alignments that are mapped ambiguously (NH tag != 1)',
+                        dest='allow_multimapping')
     parser.add_argument('--fixed-event-set', action='store', help='A directory containing fromGTF.[AS].txt files to be used instead of detecting a new set of events')
 
     args = parser.parse_args()

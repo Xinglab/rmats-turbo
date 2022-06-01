@@ -1,6 +1,7 @@
 import unittest
 
 import tests.allow_clipping.test as allow_clipping_test
+import tests.allow_multimapping.test as allow_multimapping_test
 import tests.alternative_3_splice_site_novel.test as alternative_3_splice_site_novel_test
 import tests.alternative_5_splice_site_novel.test as alternative_5_splice_site_novel_test
 import tests.fixed_event_set.test as fixed_event_set_test
@@ -22,6 +23,7 @@ def build_test_suite():
     loader = unittest.defaultTestLoader
     suite = unittest.TestSuite()
     suite.addTest(loader.loadTestsFromModule(allow_clipping_test))
+    suite.addTest(loader.loadTestsFromModule(allow_multimapping_test))
     suite.addTest(
         loader.loadTestsFromModule(alternative_3_splice_site_novel_test))
     suite.addTest(
