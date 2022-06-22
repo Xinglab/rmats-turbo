@@ -1,6 +1,6 @@
 # Python 3 requirements
 Cython==0.29.21
-numpy==1.16.6
+numpy==1.22.0
 python==3.6.12
 #
 # Python 2 requirements
