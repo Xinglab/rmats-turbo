@@ -133,7 +133,7 @@ def get_args():
                         dest='variable_read_length')
     parser.add_argument('--anchorLength', action='store', type=int, default=1,
                         help='The anchor length. Default is %(default)s', dest='anchorLength')
-    parser.add_argument('--tophatAnchor', action='store', type=int, default=6,
+    parser.add_argument('--tophatAnchor', action='store', type=int, default=1,
                         help='The "anchor length" or "overhang length" used in the aligner. At least "anchor length" NT must be mapped to each end of a given junction. The default is %(default)s. (Only if using fastq)', dest='tophatAnchor')
     parser.add_argument('--bi', action='store', default='',
                         help='The directory name of the STAR binary indices (name of the directory that contains the SA file). (Only if using fastq)', dest='bIndex')
