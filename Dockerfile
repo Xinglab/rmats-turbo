@@ -14,7 +14,6 @@ RUN apt-get update \
        liblapack-dev \
        make \
        python-dev \
-       python-numpy \
        r-base \
        r-cran-nloptr \
        zlib1g-dev \

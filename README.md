@@ -37,7 +37,6 @@ Tested on Ubuntu (20.04 LTS)
 
 - Python (3.6.12 or 2.7.15)
   * Cython (0.29.21 or 0.29.15 for Python 2)
-  * numpy (1.16.6 or 1.16.5 for Python 2)
 - BLAS, LAPACK
 - GNU Scientific Library (GSL 2.5)
 - GCC (>=5.4.0)
