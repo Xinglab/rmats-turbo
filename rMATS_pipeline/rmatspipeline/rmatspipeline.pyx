@@ -828,6 +828,9 @@ cdef void parse_bam(long fidx, string bam,
 
             visited.clear()
             for i in range(mc/refer_len, mec/refer_len+1):
+                if geneGroup.find(i) == geneGroup.end():
+                    continue
+
                 cg = geneGroup[i].begin()
                 while cg != geneGroup[i].end():
                     ## for each candidate gene
@@ -866,6 +869,9 @@ cdef void parse_bam(long fidx, string bam,
                     continue
 
                 for j in range(estart/refer_len, eend/refer_len+1):
+                    if geneGroup.find(j) == geneGroup.end():
+                        continue
+
                     cg = geneGroup[j].begin()
                     while cg != geneGroup[j].end():
                         ## for each candidate gene
