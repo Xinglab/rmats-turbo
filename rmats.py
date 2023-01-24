@@ -64,6 +64,7 @@ def doSTARMapping(args): ## do STAR mapping
 
                 os.makedirs(map_folder)
                 cmd = 'STAR --chimSegmentMin 2 --outFilterMismatchNmax 3'
+                cmd += ' --twopassMode Basic'
                 if not args.allow_clipping:
                     cmd += ' --alignEndsType EndToEnd'
 
