@@ -305,7 +305,7 @@ optional arguments:
   --tophatAnchor TOPHATANCHOR
                         The "anchor length" or "overhang length" used in the
                         aligner. At least "anchor length" NT must be mapped to
-                        each end of a given junction. The default is 6. (Only
+                        each end of a given junction. The default is 1. (Only
                         if using fastq)
   --bi BINDEX           The directory name of the STAR binary indices (name of
                         the directory that contains the SA file). (Only if
