@@ -64,6 +64,7 @@ def doSTARMapping(args): ## do STAR mapping
 
                 os.makedirs(map_folder)
                 cmd = 'STAR --chimSegmentMin 2 --outFilterMismatchNmax 3'
+                cmd += ' --twopassMode Basic'
                 if not args.allow_clipping:
                     cmd += ' --alignEndsType EndToEnd'
 
@@ -125,14 +126,14 @@ def get_args():
     parser.add_argument('--libType', action='store', default='fr-unstranded',
                         choices=['fr-unstranded', 'fr-firststrand',
                                  'fr-secondstrand',],
-                        help='Library type. Use fr-firststrand or fr-secondstrand for strand-specific data. Default: %(default)s', dest='dt')
+                        help='Library type. Use fr-firststrand or fr-secondstrand for strand-specific data. Only relevant to prep step, not the post step. Default: %(default)s', dest='dt')
     parser.add_argument('--readLength', action='store', type=int,
                         help='The length of each read', dest='readLength')
     parser.add_argument('--variable-read-length', action='store_true',
                         help='Allow reads with lengths that differ from --readLength to be processed. --readLength will still be used to determine IncFormLen and SkipFormLen',
                         dest='variable_read_length')
     parser.add_argument('--anchorLength', action='store', type=int, default=1,
-                        help='The anchor length. Default is %(default)s', dest='anchorLength')
+                        help='The "anchor length" or "overhang length" used when counting the number of reads spanning splicing junctions. At least "anchor length" nucleotides must be mapped to each end of a given junction. The default value is set to %(default)s to make use of all possible junction reads. The minimum value is 1.', dest='anchorLength')
     parser.add_argument('--tophatAnchor', action='store', type=int, default=1,
                         help='The "anchor length" or "overhang length" used in the aligner. At least "anchor length" NT must be mapped to each end of a given junction. The default is %(default)s. (Only if using fastq)', dest='tophatAnchor')
     parser.add_argument('--bi', action='store', default='',

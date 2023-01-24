@@ -95,7 +95,7 @@ cdef:
 @wraparound(False)
 cdef void parse_gtf(str gtff, unordered_map[int,cset[string]]& geneGroup,
                     unordered_map[string,Gene]& genes,
-                    unordered_map[string,SupInfo]& supple):
+                    unordered_map[string,SupInfo]& supple) except *:
     """TODO: Docstring for parse_gtf.
     :returns: TODO
 
@@ -828,6 +828,9 @@ cdef void parse_bam(long fidx, string bam,
 
             visited.clear()
             for i in range(mc/refer_len, mec/refer_len+1):
+                if geneGroup.find(i) == geneGroup.end():
+                    continue
+
                 cg = geneGroup[i].begin()
                 while cg != geneGroup[i].end():
                     ## for each candidate gene
@@ -866,6 +869,9 @@ cdef void parse_bam(long fidx, string bam,
                     continue
 
                 for j in range(estart/refer_len, eend/refer_len+1):
+                    if geneGroup.find(j) == geneGroup.end():
+                        continue
+
                     cg = geneGroup[j].begin()
                     while cg != geneGroup[j].end():
                         ## for each candidate gene
@@ -3831,7 +3837,14 @@ def run_pipe(args):
         int jld2
 
     start = time.time()
-    parse_gtf(args.gtf, geneGroup, genes, supple)
+    try:
+        parse_gtf(args.gtf, geneGroup, genes, supple)
+    except Exception:
+        print('unable to parse the gtf: {}'.format(args.gtf))
+        print('please check that the --gtf argument is a valid'
+              ' .gtf file that is not compressed')
+        raise
+
     print 'gtf:', time.time() - start
 
     start = time.time()

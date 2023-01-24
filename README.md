@@ -37,7 +37,6 @@ Tested on Ubuntu (20.04 LTS)
 
 - Python (3.6.12 or 2.7.15)
   * Cython (0.29.21 or 0.29.15 for Python 2)
-  * numpy (1.16.6 or 1.16.5 for Python 2)
 - BLAS, LAPACK
 - GNU Scientific Library (GSL 2.5)
 - GCC (>=5.4.0)
@@ -288,7 +287,8 @@ optional arguments:
                         Default: paired
   --libType {fr-unstranded,fr-firststrand,fr-secondstrand}
                         Library type. Use fr-firststrand or fr-secondstrand
-                        for strand-specific data. Default: fr-unstranded
+                        for strand-specific data. Only relevant to prep step,
+                        not the post step. Default: fr-unstranded
   --readLength READLENGTH
                         The length of each read
   --variable-read-length
@@ -296,7 +296,12 @@ optional arguments:
                         to be processed. --readLength will still be used to
                         determine IncFormLen and SkipFormLen
   --anchorLength ANCHORLENGTH
-                        The anchor length. Default is 1
+                        The "anchor length" or "overhang length" used when
+                        counting the number of reads spanning splicing
+                        junctions. At least "anchor length" nucleotides must
+                        be mapped to each end of a given junction. The default
+                        value is set to 1 to make use of all possible junction
+                        reads. The minimum value is 1.
   --tophatAnchor TOPHATANCHOR
                         The "anchor length" or "overhang length" used in the
                         aligner. At least "anchor length" NT must be mapped to
@@ -347,8 +352,8 @@ Each alternative splicing event type has a corresponding set of output files. In
 
 `--od` contains the final output files from the post step:
 
-- `[AS_Event].MATS.JC.txt`: Final output including only reads that span junctions defined by rmats (Junction Counts)
-- `[AS_Event].MATS.JCEC.txt`: Final output including both reads that span junctions defined by rmats (Junction Counts) and reads that do not cross an exon boundary (Exon Counts)
+- `[AS_Event].MATS.JC.txt`: Final output that contains both event information and read counts information. Only reads that span junctions defined by rMATS-turbo are included.
+- `[AS_Event].MATS.JCEC.txt`: Final output that contains both event information and read counts information. Both reads that span junctions defined by rMATS-turbo and reads that do not cross an exon boundary are included.
 - `fromGTF.[AS_Event].txt`: All identified alternative splicing (AS) events derived from GTF and RNA
 - `fromGTF.novelJunction.[AS_Event].txt`: Alternative splicing (AS) events which were identified only after considering the RNA (as opposed to analyzing the GTF in isolation). This does not include events with an unannotated splice site.
 - `fromGTF.novelSpliceSite.[AS_Event].txt`: This file contains only those events which include an unannotated splice site. Only relevant if `--novelSS` is enabled.
