@@ -287,8 +287,8 @@ optional arguments:
                         Default: paired
   --libType {fr-unstranded,fr-firststrand,fr-secondstrand}
                         Library type. Use fr-firststrand or fr-secondstrand
-                        for strand-specific data. Only relevant to prep step,
-                        not the post step. Default: fr-unstranded
+                        for strand-specific data. Only relevant to the prep
+                        step, not the post step. Default: fr-unstranded
   --readLength READLENGTH
                         The length of each read
   --variable-read-length
@@ -297,11 +297,12 @@ optional arguments:
                         determine IncFormLen and SkipFormLen
   --anchorLength ANCHORLENGTH
                         The "anchor length" or "overhang length" used when
-                        counting the number of reads spanning splicing
-                        junctions. At least "anchor length" nucleotides must
-                        be mapped to each end of a given junction. The default
-                        value is set to 1 to make use of all possible junction
-                        reads. The minimum value is 1.
+                        counting the number of reads spanning splice
+                        junctions. A minimum number of "anchor length"
+                        nucleotides must be mapped to each end of a given
+                        junction. The minimum value is 1 and the default value
+                        is set to 1 to make use of all possible splice
+                        junction reads.
   --tophatAnchor TOPHATANCHOR
                         The "anchor length" or "overhang length" used in the
                         aligner. At least "anchor length" NT must be mapped to
@@ -345,20 +346,20 @@ optional arguments:
 
 ## Output
 
-Each alternative splicing event type has a corresponding set of output files. In the filename templates below `[AS_Event]` is replaced by one of [SE (skipped exon), MXE (mutually exclusive exons), A3SS (alternative 3' splice site), A5SS (alternative 5' splice site), RI (retained intron)] for the event specific filename.
+In rMATS-turbo, each alternative splicing pattern has a corresponding set of output files. In the filename templates below, `[AS_Event]` is replaced by one of the five basic alternative splicing patterns: skipped exon (SE), alternative 5' splice sites (A5SS), alternative 3' splice sites (A3SS), mutually exclusive exons (MXE), or retained intron (RI). As shown in the diagram, the number of supporting reads can be counted by the junction reads only (JC) or by both the junction and exon reads (JCEC). The output file from different counting methods is also indicated in the file name.
 
 ![rmats-turbo](docs/rmats_diagram.png)
 
 
 `--od` contains the final output files from the post step:
 
-- `[AS_Event].MATS.JC.txt`: Final output that contains both event information and read counts information. Only reads that span junctions defined by rMATS-turbo are included.
-- `[AS_Event].MATS.JCEC.txt`: Final output that contains both event information and read counts information. Both reads that span junctions defined by rMATS-turbo and reads that do not cross an exon boundary are included.
-- `fromGTF.[AS_Event].txt`: All identified alternative splicing (AS) events derived from GTF and RNA
-- `fromGTF.novelJunction.[AS_Event].txt`: Alternative splicing (AS) events which were identified only after considering the RNA (as opposed to analyzing the GTF in isolation). This does not include events with an unannotated splice site.
-- `fromGTF.novelSpliceSite.[AS_Event].txt`: This file contains only those events which include an unannotated splice site. Only relevant if `--novelSS` is enabled.
-- `JC.raw.input.[AS_Event].txt`: Event counts including only reads that span junctions defined by rmats (Junction Counts)
-- `JCEC.raw.input.[AS_Event].txt`: Event counts including both reads that span junctions defined by rmats (Junction Counts) and reads that do not cross an exon boundary (Exon Counts)
+- `[AS_Event].MATS.JC.txt`: Final output that contains the list of events and read counts. Only splice junction reads are counted.
+- `[AS_Event].MATS.JCEC.txt`: Final output that contains the list of events and read counts. Both splice junction reads and exon body reads are counted.
+- `fromGTF.[AS_Event].txt`: All identified alternative splicing (AS) events derived from GTF and RNA.
+- `fromGTF.novelJunction.[AS_Event].txt`: Alternative splicing (AS) events which were identified only after considering the RNA (as opposed to analyzing the GTF in isolation). Does not include events with an unannotated splice site.
+- `fromGTF.novelSpliceSite.[AS_Event].txt`: This file contains only events that include an unannotated splice site. Only relevant if `--novelSS` is enabled.
+- `JC.raw.input.[AS_Event].txt`: Event counts including only reads that span junctions defined by rMATS.
+- `JCEC.raw.input.[AS_Event].txt`: Event counts including both reads that span junctions defined by rMATS and reads that do not cross an exon boundary.
 - Shared columns:
   * `ID`: rMATS event id
   * `GeneID`: Gene id
@@ -380,16 +381,16 @@ Each alternative splicing event type has a corresponding set of output files. In
   * SE: `exonStart_0base` `exonEnd` `upstreamES` `upstreamEE` `downstreamES` `downstreamEE`
     + The inclusion form includes the target exon (`exonStart_0base`, `exonEnd`)
   * MXE: `1stExonStart_0base` `1stExonEnd` `2ndExonStart_0base` `2ndExonEnd` `upstreamES` `upstreamEE` `downstreamES` `downstreamEE`
-    + If the strand is `+` then the inclusion form includes the 1st exon (`1stExonStart_0base`, `1stExonEnd`) and skips the 2nd exon
-    + If the strand is `-` then the inclusion form includes the 2nd exon (`2ndExonStart_0base`, `2ndExonEnd`) and skips the 1st exon
+    + If the strand is `+`, then the inclusion form includes the 1st exon (`1stExonStart_0base`, `1stExonEnd`) and skips the 2nd exon
+    + If the strand is `-`, then the inclusion form includes the 2nd exon (`2ndExonStart_0base`, `2ndExonEnd`) and skips the 1st exon
   * A3SS, A5SS: `longExonStart_0base` `longExonEnd` `shortES` `shortEE` `flankingES` `flankingEE`
     + The inclusion form includes the long exon (`longExonStart_0base`, `longExonEnd`) instead of the short exon (`shortES` `shortEE`)
   * RI: `riExonStart_0base` `riExonEnd` `upstreamES` `upstreamEE` `downstreamES` `downstreamEE`
     + The inclusion form includes (retains) the intron (`upstreamEE`, `downstreamES`)
-- `summary.txt`: Brief summary of all AS event types. Includes the total event counts and significant event counts. By default, events are counted as significant if FDR <= 0.05. The summary can be regenerated with different criteria by running [rMATS_P/summary.py](rMATS_P/summary.py)
+- `summary.txt`: Brief summary of all alternative splicing event types. Includes the total event counts and significant event counts. By default, events are counted as significant if FDR <= 0.05. Summary can be regenerated with different criteria by running [rMATS_P/summary.py](rMATS_P/summary.py)
 
 `--tmp` contains the intermediate files generated by the prep step:
 
-- `{datetime}_{id}.rmats`: Summary generated from processing a BAM
-- `{datetime}_bam{sample_num}_{replicate_num}/Aligned.sortedByCoord.out.bam`: result of mapping input FASTQ files
-- `{datetime}_read_outcomes_by_bam.txt`: Counts of the reads used from each BAM along with counts of the reasons that reads were not able to be used
+- `[datetime]_[id].rmats`: Summary generated from processing a BAM
+- `[datetime]_bam[sample_num]_[replicate_num]/Aligned.sortedByCoord.out.bam`: Result of mapping input FASTQ files
+- `[datetime]_read_outcomes_by_bam.txt`: Counts of the reads used from each BAM along with counts of the reasons that reads were not able to be used
