@@ -111,8 +111,8 @@ def summarize(args, output_file_handle):
     print('\t'.join(headers), file=output_file_handle)
     event_types = {
         'SE': 'skipped exon',
-        'A5SS': "alternative 5' splice site",
-        'A3SS': "alternative 3' splice site",
+        'A5SS': "alternative 5' splice sites",
+        'A3SS': "alternative 3' splice sites",
         'MXE': 'mutually exclusive exons',
         'RI': 'retained intron'
     }
