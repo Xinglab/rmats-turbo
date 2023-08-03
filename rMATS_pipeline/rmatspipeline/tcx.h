@@ -19,7 +19,7 @@ namespace rmats {
         std::string g_name;
         std::string chrom;
         char strand;
-        void set_info(std::string& iname, std::string& ichrom, std::string& istrand) {
+        void set_info(const std::string& iname, const std::string& ichrom, const std::string& istrand) {
             this->g_name = iname;
             this->chrom = ichrom;
             this->strand = istrand.c_str()[0];
