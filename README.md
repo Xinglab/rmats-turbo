@@ -342,6 +342,9 @@ optional arguments:
   --fixed-event-set FIXED_EVENT_SET
                         A directory containing fromGTF.[AS].txt files to be
                         used instead of detecting a new set of events
+  --drop-zero-read-replicates-for-stat
+                        When calculating the pvalue, for each event ignore
+                        replicates that do not have any reads for that event
 ```
 
 ## Output

@@ -164,6 +164,7 @@ def get_args():
                         help='Allow alignments with soft or hard clipping to be used',
                         dest='allow_clipping')
     parser.add_argument('--fixed-event-set', action='store', help='A directory containing fromGTF.[AS].txt files to be used instead of detecting a new set of events')
+    parser.add_argument('--drop-zero-read-replicates-for-stat', action='store_true', help='When calculating the pvalue, for each event ignore replicates that do not have any reads for that event')
 
     args = parser.parse_args()
 
@@ -348,7 +349,8 @@ def filter_countfile(fn):
 
 
 def process_counts(istat, tstat, counttype, ase, cstat, od, od_tmp, stat,
-                   paired_stats, python_executable, root_dir):
+                   paired_stats, python_executable, root_dir,
+                   drop_zero_read_replicates_for_stat):
     """TODO: Docstring for process_counts.
     :returns: TODO
 
@@ -426,7 +428,17 @@ def process_counts(istat, tstat, counttype, ase, cstat, od, od_tmp, stat,
                 print('error in paired model', file=sys.stderr)
                 print_file_to_stderr(ostat_paired)
         else:
-            subprocess.call([rmats_c, '-i', istat, '-t', str(tstat), '-o', ostat_pv, '-c', str(cstat),], stdout=FNULL)
+            stat_in_file = istat
+            stat_out_file = ostat_pv
+            if drop_zero_read_replicates_for_stat:
+                stat_in_file = os.path.join(sec_tmp, 'cleaned_stat_input.txt')
+                stat_out_file = os.path.join(sec_tmp, 'cleaned_stat_output.txt')
+                drop_zero_read_replicates(istat, stat_in_file)
+
+            subprocess.call([rmats_c, '-i', stat_in_file, '-t', str(tstat), '-o', stat_out_file, '-c', str(cstat),], stdout=FNULL)
+            if drop_zero_read_replicates_for_stat:
+                copy_last_column_and_append(istat, stat_out_file, ostat_pv)
+
             subprocess.call([python_executable, fdr_cal, ostat_pv, ostat_fdr,], stdout=FNULL)
     else:
         append_columns_with_defaults(istat, ostat_fdr, ['PValue', 'FDR'], ['NA', 'NA'])
@@ -439,10 +451,99 @@ def process_counts(istat, tstat, counttype, ase, cstat, od, od_tmp, stat,
     resfp.close()
 
 
+def drop_zero_read_replicates(orig_file_path, filtered_file_path):
+    COUNT_HEADERS = ['IJC_SAMPLE_1', 'SJC_SAMPLE_1', 'IJC_SAMPLE_2',
+                     'SJC_SAMPLE_2']
+    with open(orig_file_path, 'rt') as in_handle:
+        with open(filtered_file_path, 'wt') as out_handle:
+            for line_i, line in enumerate(in_handle):
+                columns = line.rstrip('\n').split('\t')
+                if line_i == 0:
+                    headers = columns
+                    out_handle.write(line)
+                    continue
+
+                row = dict(zip(headers, columns))
+                for count_header in COUNT_HEADERS:
+                    row[count_header] = parse_comma_ints(row[count_header])
+
+                group_1_should_drop = find_zero_read_replicates(
+                    row['IJC_SAMPLE_1'], row['SJC_SAMPLE_1'])
+                group_2_should_drop = find_zero_read_replicates(
+                    row['IJC_SAMPLE_2'], row['SJC_SAMPLE_2'])
+
+                filtered_ijc_1, filtered_sjc_1 = drop_items_by_index(
+                    group_1_should_drop, [row['IJC_SAMPLE_1'],
+                                          row['SJC_SAMPLE_1']])
+                filtered_ijc_2, filtered_sjc_2 = drop_items_by_index(
+                    group_2_should_drop, [row['IJC_SAMPLE_2'],
+                                          row['SJC_SAMPLE_2']])
+
+                row['IJC_SAMPLE_1'] = int_list_to_string(filtered_ijc_1)
+                row['SJC_SAMPLE_1'] = int_list_to_string(filtered_sjc_1)
+                row['IJC_SAMPLE_2'] = int_list_to_string(filtered_ijc_2)
+                row['SJC_SAMPLE_2'] = int_list_to_string(filtered_sjc_2)
+
+                out_columns = list()
+                for header in headers:
+                    out_columns.append(row[header])
+
+                out_handle.write('{}\n'.format('\t'.join(out_columns)))
+
+
+def parse_comma_ints(string):
+    ints = list()
+    int_strings = string.split(',')
+    for int_string in int_strings:
+        parsed = int(int_string)
+        ints.append(parsed)
+
+    return ints
+
+
+def int_list_to_string(int_list):
+    return ','.join([str(x) for x in int_list])
+
+
+def find_zero_read_replicates(ijc, sjc):
+    is_zero = list()
+    for i, inc_count in enumerate(ijc):
+        skip_count = sjc[i]
+        is_zero.append(inc_count == 0 and skip_count == 0)
+
+    return is_zero
+
+
+def drop_items_by_index(drop_list, item_lists):
+    out_lists = [list() for _ in item_lists]
+    for should_drop_i, should_drop in enumerate(drop_list):
+        if should_drop:
+            continue
+
+        for list_i, item_list in enumerate(item_lists):
+            out_lists[list_i].append(item_list[should_drop_i])
+
+    return out_lists
+
+
 def print_file_to_stderr(filename):
     with open(filename, 'rt') as file_handle:
         for line in file_handle:
             print(line, file=sys.stderr)
+
+
+def copy_last_column_and_append(base_file, column_file, out_file):
+    with open(base_file, 'rt') as base_handle:
+        with open(column_file, 'rt') as column_handle:
+            with open(out_file, 'wt') as out_handle:
+                for base_line in base_handle:
+                    column_line = column_handle.readline()
+                    base_line = base_line.rstrip('\n')
+                    column_line = column_line.rstrip('\n')
+                    all_columns = column_line.split('\t')
+                    last_column = all_columns[-1]
+                    out_line = '{}\t{}\n'.format(base_line, last_column)
+                    out_handle.write(out_line)
 
 
 def append_columns_with_defaults(in_file_name, out_file_name, column_names, default_values):
@@ -581,10 +682,12 @@ def main():
 
         process_counts(jc_it % (event_type), args.tstat, 'JC', event_type,
                        args.cstat, args.od, args.out_tmp_sub_dir, args.stat,
-                       args.paired_stats, python_executable, root_dir)
+                       args.paired_stats, python_executable, root_dir,
+                       args.drop_zero_read_replicates_for_stat)
         process_counts(jcec_it % (event_type), args.tstat, 'JCEC', event_type,
                        args.cstat, args.od, args.out_tmp_sub_dir, args.stat,
-                       args.paired_stats, python_executable, root_dir)
+                       args.paired_stats, python_executable, root_dir,
+                       args.drop_zero_read_replicates_for_stat)
 
     generate_summary(python_executable, args.od, root_dir)
     print('Done processing count files.')
