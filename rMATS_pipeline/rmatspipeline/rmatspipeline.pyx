@@ -3211,9 +3211,15 @@ cdef read_mxe_event_set(str from_gtf_path, const int jld2, const int rl,
 
             sup_info.set_info(shared_col_values.g_sym, shared_col_values.chrom,
                               shared_col_values.strand)
-            ms_inclen(first_ex_start, first_ex_end, second_ex_start,
-                      second_ex_end, up_start, up_end, down_start, down_end,
-                      &inc_skip_lens, jld2, rl, rl_jl)
+            if shared_col_values.strand == '-':
+                ms_inclen(second_ex_start, second_ex_end, first_ex_start,
+                          first_ex_end, up_start, up_end, down_start, down_end,
+                          &inc_skip_lens, jld2, rl, rl_jl)
+            else:
+                ms_inclen(first_ex_start, first_ex_end, second_ex_start,
+                          second_ex_end, up_start, up_end, down_start, down_end,
+                          &inc_skip_lens, jld2, rl, rl_jl)
+
             is_novel_junc = False
             is_novel_ss = False
             mxe_info.set(shared_col_values.event_id, shared_col_values.g_id,
