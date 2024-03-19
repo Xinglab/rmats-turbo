@@ -1,11 +1,11 @@
-FROM debian:buster
+FROM debian:bullseye
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
        ca-certificates \
        cmake \
        curl \
-       cython \
+       cython3 \
        g++ \
        gfortran \
        git \
@@ -13,8 +13,8 @@ RUN apt-get update \
        libgsl-dev \
        liblapack-dev \
        make \
-       python-dev \
-       python-numpy \
+       python-is-python3 \
+       python3-dev \
        r-base \
        r-cran-nloptr \
        zlib1g-dev \
@@ -24,6 +24,7 @@ RUN apt-get update \
     && cd /rmats_build \
     && git clone https://github.com/Xinglab/rmats-turbo.git \
     && cd rmats-turbo \
+    # && git checkout {commit} \
     # The build will source setup_environment.sh which will source ~/.bashrc.
     # Skip that by truncating setup_environment.sh
     && echo '' > setup_environment.sh \
@@ -51,7 +52,9 @@ RUN apt-get update \
     && make STAR \
     && cp STAR /usr/local/bin
 
-# Set defaults for running the image
+# Set defaults for running the image.
+# The ENTRYPOINT AND CMD are empty to be compatible with
+# CWL and WDL implementations that cannot override those values
 WORKDIR /rmats
-ENTRYPOINT ["python", "/rmats/rmats.py"]
-CMD ["--help"]
+ENTRYPOINT []
+CMD []

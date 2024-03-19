@@ -19,7 +19,7 @@ from datetime import datetime
 from rmatspipeline import run_pipe
 
 
-VERSION = 'v4.1.1'
+VERSION = 'v4.2.0'
 USAGE = '''%(prog)s [options]'''
 pipe_tasks = set(['prep', 'post', 'both',])
 
@@ -64,6 +64,7 @@ def doSTARMapping(args): ## do STAR mapping
 
                 os.makedirs(map_folder)
                 cmd = 'STAR --chimSegmentMin 2 --outFilterMismatchNmax 3'
+                cmd += ' --twopassMode Basic'
                 if not args.allow_clipping:
                     cmd += ' --alignEndsType EndToEnd'
 
@@ -125,15 +126,15 @@ def get_args():
     parser.add_argument('--libType', action='store', default='fr-unstranded',
                         choices=['fr-unstranded', 'fr-firststrand',
                                  'fr-secondstrand',],
-                        help='Library type. Use fr-firststrand or fr-secondstrand for strand-specific data. Default: %(default)s', dest='dt')
+                        help='Library type. Use fr-firststrand or fr-secondstrand for strand-specific data. Only relevant to the prep step, not the post step. Default: %(default)s', dest='dt')
     parser.add_argument('--readLength', action='store', type=int,
                         help='The length of each read', dest='readLength')
     parser.add_argument('--variable-read-length', action='store_true',
                         help='Allow reads with lengths that differ from --readLength to be processed. --readLength will still be used to determine IncFormLen and SkipFormLen',
                         dest='variable_read_length')
     parser.add_argument('--anchorLength', action='store', type=int, default=1,
-                        help='The anchor length. Default is %(default)s', dest='anchorLength')
-    parser.add_argument('--tophatAnchor', action='store', type=int, default=6,
+                        help='The "anchor length" or "overhang length" used when counting the number of reads spanning splice junctions. A minimum number of "anchor length" nucleotides must be mapped to each end of a given junction. The minimum value is 1 and the default value is set to %(default)s to make use of all possible splice junction reads.', dest='anchorLength')
+    parser.add_argument('--tophatAnchor', action='store', type=int, default=1,
                         help='The "anchor length" or "overhang length" used in the aligner. At least "anchor length" NT must be mapped to each end of a given junction. The default is %(default)s. (Only if using fastq)', dest='tophatAnchor')
     parser.add_argument('--bi', action='store', default='',
                         help='The directory name of the STAR binary indices (name of the directory that contains the SA file). (Only if using fastq)', dest='bIndex')
@@ -784,7 +785,7 @@ def claim_prep_prefix(task, tmp_dir):
     prep_prefix = None
     while True:
         prep_prefix = datetime.fromtimestamp(time.time()).strftime(
-            '%Y-%m-%d-%H:%M:%S_%f')
+            '%Y-%m-%d-%H_%M_%S_%f')
         file_path = file_name_template.format(prep_prefix)
         if not os.path.exists(file_path):
             with open(file_path, 'wt'):
@@ -800,6 +801,44 @@ def create_output_dirs(args):
     for dir_path in [args.od, args.out_tmp_sub_dir, args.tmp]:
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)   # python2: makedirs() got an unexpected keyword argument 'exist_ok'
+
+
+def apply_id_mapping(event_type, out_dir):
+    id_to_orig = dict()
+    mapping_path = os.path.join(out_dir, 'id_mapping.{}.txt'.format(event_type))
+    with open(mapping_path, 'rt') as map_f:
+        for i, line in enumerate(map_f):
+            values = line.strip().split('\t')
+            if i == 0:
+                expected_mapping_headers = ['original_id', 'mapped_id']
+                if values != expected_mapping_headers:
+                    sys.exit('ERROR: expected headers in {} to be {}'
+                             ' but found {}'.format(
+                                 mapping_path, expected_mapping_headers, values))
+
+                continue
+
+            id_to_orig[values[1]] = values[0]
+
+    file_templates = ['fromGTF.{}.txt', 'JC.raw.input.{}.txt',
+                      'JCEC.raw.input.{}.txt']
+    for file_template in file_templates:
+        file_path = os.path.join(out_dir, file_template.format(event_type))
+        with open(file_path, 'rt') as in_f:
+            # using mapping_path as a temporary file which is then removed
+            with open(mapping_path, 'wt') as out_f:
+                for i, line in enumerate(in_f):
+                    values = line.strip().split('\t')
+                    if i == 0:
+                        id_i = values.index('ID')
+                        out_f.write(line)
+                        continue
+
+                    mapped_id = values[id_i]
+                    values[id_i] = id_to_orig[mapped_id]
+                    out_f.write('{}\n'.format('\t'.join(values)))
+
+        shutil.move(mapping_path, file_path)
 
 
 def main():
@@ -832,6 +871,9 @@ def main():
 
     print('Processing count files.')
     for event_type in ['SE', 'MXE', 'A3SS', 'A5SS', 'RI']:
+        if args.fixed_event_set:
+            apply_id_mapping(event_type, args.od)
+
         process_counts(jc_it % (event_type), args.tstat, 'JC', event_type,
                        args.cstat, args.od, args.out_tmp_sub_dir, args.stat,
                        args.paired_stats, python_executable, root_dir,

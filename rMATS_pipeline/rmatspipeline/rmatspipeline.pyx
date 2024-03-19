@@ -104,7 +104,7 @@ cdef:
 @wraparound(False)
 cdef void parse_gtf(str gtff, unordered_map[int,cset[string]]& geneGroup,
                     unordered_map[string,Gene]& genes,
-                    unordered_map[string,SupInfo]& supple):
+                    unordered_map[string,SupInfo]& supple) except *:
     """TODO: Docstring for parse_gtf.
     :returns: TODO
 
@@ -752,7 +752,7 @@ cdef void parse_bam(long fidx, string bam,
                     cbool issingle, int jld2, int readLength,
                     cbool variable_read_length, int dt, cbool& novelSS,
                     long& mil, long& mel, cbool allow_clipping,
-                    vector[int]& read_outcome_counts) nogil:
+                    vector[int64_t]& read_outcome_counts) nogil:
     """TODO: Docstring for parse_bam.
     :returns: TODO
 
@@ -837,6 +837,9 @@ cdef void parse_bam(long fidx, string bam,
 
             visited.clear()
             for i in range(mc/refer_len, mec/refer_len+1):
+                if geneGroup.find(i) == geneGroup.end():
+                    continue
+
                 cg = geneGroup[i].begin()
                 while cg != geneGroup[i].end():
                     ## for each candidate gene
@@ -875,6 +878,9 @@ cdef void parse_bam(long fidx, string bam,
                     continue
 
                 for j in range(estart/refer_len, eend/refer_len+1):
+                    if geneGroup.find(j) == geneGroup.end():
+                        continue
+
                     cg = geneGroup[j].begin()
                     while cg != geneGroup[j].end():
                         ## for each candidate gene
@@ -918,13 +924,13 @@ cdef void parse_bam(long fidx, string bam,
 
 @boundscheck(False)
 @wraparound(False)
-cdef void output_read_outcomes(const vector[vector[int]]& read_outcome_counts,
+cdef void output_read_outcomes(const vector[vector[int64_t]]& read_outcome_counts,
                                const vector[string]& vbams, str tmp_dir,
                                str prep_prefix):
     cdef:
-        vector[int] aggregated_read_outcome_counts
-        int total_for_bam
-        int total
+        vector[int64_t] aggregated_read_outcome_counts
+        int64_t total_for_bam
+        int64_t total
 
     # initialize counts to zero
     aggregated_read_outcome_counts.resize(READ_ENUM_VALUE_COUNT)
@@ -977,7 +983,7 @@ cdef void detect_novel(str bams, unordered_map[int,cset[string]]& geneGroup,
         long mil = args.mil
         long mel = args.mel
         cbool allow_clipping = args.allow_clipping
-        vector[vector[int]] read_outcome_counts
+        vector[vector[int64_t]] read_outcome_counts
 
     dt = args.dt
     vlen = vbams.size()
@@ -3117,13 +3123,35 @@ cdef detect_ase(unordered_map[string,Gene]& genes,
 @wraparound(False)
 cdef str copy_from_gtf(str src_dir, str dest_dir, str event):
     cdef:
-        str from_gtf_base, src_gtf_path, path_of_copy
+        str from_gtf_base, src_gtf_path, path_of_copy, mapping_path
+        str mapping_path_template = 'id_mapping.{}.txt'
         str from_gtf_template = 'fromGTF.{}.txt'
+        int i, id_i
+        str line, mapped_line, orig_id, mapped_id
+        list values
 
     from_gtf_base = from_gtf_template.format(event)
     src_gtf_path = join(src_dir, from_gtf_base)
     path_of_copy = join(dest_dir, from_gtf_base)
-    shutil.copy(src_gtf_path, path_of_copy)
+    mapping_path = join(dest_dir, mapping_path_template.format(event))
+    with open(src_gtf_path, 'rt') as src_f:
+        with open(path_of_copy, 'wt') as dest_f:
+            with open(mapping_path, 'wt') as map_f:
+                for i, line in enumerate(src_f):
+                    values = line.strip().split('\t')
+                    if i == 0:
+                        id_i = values.index('ID')
+                        dest_f.write(line)
+                        mapped_line = '\t'.join(['original_id', 'mapped_id'])
+                        map_f.write('{}\n'.format(mapped_line))
+                        continue
+
+                    orig_id = values[id_i]
+                    # the mapped_id is (i-1) so that the first id is 0
+                    mapped_id = str(i - 1)
+                    values[id_i] = mapped_id
+                    dest_f.write('{}\n'.format('\t'.join(values)))
+                    map_f.write('{}\n'.format('\t'.join([orig_id, mapped_id])))
 
     return path_of_copy
 
@@ -3945,7 +3973,14 @@ def run_pipe(args):
         int jld2
 
     start = time.time()
-    parse_gtf(args.gtf, geneGroup, genes, supple)
+    try:
+        parse_gtf(args.gtf, geneGroup, genes, supple)
+    except Exception:
+        print('unable to parse the gtf: {}'.format(args.gtf))
+        print('please check that the --gtf argument is a valid'
+              ' .gtf file that is not compressed')
+        raise
+
     print 'gtf:', time.time() - start
 
     start = time.time()
