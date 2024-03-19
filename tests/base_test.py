@@ -170,56 +170,76 @@ class BaseTest(unittest.TestCase):
             'IncLevel1', 'IncLevel2', 'IncLevelDifference'
         ]
 
-    def _check_se_mats_jc_header(self, header):
-        expected = (self._from_gtf_base_headers() + [
+    def _check_se_mats_jc_header(self, header, has_individual=False):
+        expected = self._from_gtf_base_headers()
+        expected.extend([
             'exonStart_0base', 'exonEnd', 'upstreamES', 'upstreamEE',
             'downstreamES', 'downstreamEE'
-        ] + self._mats_base_headers() + [
-            'upstream_to_target_count', 'target_to_downstream_count',
-            'target_count', 'upstream_to_downstream_count'
         ])
+        expected.extend(self._mats_base_headers())
+        if has_individual:
+            expected.extend([
+                'upstream_to_target_count', 'target_to_downstream_count',
+                'target_count', 'upstream_to_downstream_count'
+            ])
+
         self.assertEqual(header, expected)
 
-    def _check_se_mats_jcec_header(self, header):
-        self._check_se_mats_jc_header(header)
+    def _check_se_mats_jcec_header(self, header, has_individual=False):
+        self._check_se_mats_jc_header(header, has_individual=has_individual)
 
-    def _check_a35ss_mats_jc_header(self, header):
-        expected = (self._from_gtf_base_headers() + [
-            'longExonStart_0base', 'longExonEnd', 'shortES', 'shortEE',
-            'flankingES', 'flankingEE'
-        ] + self._mats_base_headers() + [
-            'across_short_boundary_count', 'long_to_flanking_count',
-            'exclusive_to_long_count', 'short_to_flanking_count'
-        ])
-        self.assertEqual(header, expected)
-
-    def _check_a35ss_mats_jcec_header(self, header):
-        self._check_a35ss_mats_jc_header(header)
-
-    def _check_mxe_mats_jc_header(self, header):
-        expected = (self._from_gtf_base_headers() + [
+    def _check_mxe_mats_jc_header(self, header, has_individual=False):
+        expected = self._from_gtf_base_headers()
+        expected.extend([
             '1stExonStart_0base', '1stExonEnd', '2ndExonStart_0base',
             '2ndExonEnd', 'upstreamES', 'upstreamEE', 'downstreamES',
             'downstreamEE'
-        ] + self._mats_base_headers() + [
-            'upstream_to_first_count', 'first_to_downstream_count',
-            'first_count', 'upstream_to_second_count',
-            'second_to_downstream_count', 'second_count'
         ])
+        expected.extend(self._mats_base_headers())
+        if has_individual:
+            expected.extend([
+                'upstream_to_first_count', 'first_to_downstream_count',
+                'first_count', 'upstream_to_second_count',
+                'second_to_downstream_count', 'second_count'
+            ])
+
         self.assertEqual(header, expected)
 
-    def _check_mxe_mats_jcec_header(self, header):
-        self._check_mxe_mats_jc_header(header)
+    def _check_mxe_mats_jcec_header(self, header, has_individual=False):
+        self._check_mxe_mats_jc_header(header, has_individual=has_individual)
 
-    def _check_ri_mats_jc_header(self, header):
-        expected = (self._from_gtf_base_headers() + [
+    def _check_a35ss_mats_jc_header(self, header, has_individual=False):
+        expected = self._from_gtf_base_headers()
+        expected.extend([
+            'longExonStart_0base', 'longExonEnd', 'shortES', 'shortEE',
+            'flankingES', 'flankingEE'
+        ])
+        expected.extend(self._mats_base_headers())
+        if has_individual:
+            expected.extend([
+                'across_short_boundary_count', 'long_to_flanking_count',
+                'exclusive_to_long_count', 'short_to_flanking_count'
+            ])
+
+        self.assertEqual(header, expected)
+
+    def _check_a35ss_mats_jcec_header(self, header, has_individual=False):
+        self._check_a35ss_mats_jc_header(header, has_individual=has_individual)
+
+    def _check_ri_mats_jc_header(self, header, has_individual=False):
+        expected = self._from_gtf_base_headers()
+        expected.extend([
             'riExonStart_0base', 'riExonEnd', 'upstreamES', 'upstreamEE',
             'downstreamES', 'downstreamEE'
-        ] + self._mats_base_headers() + [
-            'upstream_to_intron_count', 'intron_to_downstream_count',
-            'intron_count', 'upstream_to_downstream_count'
         ])
+        expected.extend(self._mats_base_headers())
+        if has_individual:
+            expected.extend([
+                'upstream_to_intron_count', 'intron_to_downstream_count',
+                'intron_count', 'upstream_to_downstream_count'
+            ])
+
         self.assertEqual(header, expected)
 
-    def _check_ri_mats_jcec_header(self, header):
-        self._check_ri_mats_jc_header(header)
+    def _check_ri_mats_jcec_header(self, header, has_individual=False):
+        self._check_ri_mats_jc_header(header, has_individual=has_individual)

@@ -320,12 +320,6 @@ cdef extern from 'tcx.h' namespace 'rmats' nogil:
           int sam1len,
           RI_joined_count_strings* joined_strings) const
 
-    cdef cppclass Str_ptr:
-        const string *p
-        Str_ptr(const string& s)
-        const string& get() const
-
-    string cjoin[T](T, T, const char&)
     char* join_pair(char* numstr, long left, long right, char& sep)
     string num2str[T](T Number)
     void insert_set[InputType](cset[InputType]& iset, cset[InputType].iterator first, cset[InputType].iterator last)

@@ -756,32 +756,6 @@ namespace rmats {
         }
     };
 
-    struct Str_ptr
-    {
-        const std::string* p;
-        Str_ptr(const std::string& s): p(&s) {}
-        const std::string& get() const {
-            return *(this->p);
-        }
-        bool operator<(const Str_ptr& t) const {
-            return std::tie(*(this->p)) < std::tie(*(t.p));
-        }
-        bool operator<(const std::string& t) const {
-            return std::tie(*(this->p)) < std::tie(t);
-        }
-    };
-
-    template <typename Iter>
-    std::string cjoin(Iter begin, Iter end, const char& separator)
-    {
-        std::ostringstream result;
-        if (begin != end)
-            result << *begin++;
-        while (begin != end)
-            result << separator << *begin++;
-        return result.str();
-    }
-
     char* join_pair(char* numstr, long left, long right, char& sep) {
         sprintf(numstr, "%ld%c%ld", left, sep, right);
         return numstr;

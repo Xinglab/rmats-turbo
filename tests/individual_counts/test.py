@@ -67,6 +67,7 @@ class IndividualCountsBaseTest(tests.base_test.BaseTest):
             self._tmp_dir,
             '--task',
             self._task,
+            '--individual-counts',
         ]
 
     def _create_sample_1_bams(self, sample_1_bams_path,
@@ -524,7 +525,7 @@ class FilteredTest(IndividualCountsBaseTest):
         se_mats_jc_header, se_mats_jc_rows, error = output_parser.parse_mats_jc(
             se_mats_jc_path)
         self.assertFalse(error)
-        self._check_se_mats_jc_header(se_mats_jc_header)
+        self._check_se_mats_jc_header(se_mats_jc_header, has_individual=True)
         self.assertEqual(len(se_mats_jc_rows), 1)
         self.assertEqual(se_mats_jc_rows[0]['upstreamES'], '0')
         self._check_se_1_jc(se_mats_jc_rows[0])
@@ -533,7 +534,8 @@ class FilteredTest(IndividualCountsBaseTest):
         se_mats_jcec_header, se_mats_jcec_rows, error = output_parser.parse_mats_jcec(
             se_mats_jcec_path)
         self.assertFalse(error)
-        self._check_se_mats_jcec_header(se_mats_jcec_header)
+        self._check_se_mats_jcec_header(se_mats_jcec_header,
+                                        has_individual=True)
         self.assertEqual(len(se_mats_jcec_rows), 1)
         self.assertEqual(se_mats_jcec_rows[0]['upstreamES'], '0')
         self._check_se_1_jcec(se_mats_jcec_rows[0])
@@ -542,7 +544,8 @@ class FilteredTest(IndividualCountsBaseTest):
         a3ss_mats_jc_header, a3ss_mats_jc_rows, error = output_parser.parse_mats_jc(
             a3ss_mats_jc_path)
         self.assertFalse(error)
-        self._check_a35ss_mats_jc_header(a3ss_mats_jc_header)
+        self._check_a35ss_mats_jc_header(a3ss_mats_jc_header,
+                                         has_individual=True)
         self.assertEqual(len(a3ss_mats_jc_rows), 1)
         self.assertEqual(a3ss_mats_jc_rows[0]['flankingES'], '2000')
         self._check_a35ss_1_jc(a3ss_mats_jc_rows[0])
@@ -551,7 +554,8 @@ class FilteredTest(IndividualCountsBaseTest):
         a3ss_mats_jcec_header, a3ss_mats_jcec_rows, error = output_parser.parse_mats_jcec(
             a3ss_mats_jcec_path)
         self.assertFalse(error)
-        self._check_a35ss_mats_jcec_header(a3ss_mats_jcec_header)
+        self._check_a35ss_mats_jcec_header(a3ss_mats_jcec_header,
+                                           has_individual=True)
         self.assertEqual(len(a3ss_mats_jcec_rows), 1)
         self.assertEqual(a3ss_mats_jcec_rows[0]['flankingES'], '2000')
         self._check_a35ss_1_jcec(a3ss_mats_jcec_rows[0])
@@ -560,7 +564,8 @@ class FilteredTest(IndividualCountsBaseTest):
         a5ss_mats_jc_header, a5ss_mats_jc_rows, error = output_parser.parse_mats_jc(
             a5ss_mats_jc_path)
         self.assertFalse(error)
-        self._check_a35ss_mats_jc_header(a5ss_mats_jc_header)
+        self._check_a35ss_mats_jc_header(a5ss_mats_jc_header,
+                                         has_individual=True)
         self.assertEqual(len(a5ss_mats_jc_rows), 1)
         self.assertEqual(a5ss_mats_jc_rows[0]['shortES'], '4000')
         self._check_a35ss_1_jc(a5ss_mats_jc_rows[0])
@@ -569,7 +574,8 @@ class FilteredTest(IndividualCountsBaseTest):
         a5ss_mats_jcec_header, a5ss_mats_jcec_rows, error = output_parser.parse_mats_jcec(
             a5ss_mats_jcec_path)
         self.assertFalse(error)
-        self._check_a35ss_mats_jcec_header(a5ss_mats_jcec_header)
+        self._check_a35ss_mats_jcec_header(a5ss_mats_jcec_header,
+                                           has_individual=True)
         self.assertEqual(len(a5ss_mats_jcec_rows), 1)
         self.assertEqual(a5ss_mats_jcec_rows[0]['shortES'], '4000')
         self._check_a35ss_1_jcec(a5ss_mats_jcec_rows[0])
@@ -578,7 +584,7 @@ class FilteredTest(IndividualCountsBaseTest):
         mxe_mats_jc_header, mxe_mats_jc_rows, error = output_parser.parse_mats_jc(
             mxe_mats_jc_path)
         self.assertFalse(error)
-        self._check_mxe_mats_jc_header(mxe_mats_jc_header)
+        self._check_mxe_mats_jc_header(mxe_mats_jc_header, has_individual=True)
         self.assertEqual(len(mxe_mats_jc_rows), 1)
         self.assertEqual(mxe_mats_jc_rows[0]['upstreamES'], '6000')
         self._check_mxe_1_jc(mxe_mats_jc_rows[0])
@@ -587,7 +593,8 @@ class FilteredTest(IndividualCountsBaseTest):
         mxe_mats_jcec_header, mxe_mats_jcec_rows, error = output_parser.parse_mats_jcec(
             mxe_mats_jcec_path)
         self.assertFalse(error)
-        self._check_mxe_mats_jcec_header(mxe_mats_jcec_header)
+        self._check_mxe_mats_jcec_header(mxe_mats_jcec_header,
+                                         has_individual=True)
         self.assertEqual(len(mxe_mats_jcec_rows), 1)
         self.assertEqual(mxe_mats_jcec_rows[0]['upstreamES'], '6000')
         self._check_mxe_1_jcec(mxe_mats_jcec_rows[0])
@@ -596,7 +603,7 @@ class FilteredTest(IndividualCountsBaseTest):
         ri_mats_jc_header, ri_mats_jc_rows, error = output_parser.parse_mats_jc(
             ri_mats_jc_path)
         self.assertFalse(error)
-        self._check_ri_mats_jc_header(ri_mats_jc_header)
+        self._check_ri_mats_jc_header(ri_mats_jc_header, has_individual=True)
         self.assertEqual(len(ri_mats_jc_rows), 1)
         self.assertEqual(ri_mats_jc_rows[0]['upstreamES'], '8000')
         self._check_ri_1_jc(ri_mats_jc_rows[0])
@@ -605,7 +612,8 @@ class FilteredTest(IndividualCountsBaseTest):
         ri_mats_jcec_header, ri_mats_jcec_rows, error = output_parser.parse_mats_jcec(
             ri_mats_jcec_path)
         self.assertFalse(error)
-        self._check_ri_mats_jcec_header(ri_mats_jcec_header)
+        self._check_ri_mats_jcec_header(ri_mats_jcec_header,
+                                        has_individual=True)
         self.assertEqual(len(ri_mats_jcec_rows), 1)
         self.assertEqual(ri_mats_jcec_rows[0]['upstreamES'], '8000')
         self._check_ri_1_jcec(ri_mats_jcec_rows[0])
@@ -625,7 +633,7 @@ class NotFilteredTest(IndividualCountsBaseTest):
         se_mats_jc_header, se_mats_jc_rows, error = output_parser.parse_mats_jc(
             se_mats_jc_path)
         self.assertFalse(error)
-        self._check_se_mats_jc_header(se_mats_jc_header)
+        self._check_se_mats_jc_header(se_mats_jc_header, has_individual=True)
         self.assertEqual(len(se_mats_jc_rows), 2)
         se_mats_jc_row_0_start = se_mats_jc_rows[0]['upstreamES']
         se_mats_jc_row_1_start = se_mats_jc_rows[1]['upstreamES']
@@ -643,7 +651,8 @@ class NotFilteredTest(IndividualCountsBaseTest):
         se_mats_jcec_header, se_mats_jcec_rows, error = output_parser.parse_mats_jcec(
             se_mats_jcec_path)
         self.assertFalse(error)
-        self._check_se_mats_jcec_header(se_mats_jcec_header)
+        self._check_se_mats_jcec_header(se_mats_jcec_header,
+                                        has_individual=True)
         self.assertEqual(len(se_mats_jcec_rows), 2)
         se_mats_jcec_row_0_start = se_mats_jcec_rows[0]['upstreamES']
         se_mats_jcec_row_1_start = se_mats_jcec_rows[1]['upstreamES']
@@ -661,7 +670,8 @@ class NotFilteredTest(IndividualCountsBaseTest):
         a3ss_mats_jc_header, a3ss_mats_jc_rows, error = output_parser.parse_mats_jc(
             a3ss_mats_jc_path)
         self.assertFalse(error)
-        self._check_a35ss_mats_jc_header(a3ss_mats_jc_header)
+        self._check_a35ss_mats_jc_header(a3ss_mats_jc_header,
+                                         has_individual=True)
         self.assertEqual(len(a3ss_mats_jc_rows), 2)
         a3ss_mats_jc_row_0_start = a3ss_mats_jc_rows[0]['flankingES']
         a3ss_mats_jc_row_1_start = a3ss_mats_jc_rows[1]['flankingES']
@@ -679,7 +689,8 @@ class NotFilteredTest(IndividualCountsBaseTest):
         a3ss_mats_jcec_header, a3ss_mats_jcec_rows, error = output_parser.parse_mats_jcec(
             a3ss_mats_jcec_path)
         self.assertFalse(error)
-        self._check_a35ss_mats_jcec_header(a3ss_mats_jcec_header)
+        self._check_a35ss_mats_jcec_header(a3ss_mats_jcec_header,
+                                           has_individual=True)
         self.assertEqual(len(a3ss_mats_jcec_rows), 2)
         a3ss_mats_jcec_row_0_start = a3ss_mats_jcec_rows[0]['flankingES']
         a3ss_mats_jcec_row_1_start = a3ss_mats_jcec_rows[1]['flankingES']
@@ -698,7 +709,8 @@ class NotFilteredTest(IndividualCountsBaseTest):
         a5ss_mats_jc_header, a5ss_mats_jc_rows, error = output_parser.parse_mats_jc(
             a5ss_mats_jc_path)
         self.assertFalse(error)
-        self._check_a35ss_mats_jc_header(a5ss_mats_jc_header)
+        self._check_a35ss_mats_jc_header(a5ss_mats_jc_header,
+                                         has_individual=True)
         self.assertEqual(len(a5ss_mats_jc_rows), 2)
         a5ss_mats_jc_row_0_start = a5ss_mats_jc_rows[0]['shortES']
         a5ss_mats_jc_row_1_start = a5ss_mats_jc_rows[1]['shortES']
@@ -716,7 +728,8 @@ class NotFilteredTest(IndividualCountsBaseTest):
         a5ss_mats_jcec_header, a5ss_mats_jcec_rows, error = output_parser.parse_mats_jcec(
             a5ss_mats_jcec_path)
         self.assertFalse(error)
-        self._check_a35ss_mats_jcec_header(a5ss_mats_jcec_header)
+        self._check_a35ss_mats_jcec_header(a5ss_mats_jcec_header,
+                                           has_individual=True)
         self.assertEqual(len(a5ss_mats_jcec_rows), 2)
         a5ss_mats_jcec_row_0_start = a5ss_mats_jcec_rows[0]['shortES']
         a5ss_mats_jcec_row_1_start = a5ss_mats_jcec_rows[1]['shortES']
@@ -735,7 +748,7 @@ class NotFilteredTest(IndividualCountsBaseTest):
         mxe_mats_jc_header, mxe_mats_jc_rows, error = output_parser.parse_mats_jc(
             mxe_mats_jc_path)
         self.assertFalse(error)
-        self._check_mxe_mats_jc_header(mxe_mats_jc_header)
+        self._check_mxe_mats_jc_header(mxe_mats_jc_header, has_individual=True)
         self.assertEqual(len(mxe_mats_jc_rows), 2)
         mxe_mats_jc_row_0_start = mxe_mats_jc_rows[0]['upstreamES']
         mxe_mats_jc_row_1_start = mxe_mats_jc_rows[1]['upstreamES']
@@ -753,7 +766,8 @@ class NotFilteredTest(IndividualCountsBaseTest):
         mxe_mats_jcec_header, mxe_mats_jcec_rows, error = output_parser.parse_mats_jcec(
             mxe_mats_jcec_path)
         self.assertFalse(error)
-        self._check_mxe_mats_jcec_header(mxe_mats_jcec_header)
+        self._check_mxe_mats_jcec_header(mxe_mats_jcec_header,
+                                         has_individual=True)
         self.assertEqual(len(mxe_mats_jcec_rows), 2)
         mxe_mats_jcec_row_0_start = mxe_mats_jcec_rows[0]['upstreamES']
         mxe_mats_jcec_row_1_start = mxe_mats_jcec_rows[1]['upstreamES']
@@ -772,7 +786,7 @@ class NotFilteredTest(IndividualCountsBaseTest):
         ri_mats_jc_header, ri_mats_jc_rows, error = output_parser.parse_mats_jc(
             ri_mats_jc_path)
         self.assertFalse(error)
-        self._check_ri_mats_jc_header(ri_mats_jc_header)
+        self._check_ri_mats_jc_header(ri_mats_jc_header, has_individual=True)
         self.assertEqual(len(ri_mats_jc_rows), 2)
         ri_mats_jc_row_0_start = ri_mats_jc_rows[0]['upstreamES']
         ri_mats_jc_row_1_start = ri_mats_jc_rows[1]['upstreamES']
@@ -790,7 +804,8 @@ class NotFilteredTest(IndividualCountsBaseTest):
         ri_mats_jcec_header, ri_mats_jcec_rows, error = output_parser.parse_mats_jcec(
             ri_mats_jcec_path)
         self.assertFalse(error)
-        self._check_ri_mats_jcec_header(ri_mats_jcec_header)
+        self._check_ri_mats_jcec_header(ri_mats_jcec_header,
+                                        has_individual=True)
         self.assertEqual(len(ri_mats_jcec_rows), 2)
         ri_mats_jcec_row_0_start = ri_mats_jcec_rows[0]['upstreamES']
         ri_mats_jcec_row_1_start = ri_mats_jcec_rows[1]['upstreamES']

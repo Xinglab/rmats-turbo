@@ -1,7 +1,9 @@
-# Python 3 requirements
-Cython==0.29.21
-python==3.6.12
-#
-# Python 2 requirements
-# Cython==0.29.15
-# python==2.7.15
+Cython=3.0.*
+cmake=3.27.*
+gcc=13.*
+gfortran=13.*
+gsl=2.7
+gxx=13.*
+liblapack=3.9.*
+python=3.10.*
+zlib=1.2.*

@@ -164,6 +164,9 @@ def get_args():
                         help='Allow alignments with soft or hard clipping to be used',
                         dest='allow_clipping')
     parser.add_argument('--fixed-event-set', action='store', help='A directory containing fromGTF.[AS].txt files to be used instead of detecting a new set of events')
+    parser.add_argument('--individual-counts', action='store_true',
+                        help='Output individualCounts.[AS_Event].txt files and add the individual count columns to [AS_Event].MATS.JC.txt',
+                        dest='individual_counts')
     # The help text for --imbalance ratio is not added to the parser
     # since the parameter is only intended for internal use and it
     # defaults to no filtering.
@@ -172,10 +175,12 @@ def get_args():
     # downstream junction reads (or downstream to upstream) exceeds
     # --imbalance-ratio. The events are filtered before running the
     # stats model so that the FDR is based on the filtered
-    # events. If not specified then no events are filtered
+    # events. If not specified then no events are filtered.
+    # Requires --individual-counts
     parser.add_argument('--imbalance-ratio', type=float,
                         help=argparse.SUPPRESS,
                         dest='imbalance_ratio')
+
 
     args = parser.parse_args()
 
@@ -195,6 +200,8 @@ def get_args():
         sys.exit('ERROR: output folder and temporary folder required. Please check --od and --tmp.')
     if (args.s1 != '' or args.s2 != '') and args.bIndex == '':
         sys.exit('ERROR: STAR binary indexes required. Please check --bi.')
+    if args.imbalance_ratio is not None and not args.individual_counts:
+        sys.exit('ERROR: --imbalance-ratio requires --individual-counts')
 
     if len(args.b1) > 0:
         with open(args.b1, 'r') as fp:
@@ -366,17 +373,37 @@ def process_counts(istat, tstat, counttype, ase, cstat, od, od_tmp, stat,
 
     """
     from_gtf_path = '%s/fromGTF.%s.txt' % (od, ase)
+    if not os.path.exists(from_gtf_path):
+        print('WARNING: Cannot find {}. Unable to produce final output files'
+              ' for {} {}.'.format(from_gtf_path, ase, counttype),
+              file=sys.stderr)
+        return
+
+    if not os.path.exists(istat):
+        print('WARNING: Cannot find {}. Unable to produce final output files'
+              ' for {} {}.'.format(istat, ase, counttype),
+              file=sys.stderr)
+        return
 
     indiv_counts_file_name = os.path.join(
         od, 'individualCounts.{}.txt'.format(ase))
     indiv_counts_temp_file_name = '{}.tmp'.format(indiv_counts_file_name)
+    has_indiv_counts = os.path.exists(indiv_counts_file_name)
 
-    for file_path in [from_gtf_path, istat, indiv_counts_file_name]:
-        if not os.path.exists(file_path):
-            print('WARNING: Cannot find {}. Unable to produce final output'
-                  ' files for {} {}.'.format(file_path, ase, counttype),
+    if stat:
+        has_sample_1_counts, has_sample_2_counts = check_if_has_counts(istat)
+        if has_sample_1_counts and has_sample_2_counts:
+            filter_countfile(istat)
+        elif has_sample_1_counts or has_sample_2_counts:
+            print('WARNING: Statistical step is skipped for {} {} because only'
+                  ' one group is involved'.format(ase, counttype),
                   file=sys.stderr)
-            return
+            stat = False
+
+    if imbalance_ratio is not None:
+        filter_countfile_by_imbalance_ratio(
+            istat, indiv_counts_file_name, indiv_counts_temp_file_name,
+            imbalance_ratio, ase)
 
     sec_tmp = os.path.join(od_tmp, '%s_%s' % (counttype, ase))
     if os.path.exists(sec_tmp):
@@ -403,21 +430,6 @@ def process_counts(istat, tstat, counttype, ase, cstat, od, od_tmp, stat,
     inc_lvl = os.path.join(root_dir, 'rMATS_P/inclusion_level.py')
     fdr_cal = os.path.join(root_dir, 'rMATS_P/FDR.py')
     join_2f = os.path.join(root_dir, 'rMATS_P/joinFiles.py')
-
-    if stat:
-        has_sample_1_counts, has_sample_2_counts = check_if_has_counts(istat)
-        if has_sample_1_counts and has_sample_2_counts:
-            filter_countfile(istat)
-        elif has_sample_1_counts or has_sample_2_counts:
-            print('WARNING: Statistical step is skipped for {} {} because only'
-                  ' one group is involved'.format(ase, counttype),
-                  file=sys.stderr)
-            stat = False
-
-    if imbalance_ratio is not None:
-        filter_countfile_by_imbalance_ratio(
-            istat, indiv_counts_file_name, indiv_counts_temp_file_name,
-            imbalance_ratio, ase)
 
     # Calculate inclusion levels
     subprocess.call([python_executable, pas_out, '-i', istat, '--o1', ostat_id, '--o2', ostat_inp,], stdout=FNULL)
@@ -451,8 +463,8 @@ def process_counts(istat, tstat, counttype, ase, cstat, od, od_tmp, stat,
     # Combine into final output
     subprocess.call(['paste', ostat_fdr, ostat_il,], stdout=resfp)
     subprocess.call([python_executable, join_2f, from_gtf_path, resfp.name, '0', '0', finfn,], stdout=FNULL)
-    append_individual_counts(indiv_counts_file_name, finfn,
-                             indiv_counts_temp_file_name)
+    if has_indiv_counts:
+        append_individual_counts(indiv_counts_file_name, finfn, indiv_counts_temp_file_name)
 
     FNULL.close()
     resfp.close()
@@ -491,17 +503,20 @@ def filter_countfile_by_imbalance_ratio(
 
     if error:
         formatted_message = (
-            'error in filter_countfile_by_imbalance_ratio({}, {}, {}, {}, {})'
+            'error in filter_countfile_by_imbalance_ratio({}, {}, {}, {}, {}): {}'
             .format(counts_file_name, indiv_counts_file_name, temp_file_name,
-                    imbalance_ratio, splicing_event_type))
+                    imbalance_ratio, splicing_event_type, error))
         print(formatted_message, file=sys.stderr)
-
-    shutil.move(temp_file_name, counts_file_name)
+    else:
+        shutil.move(temp_file_name, counts_file_name)
 
 
 def filter_countfile_by_imbalance_ratio_with_handles(
         counts_file_handle, indiv_counts_file_handle, temp_file_handle,
         imbalance_ratio, splicing_event_type):
+    if imbalance_ratio == 0:
+        return 'imbalance_ratio == 0'
+
     inverse_imbalance_ratio = 1 / imbalance_ratio
     calculate_ratios = get_calculate_ratios_for_event_type(splicing_event_type)
     if calculate_ratios is None:
@@ -549,8 +564,8 @@ def append_individual_counts(counts_file_name, mats_file_name, temp_file_name):
             'error in append_individual_counts({}, {}, {}): {}'
             .format(counts_file_name, mats_file_name, temp_file_name, error))
         print(formatted_message, file=sys.stderr)
-
-    shutil.move(temp_file_name, mats_file_name)
+    else:
+        shutil.move(temp_file_name, mats_file_name)
 
 
 def append_individual_counts_with_handles(counts_file_handle, mats_file_handle,

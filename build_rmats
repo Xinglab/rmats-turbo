@@ -37,9 +37,11 @@ function parse_arguments() {
 }
 
 function set_script_dir() {
+  local ORIG_DIR="$(pwd)" || return 1
   local REL_SCRIPT_DIR="$(dirname ${BASH_SOURCE[0]})" || return 1
   cd "${REL_SCRIPT_DIR}" || return 1
   SCRIPT_DIR="$(pwd)" || return 1
+  cd "${ORIG_DIR}" || return 1
 }
 
 function create_and_activate_conda_env() {
@@ -47,6 +49,9 @@ function create_and_activate_conda_env() {
 
   conda create --prefix "${CONDA_ENV_PATH}" || return 1
   conda activate "${CONDA_ENV_PATH}" || return 1
+
+  # This lets the build find zlib.h from conda
+  export CPATH="${CPATH}:${CONDA_ENV_PATH}/include" || return 1
 }
 
 function install_conda_dependencies() {
@@ -62,6 +67,18 @@ function install_conda_dependencies() {
   fi
 
   conda install -c conda-forge --file "${ALL_REQUIREMENTS}" || return 1
+}
+
+function set_compiler_environment_variables() {
+  if [[ -z "${FC}" ]]; then
+    export FC="$(which gfortran)" || return 1
+  fi
+  if [[ -z "${CC}" ]]; then
+    export CC="$(which gcc)" || return 1
+  fi
+  if [[ -z "${CXX}" ]]; then
+    export CXX="$(which g++)" || return 1
+  fi
 }
 
 function build_rmats() {
@@ -90,6 +107,7 @@ function main() {
     install_conda_dependencies || return 1
   fi
 
+  set_compiler_environment_variables || return 1
   build_rmats || return 1
 
   if [[ "${USE_PAIRED}" -eq 1 ]]; then

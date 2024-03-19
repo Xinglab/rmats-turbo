@@ -43,14 +43,10 @@ class Test(tests.base_test.BaseTest):
                                               'fromGTF.SE.txt')
         self._jc_raw_input_se_path = os.path.join(self._generated_input_dir,
                                                   'JC.raw.input.SE.txt')
-        self._indiv_counts_se_path = os.path.join(self._generated_input_dir,
-                                                  'individualCounts.SE.txt')
         self._create_from_gtf(self._from_gtf_se_path)
         self._create_jc_input(self._jc_raw_input_se_path)
-        self._create_indiv_counts(self._indiv_counts_se_path)
         shutil.copy(self._from_gtf_se_path, self._out_dir)
         shutil.copy(self._jc_raw_input_se_path, self._out_dir)
-        shutil.copy(self._indiv_counts_se_path, self._out_dir)
 
     def test(self):
         self._run_test()
@@ -115,39 +111,6 @@ class Test(tests.base_test.BaseTest):
                     str(i), inc_1_str, skip_1_str, inc_2_str, skip_2_str,
                     str(self._inc_form_len),
                     str(self._skip_form_len)
-                ]
-                self._write_tsv_line(handle, columns)
-
-    def _create_indiv_counts(self, indiv_counts_path):
-        headers = [
-            'ID', 'upstream_to_target_count', 'target_to_downstream_count',
-            'target_count', 'upstream_to_downstream_count'
-        ]
-        with open(indiv_counts_path, 'wt') as handle:
-            self._write_tsv_line(handle, headers)
-            for i in self._ids:
-                inc_1 = self._inc_1_by_id[i]
-                skip_1 = self._skip_1_by_id[i]
-                inc_2 = self._inc_2_by_id[i]
-                skip_2 = self._skip_2_by_id[i]
-                up_to_target_str_1 = self._repeat_and_comma_separate(
-                    inc_1, self._num_sample_1_bams)
-                up_to_target_str_2 = self._repeat_and_comma_separate(
-                    inc_2, self._num_sample_2_bams)
-                up_to_target_str = ','.join(
-                    [up_to_target_str_1, up_to_target_str_2])
-                total_num_bams = self._num_sample_1_bams + self._num_sample_2_bams
-                target_to_down_str = self._repeat_and_comma_separate(
-                    0, total_num_bams)
-                target_str = self._repeat_and_comma_separate(0, total_num_bams)
-                up_to_down_str_1 = self._repeat_and_comma_separate(
-                    skip_1, self._num_sample_1_bams)
-                up_to_down_str_2 = self._repeat_and_comma_separate(
-                    skip_2, self._num_sample_2_bams)
-                up_to_down_str = ','.join([up_to_down_str_1, up_to_down_str_2])
-                columns = [
-                    str(i), up_to_target_str, target_to_down_str, target_str,
-                    up_to_down_str
                 ]
                 self._write_tsv_line(handle, columns)
 

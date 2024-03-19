@@ -2310,6 +2310,7 @@ cdef void count_alt35(cset[ALT35_info]& junction_35,
                             deref(ialt35), rl_jl,
                             alt35_counts[idx].counts[i])
                         inc(imap2)
+
         else:
             for i in residx:
                 iunmap = juncs[i].find(deref(ialt35).gID)
@@ -2390,7 +2391,6 @@ cdef void count_ri_exon(const Tetrad& exon_read,
         if not counted:
             ri_counts.jc_counts.inc_count += count
             ri_counts.jcec_counts.inc_count += count
-
     if ((exon_read.first > ri_event.ue
          and exon_read.fourth != -1
          and exon_read.fourth <= ri_event.ds)):
@@ -2408,7 +2408,7 @@ cdef void count_ri(cset[RI_info]& junction_ri,
     cdef:
         int idx
         size_t i
-        int rl_jl = rl - jld2
+        long rl_jl = rl - jld2
         cmap[Tetrad,int].iterator imap2
         cmap[vector[pair[long,long]],int].iterator imap
         unordered_map[string,cmap[Tetrad,int]].iterator iunmap2
@@ -2447,7 +2447,7 @@ cdef count_occurrence(str bams, list dot_rmats_paths, str od,
                       cset[SE_info]& se, cset[MXE_info]& mxe,
                       cset[ALT35_info]& alt3, cset[ALT35_info]& alt5,
                       cset[RI_info]& ri, int sam1len, int& jld2, int& rl,
-                      int& nthread, cbool stat):
+                      int& nthread, cbool stat, cbool individual_counts):
     cdef:
         size_t idx = 0
         list vbams = bams.split(',')
@@ -2538,14 +2538,15 @@ cdef count_occurrence(str bams, list dot_rmats_paths, str od,
             juncs[idx].clear()
 
     save_ct(od, se_counts, mxe_counts, alt3_counts, alt5_counts, ri_counts,
-            sam1len, stat)
+            sam1len, stat, individual_counts)
 
 
 @boundscheck(False)
 @wraparound(False)
 cdef void write_se_count_rows(const vector[SE_counts_for_event_by_bam]& se_counts,
                               int sam1len, FILE* se_fp,
-                              FILE* se_fp_n, FILE* se_fp_individual):
+                              FILE* se_fp_n, FILE* se_fp_individual,
+                              cbool individual_counts):
     cdef:
         SE_joined_count_strings joined_strings
 
@@ -2565,18 +2566,20 @@ cdef void write_se_count_rows(const vector[SE_counts_for_event_by_bam]& se_count
                 joined_strings.jcec_skp_2.c_str(),
                 se_counts[i].jcec_lengths.inc_len,
                 se_counts[i].jcec_lengths.skp_len)
-        fprintf(se_fp_individual, se_count_template, i,
-                joined_strings.upstream_to_target.c_str(),
-                joined_strings.target_to_downstream.c_str(),
-                joined_strings.target.c_str(),
-                joined_strings.upstream_to_downstream.c_str())
+        if individual_counts:
+            fprintf(se_fp_individual, se_count_template, i,
+                    joined_strings.upstream_to_target.c_str(),
+                    joined_strings.target_to_downstream.c_str(),
+                    joined_strings.target.c_str(),
+                    joined_strings.upstream_to_downstream.c_str())
 
 
 @boundscheck(False)
 @wraparound(False)
 cdef void write_mxe_count_rows(const vector[MXE_counts_for_event_by_bam]& mxe_counts,
                                int sam1len, FILE* mxe_fp,
-                               FILE* mxe_fp_n, FILE* mxe_fp_individual):
+                               FILE* mxe_fp_n, FILE* mxe_fp_individual,
+                               cbool individual_counts):
     cdef:
         MXE_joined_count_strings joined_strings
 
@@ -2597,13 +2600,14 @@ cdef void write_mxe_count_rows(const vector[MXE_counts_for_event_by_bam]& mxe_co
                     joined_strings.jcec_skp_2.c_str(),
                     mxe_counts[i].jcec_lengths.inc_len,
                     mxe_counts[i].jcec_lengths.skp_len)
-            fprintf(mxe_fp_individual, mxe_count_template, i,
-                    joined_strings.upstream_to_first.c_str(),
-                    joined_strings.first_to_downstream.c_str(),
-                    joined_strings.first.c_str(),
-                    joined_strings.upstream_to_second.c_str(),
-                    joined_strings.second_to_downstream.c_str(),
-                    joined_strings.second.c_str())
+            if individual_counts:
+                fprintf(mxe_fp_individual, mxe_count_template, i,
+                        joined_strings.upstream_to_first.c_str(),
+                        joined_strings.first_to_downstream.c_str(),
+                        joined_strings.first.c_str(),
+                        joined_strings.upstream_to_second.c_str(),
+                        joined_strings.second_to_downstream.c_str(),
+                        joined_strings.second.c_str())
         else:
             fprintf(mxe_fp, count_tmp, i,
                     joined_strings.jc_skp_1.c_str(),
@@ -2619,20 +2623,22 @@ cdef void write_mxe_count_rows(const vector[MXE_counts_for_event_by_bam]& mxe_co
                     joined_strings.jcec_inc_2.c_str(),
                     mxe_counts[i].jcec_lengths.inc_len,
                     mxe_counts[i].jcec_lengths.skp_len)
-            fprintf(mxe_fp_individual, mxe_count_template, i,
-                    joined_strings.upstream_to_second.c_str(),
-                    joined_strings.second_to_downstream.c_str(),
-                    joined_strings.second.c_str(),
-                    joined_strings.upstream_to_first.c_str(),
-                    joined_strings.first_to_downstream.c_str(),
-                    joined_strings.first.c_str())
+            if individual_counts:
+                fprintf(mxe_fp_individual, mxe_count_template, i,
+                        joined_strings.upstream_to_second.c_str(),
+                        joined_strings.second_to_downstream.c_str(),
+                        joined_strings.second.c_str(),
+                        joined_strings.upstream_to_first.c_str(),
+                        joined_strings.first_to_downstream.c_str(),
+                        joined_strings.first.c_str())
 
 
 @boundscheck(False)
 @wraparound(False)
 cdef void write_alt35_count_rows(const vector[ALT35_counts_for_event_by_bam]& alt35_counts,
-                              int sam1len, FILE* alt35_fp,
-                              FILE* alt35_fp_n, FILE* alt35_fp_individual):
+                                 int sam1len, FILE* alt35_fp,
+                                 FILE* alt35_fp_n, FILE* alt35_fp_individual,
+                                 cbool individual_counts):
     cdef:
         ALT35_joined_count_strings joined_strings
 
@@ -2652,18 +2658,20 @@ cdef void write_alt35_count_rows(const vector[ALT35_counts_for_event_by_bam]& al
                 joined_strings.jcec_skp_2.c_str(),
                 alt35_counts[i].jcec_lengths.inc_len,
                 alt35_counts[i].jcec_lengths.skp_len)
-        fprintf(alt35_fp_individual, alt35_count_template, i,
-                joined_strings.across_short_boundary.c_str(),
-                joined_strings.long_to_flanking.c_str(),
-                joined_strings.exclusive_to_long.c_str(),
-                joined_strings.short_to_flanking.c_str())
+        if individual_counts:
+            fprintf(alt35_fp_individual, alt35_count_template, i,
+                    joined_strings.across_short_boundary.c_str(),
+                    joined_strings.long_to_flanking.c_str(),
+                    joined_strings.exclusive_to_long.c_str(),
+                    joined_strings.short_to_flanking.c_str())
 
 
 @boundscheck(False)
 @wraparound(False)
 cdef void write_ri_count_rows(const vector[RI_counts_for_event_by_bam]& ri_counts,
                               int sam1len, FILE* ri_fp,
-                              FILE* ri_fp_n, FILE* ri_fp_individual):
+                              FILE* ri_fp_n, FILE* ri_fp_individual,
+                              cbool individual_counts):
     cdef:
         RI_joined_count_strings joined_strings
 
@@ -2683,11 +2691,12 @@ cdef void write_ri_count_rows(const vector[RI_counts_for_event_by_bam]& ri_count
                 joined_strings.jcec_skp_2.c_str(),
                 ri_counts[i].jcec_lengths.inc_len,
                 ri_counts[i].jcec_lengths.skp_len)
-        fprintf(ri_fp_individual, ri_count_template, i,
-                joined_strings.upstream_to_intron.c_str(),
-                joined_strings.intron_to_downstream.c_str(),
-                joined_strings.intron.c_str(),
-                joined_strings.upstream_to_downstream.c_str())
+        if individual_counts:
+            fprintf(ri_fp_individual, ri_count_template, i,
+                    joined_strings.upstream_to_intron.c_str(),
+                    joined_strings.intron_to_downstream.c_str(),
+                    joined_strings.intron.c_str(),
+                    joined_strings.upstream_to_downstream.c_str())
 
 
 @boundscheck(False)
@@ -2697,7 +2706,7 @@ cdef save_ct(str od, vector[SE_counts_for_event_by_bam]& se_counts,
              vector[ALT35_counts_for_event_by_bam]& alt3_counts,
              vector[ALT35_counts_for_event_by_bam]& alt5_counts,
              vector[RI_counts_for_event_by_bam]& ri_counts,
-             int sam1len, cbool stat):
+             int sam1len, cbool stat, cbool individual_counts):
     cdef:
         size_t i
         FILE *se_fp
@@ -2710,61 +2719,76 @@ cdef save_ct(str od, vector[SE_counts_for_event_by_bam]& se_counts,
         FILE *alt3_fp_n
         FILE *alt5_fp_n
         FILE *ri_fp_n
+        FILE *se_fp_individual
+        FILE *mxe_fp_individual
+        FILE *alt3_fp_individual
+        FILE *alt5_fp_individual
+        FILE *ri_fp_individual
         int total
 
     se_fp = fopen('%s/JC.raw.input.SE.txt' % (od), 'w')
     se_fp_n = fopen('%s/JCEC.raw.input.SE.txt' % (od), 'w')
-    se_fp_individual = fopen('%s/individualCounts.SE.txt' % (od), 'w')
     mxe_fp = fopen('%s/JC.raw.input.MXE.txt' % (od), 'w')
     mxe_fp_n = fopen('%s/JCEC.raw.input.MXE.txt' % (od), 'w')
-    mxe_fp_individual = fopen('%s/individualCounts.MXE.txt' % (od), 'w')
     alt3_fp = fopen('%s/JC.raw.input.A3SS.txt' % (od), 'w')
     alt3_fp_n = fopen('%s/JCEC.raw.input.A3SS.txt' % (od), 'w')
-    alt3_fp_individual = fopen('%s/individualCounts.A3SS.txt' % (od), 'w')
     alt5_fp = fopen('%s/JC.raw.input.A5SS.txt' % (od), 'w')
     alt5_fp_n = fopen('%s/JCEC.raw.input.A5SS.txt' % (od), 'w')
-    alt5_fp_individual = fopen('%s/individualCounts.A5SS.txt' % (od), 'w')
     ri_fp = fopen('%s/JC.raw.input.RI.txt' % (od), 'w')
     ri_fp_n = fopen('%s/JCEC.raw.input.RI.txt' % (od), 'w')
-    ri_fp_individual = fopen('%s/individualCounts.RI.txt' % (od), 'w')
+    if individual_counts:
+        se_fp_individual = fopen('%s/individualCounts.SE.txt' % (od), 'w')
+        mxe_fp_individual = fopen('%s/individualCounts.MXE.txt' % (od), 'w')
+        alt3_fp_individual = fopen('%s/individualCounts.A3SS.txt' % (od), 'w')
+        alt5_fp_individual = fopen('%s/individualCounts.A5SS.txt' % (od), 'w')
+        ri_fp_individual = fopen('%s/individualCounts.RI.txt' % (od), 'w')
 
     fprintf(se_fp, count_header)
     fprintf(se_fp_n, count_header)
-    fprintf(se_fp_individual, se_count_header)
     fprintf(mxe_fp, count_header)
     fprintf(mxe_fp_n, count_header)
-    fprintf(mxe_fp_individual, mxe_count_header)
     fprintf(alt3_fp, count_header)
     fprintf(alt3_fp_n, count_header)
-    fprintf(alt3_fp_individual, alt35_count_header)
     fprintf(alt5_fp, count_header)
     fprintf(alt5_fp_n, count_header)
-    fprintf(alt5_fp_individual, alt35_count_header)
     fprintf(ri_fp, count_header)
     fprintf(ri_fp_n, count_header)
-    fprintf(ri_fp_individual, ri_count_header)
 
-    write_se_count_rows(se_counts, sam1len, se_fp, se_fp_n, se_fp_individual)
-    write_mxe_count_rows(mxe_counts, sam1len, mxe_fp, mxe_fp_n, mxe_fp_individual)
-    write_alt35_count_rows(alt3_counts, sam1len, alt3_fp, alt3_fp_n, alt3_fp_individual)
-    write_alt35_count_rows(alt5_counts, sam1len, alt5_fp, alt5_fp_n, alt5_fp_individual)
-    write_ri_count_rows(ri_counts, sam1len, ri_fp, ri_fp_n, ri_fp_individual)
+    if individual_counts:
+        fprintf(se_fp_individual, se_count_header)
+        fprintf(mxe_fp_individual, mxe_count_header)
+        fprintf(alt3_fp_individual, alt35_count_header)
+        fprintf(alt5_fp_individual, alt35_count_header)
+        fprintf(ri_fp_individual, ri_count_header)
+
+    write_se_count_rows(se_counts, sam1len, se_fp, se_fp_n,
+                        se_fp_individual, individual_counts)
+    write_mxe_count_rows(mxe_counts, sam1len, mxe_fp, mxe_fp_n,
+                         mxe_fp_individual, individual_counts)
+    write_alt35_count_rows(alt3_counts, sam1len, alt3_fp, alt3_fp_n,
+                           alt3_fp_individual, individual_counts)
+    write_alt35_count_rows(alt5_counts, sam1len, alt5_fp, alt5_fp_n,
+                           alt5_fp_individual, individual_counts)
+    write_ri_count_rows(ri_counts, sam1len, ri_fp, ri_fp_n,
+                        ri_fp_individual, individual_counts)
 
     fclose(se_fp)
     fclose(se_fp_n)
-    fclose(se_fp_individual)
     fclose(mxe_fp)
     fclose(mxe_fp_n)
-    fclose(mxe_fp_individual)
     fclose(alt3_fp)
     fclose(alt3_fp_n)
-    fclose(alt3_fp_individual)
     fclose(alt5_fp)
     fclose(alt5_fp_n)
-    fclose(alt5_fp_individual)
     fclose(ri_fp)
     fclose(ri_fp_n)
-    fclose(ri_fp_individual)
+
+    if individual_counts:
+        fclose(se_fp_individual)
+        fclose(mxe_fp_individual)
+        fclose(alt3_fp_individual)
+        fclose(alt5_fp_individual)
+        fclose(ri_fp_individual)
 
 
 @boundscheck(False)
@@ -4034,7 +4058,8 @@ def run_pipe(args):
         start = time.time()
         count_occurrence(args.bams, dot_rmats_file_paths, args.od, se, mxe,
                          alt3, alt5, ri, sam1len, jld2,
-                         args.readLength, args.nthread, args.stat)
+                         args.readLength, args.nthread, args.stat,
+                         args.individual_counts)
         print 'count:', time.time() - start
 
         shutil.rmtree(split_dot_rmats_dir_path)
