@@ -904,9 +904,12 @@ def apply_id_mapping(event_type, out_dir):
             id_to_orig[values[1]] = values[0]
 
     file_templates = ['fromGTF.{}.txt', 'JC.raw.input.{}.txt',
-                      'JCEC.raw.input.{}.txt']
+                      'JCEC.raw.input.{}.txt', 'individualCounts.{}.txt']
     for file_template in file_templates:
         file_path = os.path.join(out_dir, file_template.format(event_type))
+        if not os.path.exists(file_path):
+            continue
+
         with open(file_path, 'rt') as in_f:
             # using mapping_path as a temporary file which is then removed
             with open(mapping_path, 'wt') as out_f:
