@@ -1960,6 +1960,7 @@ cdef void count_se_junction(const vector[pair[long,long]]& junction_read,
         if ((i == junction_read.size() - 2
              and junction_read[i].first == se_event.ue
              and junction_read[i].second == se_event.ts
+             and junction_read[junction_read.size()-1].first != -1
              and junction_read[junction_read.size()-1].first <= se_event.te)):
             se_counts.upstream_to_target_count += read_count
             se_counts.jc_counts.inc_count += read_count
@@ -2053,8 +2054,8 @@ cdef void count_mxe_junction(const vector[pair[long,long]]& junction_read,
         if ((i == junction_read.size()-2
              and junction_read[i].first == mxe_event.ue
              and junction_read[i].second == mxe_event.ts
-             and (junction_read[junction_read.size()-1].first
-                  <= mxe_event.te))):
+             and junction_read[junction_read.size()-1].first != -1
+             and junction_read[junction_read.size()-1].first <= mxe_event.te)):
             mxe_counts.upstream_to_first_count += read_count
             mxe_counts.jc_counts.inc_count += read_count
             mxe_counts.jcec_counts.inc_count += read_count
@@ -2080,8 +2081,8 @@ cdef void count_mxe_junction(const vector[pair[long,long]]& junction_read,
         if ((i == junction_read.size()-2
              and junction_read[i].first == mxe_event.ue
              and junction_read[i].second == mxe_event.ss
-             and (junction_read[junction_read.size()-1].first
-                  <= mxe_event.se))):
+             and junction_read[junction_read.size()-1].first != -1
+             and junction_read[junction_read.size()-1].first <= mxe_event.se)):
             mxe_counts.upstream_to_second_count += read_count
             mxe_counts.jc_counts.skp_count += read_count
             mxe_counts.jcec_counts.skp_count += read_count
@@ -2178,6 +2179,7 @@ cdef void count_alt35_right_flank_junction(
             alt35_counts.jcec_counts.skp_count += read_count
             return
         if ((i == junction_read.size()-2
+             and junction_read[i].second != -1
              and junction_read[i].second <= alt35_event.se-rl_jl
              and junction_read[i+1].first >= alt35_event.se+rl_jl
              and junction_read[i+1].first <= alt35_event.le)):
@@ -2345,6 +2347,7 @@ cdef void count_ri_junction(const vector[pair[long,long]]& junction_read,
             ri_counts.jcec_counts.skp_count += read_count
             return
         if ((i == 1
+             and junction_read[0].second != -1
              and junction_read[0].second <= ri_event.ds-rl_jl
              and junction_read[1].first >= ri_event.ds+rl_jl)):
             ri_counts.intron_to_downstream_count += read_count
@@ -2352,6 +2355,7 @@ cdef void count_ri_junction(const vector[pair[long,long]]& junction_read,
             ri_counts.jcec_counts.inc_count += read_count
             return
         if ((i == junction_read.size()-2
+             and junction_read[i].second != -1
              and junction_read[i].second <= ri_event.ue-rl_jl
              and junction_read[i+1].first >= ri_event.ue+rl_jl)):
             ri_counts.upstream_to_intron_count += read_count
