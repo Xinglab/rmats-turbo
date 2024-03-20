@@ -153,6 +153,10 @@ def get_args():
                         help='Skip the statistical analysis', dest='stat')
     parser.add_argument('--paired-stats', action='store_true',
                         help='Use the paired stats model', dest='paired_stats')
+    parser.add_argument('--darts-model', action='store_true',
+                        help='Use the DARTS statistical model', dest='darts_model')
+    parser.add_argument('--darts-cutoff', action='store', type=float, default=0.05,
+                        help='The cutoff of delta-PSI in the DARTS model. The output posterior probability is P(abs(delta_psi) > cutoff). The default is %(default)s', dest='darts_cutoff')
 
     parser.add_argument('--novelSS', action='store_true',
                         help='Enable detection of novel splice sites (unannotated splice sites). Default is no detection of novel splice sites', dest='novelSS')
@@ -305,6 +309,7 @@ def check_integrity(input_bams_string, tmp_dir):
 def check_if_has_counts(counts_file_path):
     has_sample_1_counts = False
     has_sample_2_counts = False
+    has_replicates = False
     with open(counts_file_path, 'rt') as f_handle:
         for i, line in enumerate(f_handle):
             if i == 0:
@@ -313,11 +318,19 @@ def check_if_has_counts(counts_file_path):
             values = line.strip().split('\t')
             inc_sample_1_vs = values[1]
             inc_sample_2_vs = values[3]
+            sample_1_counts = inc_sample_1_vs.split(',')
+            sample_2_counts = inc_sample_2_vs.split(',')
             has_sample_1_counts = inc_sample_1_vs != ''
             has_sample_2_counts = inc_sample_2_vs != ''
+            has_replicates = ((len(sample_1_counts) > 1)
+                              or (len(sample_2_counts) > 1))
             break  # only check the first row
 
-    return has_sample_1_counts, has_sample_2_counts
+    return {
+        'has_sample_1_counts': has_sample_1_counts,
+        'has_sample_2_counts': has_sample_2_counts,
+        'has_replicates': has_replicates
+    }
 
 
 def filter_countfile(fn):
@@ -367,7 +380,8 @@ def filter_countfile(fn):
 
 
 def process_counts(istat, tstat, counttype, ase, cstat, od, od_tmp, stat,
-                   paired_stats, python_executable, root_dir, imbalance_ratio):
+                   paired_stats, use_darts_model, darts_cutoff,
+                   python_executable, root_dir, imbalance_ratio):
     """TODO: Docstring for process_counts.
     :returns: TODO
 
@@ -391,7 +405,10 @@ def process_counts(istat, tstat, counttype, ase, cstat, od, od_tmp, stat,
     has_indiv_counts = os.path.exists(indiv_counts_file_name)
 
     if stat:
-        has_sample_1_counts, has_sample_2_counts = check_if_has_counts(istat)
+        has_counts_result = check_if_has_counts(istat)
+        has_sample_1_counts = has_counts_result['has_sample_1_counts']
+        has_sample_2_counts = has_counts_result['has_sample_2_counts']
+        has_replicates = has_counts_result['has_replicates']
         if has_sample_1_counts and has_sample_2_counts:
             filter_countfile(istat)
         elif has_sample_1_counts or has_sample_2_counts:
@@ -423,9 +440,11 @@ def process_counts(istat, tstat, counttype, ase, cstat, od, od_tmp, stat,
     ostat_pv = ostat % ('P-V')
     ostat_fdr = ostat % ('FDR')
     ostat_paired = ostat % ('paired')
+    ostat_darts = ostat % ('darts')
 
     rmats_c = os.path.join(root_dir, 'rMATS_C/rMATSexe')
     paired_model = os.path.join(root_dir, 'rMATS_R/paired_model.R')
+    darts_model = os.path.join(root_dir, 'rMATS_R/darts_model.R')
     pas_out = os.path.join(root_dir, 'rMATS_P/paste.py')
     inc_lvl = os.path.join(root_dir, 'rMATS_P/inclusion_level.py')
     fdr_cal = os.path.join(root_dir, 'rMATS_P/FDR.py')
@@ -454,6 +473,19 @@ def process_counts(istat, tstat, counttype, ase, cstat, od, od_tmp, stat,
             if paired_model_return_code != 0:
                 print('error in paired model', file=sys.stderr)
                 print_file_to_stderr(ostat_paired)
+        elif use_darts_model:
+            has_replicates_str = 'true' if has_replicates else 'false'
+            darts_command = ['Rscript', darts_model, istat, ostat_pv,
+                             str(tstat), str(darts_cutoff), has_replicates_str]
+            with open(ostat_darts, 'wb') as darts_fp:
+                darts_return_code = subprocess.call(
+                    darts_command, stdout=darts_fp, stderr=subprocess.STDOUT)
+
+            if darts_return_code != 0:
+                print('error running darts', file=sys.stderr)
+                print_file_to_stderr(ostat_darts)
+            else:
+                write_fdr_file_from_darts_output(istat, ostat_pv, ostat_fdr)
         else:
             subprocess.call([rmats_c, '-i', istat, '-t', str(tstat), '-o', ostat_pv, '-c', str(cstat),], stdout=FNULL)
             subprocess.call([python_executable, fdr_cal, ostat_pv, ostat_fdr,], stdout=FNULL)
@@ -468,6 +500,42 @@ def process_counts(istat, tstat, counttype, ase, cstat, od, od_tmp, stat,
 
     FNULL.close()
     resfp.close()
+
+
+def write_fdr_file_from_darts_output(istat, ostat_pv, ostat_fdr):
+    darts_id_to_probability = dict()
+    with open(ostat_pv, 'rt') as darts_out_handle:
+        for line_i, line in enumerate(darts_out_handle):
+            columns = line.rstrip('\n').split('\t')
+            if line_i == 0:
+                try:
+                    darts_id_index = columns.index('ID')
+                    darts_post_index = columns.index('post_pr')
+                except ValueError:
+                    print('error parsing column names in darts output: {}'
+                          .format(line), file=sys.stderr)
+                    return
+
+                continue
+
+            id_str = columns[darts_id_index]
+            probability_str = columns[darts_post_index]
+            darts_id_to_probability[id_str] = probability_str
+
+    with open(istat, 'rt') as counts_handle:
+        with open(ostat_fdr, 'wt') as fdr_out_handle:
+            for line_i, line in enumerate(counts_handle):
+                columns = line.rstrip('\n').split('\t')
+                if line_i == 0:
+                    columns.extend(['PValue', 'FDR'])
+                else:
+                    id_str = columns[0]
+                    # DARTS will not produce an output value for an event if
+                    # there are 0 counts for a replicate.
+                    probability_str = darts_id_to_probability.get(id_str, 'NA')
+                    columns.extend([probability_str, 'NA'])
+
+                fdr_out_handle.write('{}\n'.format('\t'.join(columns)))
 
 
 def print_file_to_stderr(filename):
@@ -891,12 +959,12 @@ def main():
 
         process_counts(jc_it % (event_type), args.tstat, 'JC', event_type,
                        args.cstat, args.od, args.out_tmp_sub_dir, args.stat,
-                       args.paired_stats, python_executable, root_dir,
-                       args.imbalance_ratio)
+                       args.paired_stats, args.darts_model, args.darts_cutoff,
+                       python_executable, root_dir, args.imbalance_ratio)
         process_counts(jcec_it % (event_type), args.tstat, 'JCEC', event_type,
                        args.cstat, args.od, args.out_tmp_sub_dir, args.stat,
-                       args.paired_stats, python_executable, root_dir,
-                       args.imbalance_ratio)
+                       args.paired_stats, args.darts_model, args.darts_cutoff,
+                       python_executable, root_dir, args.imbalance_ratio)
 
     generate_summary(python_executable, args.od, root_dir)
     print('Done processing count files.')
