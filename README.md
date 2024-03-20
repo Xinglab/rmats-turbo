@@ -1,4 +1,4 @@
-# rMATS turbo v4.1.1
+# rMATS turbo v4.2.0
 
 [![Latest Release](https://img.shields.io/github/release/Xinglab/rmats-turbo.svg?label=Latest%20Release)](https://github.com/Xinglab/rmats-turbo/releases/latest)
 [![Total GitHub Downloads](https://img.shields.io/github/downloads/Xinglab/rmats-turbo/total.svg?label=Total%20GitHub%20Downloads)](https://github.com/Xinglab/rmats-turbo/releases)
@@ -33,11 +33,10 @@ rMATS turbo is the C/Cython version of rMATS (refer to http://rnaseq-mats.source
 
 ## Dependencies
 
-Tested with
+Tested on Ubuntu (20.04 LTS)
 
 - Python (3.6.12 or 2.7.15)
   * Cython (0.29.21 or 0.29.15 for Python 2)
-  * numpy (1.16.6 or 1.16.5 for Python 2)
 - BLAS, LAPACK
 - GNU Scientific Library (GSL 2.5)
 - GCC (>=5.4.0)
@@ -77,6 +76,8 @@ If rMATS was built with `./build_rmats --conda` then it should be run with:
 ```
 ./run_rmats {arguments}
 ```
+
+It takes about 30 minutes to install dependencies and build rMATS (as tested on an Ubuntu VM with 2 CPUs and 4 GB of memory)
 
 ## Test
 
@@ -222,7 +223,7 @@ The `--paired-stats` flag can then be given so that the paired statistical model
 
 #### Running the statistical model separately
 
-The rMATS statistical model requires an event definition file (`fromGTF.[AS].txt`) and count files (`{JC,JCEC}.raw.input.[AS].txt`, `individualCounts.[AS].txt`) as input. Usually those files are created by the post step which also runs the statistical model to create the final output file (`[AS].MATS.{JC,JCEC}.txt`). There may be situations where the event definitions and counts are already available and the statistical model can be run on those existing files with
+The rMATS statistical model requires an event definition file (`fromGTF.[AS].txt`) and a count file (`{JC,JCEC}.raw.input.[AS].txt`) as input. Usually those files are created by the post step which also runs the statistical model to create the final output file (`[AS].MATS.{JC,JCEC}.txt`). There may be situations where the event definitions and counts are already available and the statistical model can be run on those existing files with
 
 ```
 python rmats.py --od /path/to/dir_with_existing_files --tmp /path/to/tmp_dir --task stat
@@ -233,7 +234,7 @@ One use case for `--task stat` is when there are more than two groups to compare
 * Run the prep step for each BAM (can utilize multiple compute nodes)
 * Combine all the prep results in a single post step (`--statoff`)
 
-After all of the BAMs have been processed in this way, the output directory will contain the necessary `fromGTF.[AS].txt`, `{JC,JCEC}.raw.input.[AS].txt`, and `individualCounts.[AS].txt` files. The `fromGTF.[AS].txt` files can be used "as is" for all comparisons involving the samples, but the information that is relevant to a specific comparison needs to be extracted from the `{JC,JCEC}.raw.input.[AS].txt` and `individualCounts.[AS].txt` files. This can be done using [rMATS_P/prepare_stat_inputs.py](rMATS_P/prepare_stat_inputs.py). If there are 3 replicates in each of the 3 groups and they were provided in the `--b1` argument of the post step in ascending order (`group_1_rep_1, group_1_rep_2, ..., group_3_rep_3`) then the comparisons can be performed by
+After all of the BAMs have been processed in this way, the output directory will contain the necessary `fromGTF.[AS].txt` and `{JC,JCEC}.raw.input.[AS].txt` files. The `fromGTF.[AS].txt` files can be used "as is" for all comparisons involving the samples, but the information that is relevant to a specific comparison needs to be extracted from the `{JC,JCEC}.raw.input.[AS].txt` files. This can be done using [rMATS_P/prepare_stat_inputs.py](rMATS_P/prepare_stat_inputs.py). If there are 3 replicates in each of the 3 groups and they were provided in the `--b1` argument of the post step in ascending order (`group_1_rep_1, group_1_rep_2, ..., group_3_rep_3`) then the comparisons can be performed by
 
 * `python rMATS_P/prepare_stat_inputs.py --new-output-dir /path/to/1_to_2_output --old-output-dir /path/to/combined_post_output --group-1-indices 0,1,2 --group-2-indices 3,4,5`
 * `python rmats.py --od /path/to/1_to_2_output --tmp /path/to/1_to_2_tmp --task stat`
@@ -286,7 +287,8 @@ optional arguments:
                         Default: paired
   --libType {fr-unstranded,fr-firststrand,fr-secondstrand}
                         Library type. Use fr-firststrand or fr-secondstrand
-                        for strand-specific data. Default: fr-unstranded
+                        for strand-specific data. Only relevant to the prep
+                        step, not the post step. Default: fr-unstranded
   --readLength READLENGTH
                         The length of each read
   --variable-read-length
@@ -294,11 +296,17 @@ optional arguments:
                         to be processed. --readLength will still be used to
                         determine IncFormLen and SkipFormLen
   --anchorLength ANCHORLENGTH
-                        The anchor length. Default is 1
+                        The "anchor length" or "overhang length" used when
+                        counting the number of reads spanning splice
+                        junctions. A minimum number of "anchor length"
+                        nucleotides must be mapped to each end of a given
+                        junction. The minimum value is 1 and the default value
+                        is set to 1 to make use of all possible splice
+                        junction reads.
   --tophatAnchor TOPHATANCHOR
                         The "anchor length" or "overhang length" used in the
                         aligner. At least "anchor length" NT must be mapped to
-                        each end of a given junction. The default is 6. (Only
+                        each end of a given junction. The default is 1. (Only
                         if using fastq)
   --bi BINDEX           The directory name of the STAR binary indices (name of
                         the directory that contains the SA file). (Only if
@@ -323,6 +331,11 @@ optional arguments:
                         existing output files
   --statoff             Skip the statistical analysis
   --paired-stats        Use the paired stats model
+  --darts-model         Use the DARTS statistical model
+  --darts-cutoff DARTS_CUTOFF
+                        The cutoff of delta-PSI in the DARTS model. The output
+                        posterior probability is P(abs(delta_psi) > cutoff).
+                        The default is 0.05
   --novelSS             Enable detection of novel splice sites (unannotated
                         splice sites). Default is no detection of novel splice
                         sites
@@ -334,25 +347,27 @@ optional arguments:
   --fixed-event-set FIXED_EVENT_SET
                         A directory containing fromGTF.[AS].txt files to be
                         used instead of detecting a new set of events
+  --individual-counts   Output individualCounts.[AS_Event].txt files and add
+                        the individual count columns to [AS_Event].MATS.JC.txt
 ```
 
 ## Output
 
-Each alternative splicing event type has a corresponding set of output files. In the filename templates below `[AS_Event]` is replaced by one of [SE (skipped exon), MXE (mutually exclusive exons), A3SS (alternative 3' splice site), A5SS (alternative 5' splice site), RI (retained intron)] for the event specific filename.
+In rMATS-turbo, each alternative splicing pattern has a corresponding set of output files. In the filename templates below, `[AS_Event]` is replaced by one of the five basic alternative splicing patterns: skipped exon (SE), alternative 5' splice sites (A5SS), alternative 3' splice sites (A3SS), mutually exclusive exons (MXE), or retained intron (RI). As shown in the diagram, the number of supporting reads can be counted by the junction reads only (JC) or by both the junction and exon reads (JCEC). The output file from different counting methods is also indicated in the file name.
 
 ![rmats-turbo](docs/rmats_diagram.png)
 
 
 `--od` contains the final output files from the post step:
 
-- `[AS_Event].MATS.JC.txt`: Final output including only reads that span junctions defined by rmats (Junction Counts)
-- `[AS_Event].MATS.JCEC.txt`: Final output including both reads that span junctions defined by rmats (Junction Counts) and reads that do not cross an exon boundary (Exon Counts)
-- `fromGTF.[AS_Event].txt`: All identified alternative splicing (AS) events derived from GTF and RNA
-- `fromGTF.novelJunction.[AS_Event].txt`: Alternative splicing (AS) events which were identified only after considering the RNA (as opposed to analyzing the GTF in isolation). This does not include events with an unannotated splice site.
-- `fromGTF.novelSpliceSite.[AS_Event].txt`: This file contains only those events which include an unannotated splice site. Only relevant if `--novelSS` is enabled.
-- `JC.raw.input.[AS_Event].txt`: Event counts including only reads that span junctions defined by rmats (Junction Counts)
-- `JCEC.raw.input.[AS_Event].txt`: Event counts including both reads that span junctions defined by rmats (Junction Counts) and reads that do not cross an exon boundary (Exon Counts)
-- `individualCounts.[AS_Event].txt`: The breakdown of individual counts which contribute to the inclusion and skipping counts
+- `[AS_Event].MATS.JC.txt`: Final output that contains the list of events and read counts. Only splice junction reads are counted.
+- `[AS_Event].MATS.JCEC.txt`: Final output that contains the list of events and read counts. Both splice junction reads and exon body reads are counted.
+- `fromGTF.[AS_Event].txt`: All identified alternative splicing (AS) events derived from GTF and RNA.
+- `fromGTF.novelJunction.[AS_Event].txt`: Alternative splicing (AS) events which were identified only after considering the RNA (as opposed to analyzing the GTF in isolation). Does not include events with an unannotated splice site.
+- `fromGTF.novelSpliceSite.[AS_Event].txt`: This file contains only events that include an unannotated splice site. Only relevant if `--novelSS` is enabled.
+- `JC.raw.input.[AS_Event].txt`: Event counts including only reads that span junctions defined by rMATS.
+- `JCEC.raw.input.[AS_Event].txt`: Event counts including both reads that span junctions defined by rMATS and reads that do not cross an exon boundary.
+- `individualCounts.[AS_Event].txt`: The breakdown of individual counts which contribute to the inclusion and skipping counts (only if run with `--individual-counts`)
 - Shared columns:
   * `ID`: rMATS event id
   * `GeneID`: Gene id
@@ -374,16 +389,16 @@ Each alternative splicing event type has a corresponding set of output files. In
   * SE: `exonStart_0base` `exonEnd` `upstreamES` `upstreamEE` `downstreamES` `downstreamEE` `upstream_to_target_count` `target_to_downstream_count` `target_count` `upstream_to_downstream_count`
     + The inclusion form includes the target exon (`exonStart_0base`, `exonEnd`)
   * MXE: `1stExonStart_0base` `1stExonEnd` `2ndExonStart_0base` `2ndExonEnd` `upstreamES` `upstreamEE` `downstreamES` `downstreamEE` `upstream_to_first_count` `first_to_downstream_count` `first_count` `upstream_to_second_count` `second_to_downstream_count` `second_count`
-    + If the strand is `+` then the inclusion form includes the 1st exon (`1stExonStart_0base`, `1stExonEnd`) and skips the 2nd exon
-    + If the strand is `-` then the inclusion form includes the 2nd exon (`2ndExonStart_0base`, `2ndExonEnd`) and skips the 1st exon
+    + If the strand is `+`, then the inclusion form includes the 1st exon (`1stExonStart_0base`, `1stExonEnd`) and skips the 2nd exon
+    + If the strand is `-`, then the inclusion form includes the 2nd exon (`2ndExonStart_0base`, `2ndExonEnd`) and skips the 1st exon
   * A3SS, A5SS: `longExonStart_0base` `longExonEnd` `shortES` `shortEE` `flankingES` `flankingEE` `across_short_boundary_count` `long_to_flanking_count` `exclusive_to_long_count` `short_to_flanking_count`
     + The inclusion form includes the long exon (`longExonStart_0base`, `longExonEnd`) instead of the short exon (`shortES` `shortEE`)
   * RI: `riExonStart_0base` `riExonEnd` `upstreamES` `upstreamEE` `downstreamES` `downstreamEE` `upstream_to_intron_count` `intron_to_downstream_count` `intron_count` `upstream_to_downstream_count`
     + The inclusion form includes (retains) the intron (`upstreamEE`, `downstreamES`)
-- `summary.txt`: Brief summary of all AS event types. Includes the total event counts and significant event counts. By default, events are counted as significant if FDR <= 0.05. The summary can be regenerated with different criteria by running [rMATS_P/summary.py](rMATS_P/summary.py)
+- `summary.txt`: Brief summary of all alternative splicing event types. Includes the total event counts and significant event counts. By default, events are counted as significant if FDR <= 0.05. Summary can be regenerated with different criteria by running [rMATS_P/summary.py](rMATS_P/summary.py)
 
 `--tmp` contains the intermediate files generated by the prep step:
 
-- `{datetime}_{id}.rmats`: Summary generated from processing a BAM
-- `{datetime}_bam{sample_num}_{replicate_num}/Aligned.sortedByCoord.out.bam`: result of mapping input FASTQ files
-- `{datetime}_read_outcomes_by_bam.txt`: Counts of the reads used from each BAM along with counts of the reasons that reads were not able to be used
+- `[datetime]_[id].rmats`: Summary generated from processing a BAM
+- `[datetime]_bam[sample_num]_[replicate_num]/Aligned.sortedByCoord.out.bam`: Result of mapping input FASTQ files
+- `[datetime]_read_outcomes_by_bam.txt`: Counts of the reads used from each BAM along with counts of the reasons that reads were not able to be used

@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 ##
 # @file lite2.py
-# @brief 
+# @brief
 # @author Zhijie Xie
 # @date 2015-11-27
 
@@ -19,7 +19,7 @@ from datetime import datetime
 from rmatspipeline import run_pipe
 
 
-VERSION = 'v4.1.1'
+VERSION = 'v4.2.0'
 USAGE = '''%(prog)s [options]'''
 pipe_tasks = set(['prep', 'post', 'both',])
 
@@ -64,21 +64,22 @@ def doSTARMapping(args): ## do STAR mapping
 
                 os.makedirs(map_folder)
                 cmd = 'STAR --chimSegmentMin 2 --outFilterMismatchNmax 3'
+                cmd += ' --twopassMode Basic'
                 if not args.allow_clipping:
                     cmd += ' --alignEndsType EndToEnd'
 
-                cmd += ' --runThreadN 4 --outSAMstrandField intronMotif --outSAMtype BAM SortedByCoordinate '
-                cmd += '--alignSJDBoverhangMin ' + str(args.tophatAnchor) + ' --alignIntronMax 299999 --genomeDir ' + args.bIndex + ' --sjdbGTFfile ' + args.gtf; 
-                cmd += ' --outFileNamePrefix ' + map_folder + '/ --readFilesIn ';
+                cmd += ' --runThreadN ' + str(max([4, args.nthread])) + ' --outSAMstrandField intronMotif --outSAMtype BAM SortedByCoordinate '
+                cmd += '--alignSJDBoverhangMin ' + str(args.tophatAnchor) + ' --alignIntronMax 299999 --genomeDir ' + args.bIndex + ' --sjdbGTFfile ' + args.gtf
+                cmd += ' --outFileNamePrefix ' + map_folder + '/ --readFilesIn '
                 cmd += ' '.join(pair)
                 if pair[0].endswith('.gz'):
-                    cmd += ' --readFilesCommand zcat';
+                    cmd += ' --readFilesCommand zcat'
                 status,output = getstatusoutput(cmd)
                 print("mapping sample_%d, %s is done with status %s" % (i, ' '.join(pair), status))
                 if (int(status)!=0): ## it did not go well
                     print("error in mapping sample_%d, %s: %s" % (i, ' '.join(pair),status))
                     print("error detail: %s" % output)
-                    raise Exception();
+                    raise Exception()
                 print(output)
                 bams[i].append(os.path.join(map_folder, 'Aligned.sortedByCoord.out.bam'))
 
@@ -87,9 +88,15 @@ def doSTARMapping(args): ## do STAR mapping
 
 
 def get_args():
-    """TODO: Docstring for get_args.
-    :returns: TODO
+    """Supplies all the neccessary arguments to the argparse package, along with appropriate help, defaults, destinations, and choices.
+    The function itself takes no arguments.
+    Unless rMATS is called in stat mode, exits with appropriate errors if any of: sequence files, gtf, or readlength arguments are missing.
+    If an output directory and/or a temporary directory aren't supplied, exits with appropriate errors.
+    Creates output directory. Cleans user supplied bam or fastq filenames to remove trailing newlines, spaces, and commas.
+    If FASTQs are supplied but not BAMs, aligns FASTQs using STAR and sets the resultant BAM file locations as BAM file arguments.
+    If tstat is not supplied, sets the tstat argument equal to the nthread argument or the nthread default, if nthread is also not supplied..
 
+    Returns an arg object.
     """
     parser = argparse.ArgumentParser(usage=USAGE)
 
@@ -119,15 +126,15 @@ def get_args():
     parser.add_argument('--libType', action='store', default='fr-unstranded',
                         choices=['fr-unstranded', 'fr-firststrand',
                                  'fr-secondstrand',],
-                        help='Library type. Use fr-firststrand or fr-secondstrand for strand-specific data. Default: %(default)s', dest='dt')
+                        help='Library type. Use fr-firststrand or fr-secondstrand for strand-specific data. Only relevant to the prep step, not the post step. Default: %(default)s', dest='dt')
     parser.add_argument('--readLength', action='store', type=int,
                         help='The length of each read', dest='readLength')
     parser.add_argument('--variable-read-length', action='store_true',
                         help='Allow reads with lengths that differ from --readLength to be processed. --readLength will still be used to determine IncFormLen and SkipFormLen',
                         dest='variable_read_length')
     parser.add_argument('--anchorLength', action='store', type=int, default=1,
-                        help='The anchor length. Default is %(default)s', dest='anchorLength')
-    parser.add_argument('--tophatAnchor', action='store', type=int, default=6,
+                        help='The "anchor length" or "overhang length" used when counting the number of reads spanning splice junctions. A minimum number of "anchor length" nucleotides must be mapped to each end of a given junction. The minimum value is 1 and the default value is set to %(default)s to make use of all possible splice junction reads.', dest='anchorLength')
+    parser.add_argument('--tophatAnchor', action='store', type=int, default=1,
                         help='The "anchor length" or "overhang length" used in the aligner. At least "anchor length" NT must be mapped to each end of a given junction. The default is %(default)s. (Only if using fastq)', dest='tophatAnchor')
     parser.add_argument('--bi', action='store', default='',
                         help='The directory name of the STAR binary indices (name of the directory that contains the SA file). (Only if using fastq)', dest='bIndex')
@@ -146,6 +153,10 @@ def get_args():
                         help='Skip the statistical analysis', dest='stat')
     parser.add_argument('--paired-stats', action='store_true',
                         help='Use the paired stats model', dest='paired_stats')
+    parser.add_argument('--darts-model', action='store_true',
+                        help='Use the DARTS statistical model', dest='darts_model')
+    parser.add_argument('--darts-cutoff', action='store', type=float, default=0.05,
+                        help='The cutoff of delta-PSI in the DARTS model. The output posterior probability is P(abs(delta_psi) > cutoff). The default is %(default)s', dest='darts_cutoff')
 
     parser.add_argument('--novelSS', action='store_true',
                         help='Enable detection of novel splice sites (unannotated splice sites). Default is no detection of novel splice sites', dest='novelSS')
@@ -157,6 +168,9 @@ def get_args():
                         help='Allow alignments with soft or hard clipping to be used',
                         dest='allow_clipping')
     parser.add_argument('--fixed-event-set', action='store', help='A directory containing fromGTF.[AS].txt files to be used instead of detecting a new set of events')
+    parser.add_argument('--individual-counts', action='store_true',
+                        help='Output individualCounts.[AS_Event].txt files and add the individual count columns to [AS_Event].MATS.JC.txt',
+                        dest='individual_counts')
     # The help text for --imbalance ratio is not added to the parser
     # since the parameter is only intended for internal use and it
     # defaults to no filtering.
@@ -165,10 +179,12 @@ def get_args():
     # downstream junction reads (or downstream to upstream) exceeds
     # --imbalance-ratio. The events are filtered before running the
     # stats model so that the FDR is based on the filtered
-    # events. If not specified then no events are filtered
+    # events. If not specified then no events are filtered.
+    # Requires --individual-counts
     parser.add_argument('--imbalance-ratio', type=float,
                         help=argparse.SUPPRESS,
                         dest='imbalance_ratio')
+
 
     args = parser.parse_args()
 
@@ -188,19 +204,21 @@ def get_args():
         sys.exit('ERROR: output folder and temporary folder required. Please check --od and --tmp.')
     if (args.s1 != '' or args.s2 != '') and args.bIndex == '':
         sys.exit('ERROR: STAR binary indexes required. Please check --bi.')
+    if args.imbalance_ratio is not None and not args.individual_counts:
+        sys.exit('ERROR: --imbalance-ratio requires --individual-counts')
 
     if len(args.b1) > 0:
         with open(args.b1, 'r') as fp:
-            args.b1 = fp.read().strip(' ,\n')
+            args.b1 = fp.read().strip().strip(',')
     if len(args.b2) > 0:
         with open(args.b2, 'r') as fp:
-            args.b2 = fp.read().strip(' ,\n')
+            args.b2 = fp.read().strip().strip(',')
     if len(args.s1) > 0:
         with open(args.s1, 'r') as fp:
-            args.s1 = fp.read().strip(' ,\n')
+            args.s1 = fp.read().strip().strip(',')
     if len(args.s2) > 0:
         with open(args.s2, 'r') as fp:
-            args.s2 = fp.read().strip(' ,\n')
+            args.s2 = fp.read().strip().strip(',')
 
     create_output_dirs(args)
     args.prep_prefix = claim_prep_prefix(args.task, args.tmp)
@@ -220,10 +238,17 @@ def get_args():
 
 
 def check_integrity(input_bams_string, tmp_dir):
-    """TODO: Docstring for check_integrity.
-    :returns: TODO
-
     """
+    Purpose: Iterates over the supplied string of bam filenames and checks every file in tmp_dir
+    to ensure every bam filename has exactly one prep file. Exits with appropriate errors if
+    there are one or more of the following: duplicate bam files, bam files with no prep,
+    bam files with multiple preps, or prep files with no corresponding bam. Otherwise, prints 'Ok.'
+
+    Positional arguments:
+    First: input_bams_string - A comma-delimited string of all the input bam filenames.
+    Second: tmp_dir - The location of the current rMATS instance's temporary directory, ostensibly containing the prep files for the input bams.
+    """
+
     input_bams = input_bams_string.split(',')
     duplicate_input_bams = list()
     prep_count_by_bam = dict()
@@ -284,6 +309,7 @@ def check_integrity(input_bams_string, tmp_dir):
 def check_if_has_counts(counts_file_path):
     has_sample_1_counts = False
     has_sample_2_counts = False
+    has_replicates = False
     with open(counts_file_path, 'rt') as f_handle:
         for i, line in enumerate(f_handle):
             if i == 0:
@@ -292,11 +318,19 @@ def check_if_has_counts(counts_file_path):
             values = line.strip().split('\t')
             inc_sample_1_vs = values[1]
             inc_sample_2_vs = values[3]
+            sample_1_counts = inc_sample_1_vs.split(',')
+            sample_2_counts = inc_sample_2_vs.split(',')
             has_sample_1_counts = inc_sample_1_vs != ''
             has_sample_2_counts = inc_sample_2_vs != ''
+            has_replicates = ((len(sample_1_counts) > 1)
+                              or (len(sample_2_counts) > 1))
             break  # only check the first row
 
-    return has_sample_1_counts, has_sample_2_counts
+    return {
+        'has_sample_1_counts': has_sample_1_counts,
+        'has_sample_2_counts': has_sample_2_counts,
+        'has_replicates': has_replicates
+    }
 
 
 def filter_countfile(fn):
@@ -346,23 +380,47 @@ def filter_countfile(fn):
 
 
 def process_counts(istat, tstat, counttype, ase, cstat, od, od_tmp, stat,
-                   paired_stats, python_executable, root_dir, imbalance_ratio):
+                   paired_stats, use_darts_model, darts_cutoff,
+                   python_executable, root_dir, imbalance_ratio):
     """TODO: Docstring for process_counts.
     :returns: TODO
 
     """
     from_gtf_path = '%s/fromGTF.%s.txt' % (od, ase)
+    if not os.path.exists(from_gtf_path):
+        print('WARNING: Cannot find {}. Unable to produce final output files'
+              ' for {} {}.'.format(from_gtf_path, ase, counttype),
+              file=sys.stderr)
+        return
+
+    if not os.path.exists(istat):
+        print('WARNING: Cannot find {}. Unable to produce final output files'
+              ' for {} {}.'.format(istat, ase, counttype),
+              file=sys.stderr)
+        return
 
     indiv_counts_file_name = os.path.join(
         od, 'individualCounts.{}.txt'.format(ase))
     indiv_counts_temp_file_name = '{}.tmp'.format(indiv_counts_file_name)
+    has_indiv_counts = os.path.exists(indiv_counts_file_name)
 
-    for file_path in [from_gtf_path, istat, indiv_counts_file_name]:
-        if not os.path.exists(file_path):
-            print('WARNING: Cannot find {}. Unable to produce final output'
-                  ' files for {} {}.'.format(file_path, ase, counttype),
+    if stat:
+        has_counts_result = check_if_has_counts(istat)
+        has_sample_1_counts = has_counts_result['has_sample_1_counts']
+        has_sample_2_counts = has_counts_result['has_sample_2_counts']
+        has_replicates = has_counts_result['has_replicates']
+        if has_sample_1_counts and has_sample_2_counts:
+            filter_countfile(istat)
+        elif has_sample_1_counts or has_sample_2_counts:
+            print('WARNING: Statistical step is skipped for {} {} because only'
+                  ' one group is involved'.format(ase, counttype),
                   file=sys.stderr)
-            return
+            stat = False
+
+    if imbalance_ratio is not None:
+        filter_countfile_by_imbalance_ratio(
+            istat, indiv_counts_file_name, indiv_counts_temp_file_name,
+            imbalance_ratio, ase)
 
     sec_tmp = os.path.join(od_tmp, '%s_%s' % (counttype, ase))
     if os.path.exists(sec_tmp):
@@ -382,28 +440,15 @@ def process_counts(istat, tstat, counttype, ase, cstat, od, od_tmp, stat,
     ostat_pv = ostat % ('P-V')
     ostat_fdr = ostat % ('FDR')
     ostat_paired = ostat % ('paired')
+    ostat_darts = ostat % ('darts')
 
     rmats_c = os.path.join(root_dir, 'rMATS_C/rMATSexe')
     paired_model = os.path.join(root_dir, 'rMATS_R/paired_model.R')
+    darts_model = os.path.join(root_dir, 'rMATS_R/darts_model.R')
     pas_out = os.path.join(root_dir, 'rMATS_P/paste.py')
     inc_lvl = os.path.join(root_dir, 'rMATS_P/inclusion_level.py')
     fdr_cal = os.path.join(root_dir, 'rMATS_P/FDR.py')
     join_2f = os.path.join(root_dir, 'rMATS_P/joinFiles.py')
-
-    if stat:
-        has_sample_1_counts, has_sample_2_counts = check_if_has_counts(istat)
-        if has_sample_1_counts and has_sample_2_counts:
-            filter_countfile(istat)
-        elif has_sample_1_counts or has_sample_2_counts:
-            print('WARNING: Statistical step is skipped for {} {} because only'
-                  ' one group is involved'.format(ase, counttype),
-                  file=sys.stderr)
-            stat = False
-
-    if imbalance_ratio is not None:
-        filter_countfile_by_imbalance_ratio(
-            istat, indiv_counts_file_name, indiv_counts_temp_file_name,
-            imbalance_ratio, ase)
 
     # Calculate inclusion levels
     subprocess.call([python_executable, pas_out, '-i', istat, '--o1', ostat_id, '--o2', ostat_inp,], stdout=FNULL)
@@ -428,6 +473,19 @@ def process_counts(istat, tstat, counttype, ase, cstat, od, od_tmp, stat,
             if paired_model_return_code != 0:
                 print('error in paired model', file=sys.stderr)
                 print_file_to_stderr(ostat_paired)
+        elif use_darts_model:
+            has_replicates_str = 'true' if has_replicates else 'false'
+            darts_command = ['Rscript', darts_model, istat, ostat_pv,
+                             str(tstat), str(darts_cutoff), has_replicates_str]
+            with open(ostat_darts, 'wb') as darts_fp:
+                darts_return_code = subprocess.call(
+                    darts_command, stdout=darts_fp, stderr=subprocess.STDOUT)
+
+            if darts_return_code != 0:
+                print('error running darts', file=sys.stderr)
+                print_file_to_stderr(ostat_darts)
+            else:
+                write_fdr_file_from_darts_output(istat, ostat_pv, ostat_fdr)
         else:
             subprocess.call([rmats_c, '-i', istat, '-t', str(tstat), '-o', ostat_pv, '-c', str(cstat),], stdout=FNULL)
             subprocess.call([python_executable, fdr_cal, ostat_pv, ostat_fdr,], stdout=FNULL)
@@ -437,11 +495,47 @@ def process_counts(istat, tstat, counttype, ase, cstat, od, od_tmp, stat,
     # Combine into final output
     subprocess.call(['paste', ostat_fdr, ostat_il,], stdout=resfp)
     subprocess.call([python_executable, join_2f, from_gtf_path, resfp.name, '0', '0', finfn,], stdout=FNULL)
-    append_individual_counts(indiv_counts_file_name, finfn,
-                             indiv_counts_temp_file_name)
+    if has_indiv_counts:
+        append_individual_counts(indiv_counts_file_name, finfn, indiv_counts_temp_file_name)
 
     FNULL.close()
     resfp.close()
+
+
+def write_fdr_file_from_darts_output(istat, ostat_pv, ostat_fdr):
+    darts_id_to_probability = dict()
+    with open(ostat_pv, 'rt') as darts_out_handle:
+        for line_i, line in enumerate(darts_out_handle):
+            columns = line.rstrip('\n').split('\t')
+            if line_i == 0:
+                try:
+                    darts_id_index = columns.index('ID')
+                    darts_post_index = columns.index('post_pr')
+                except ValueError:
+                    print('error parsing column names in darts output: {}'
+                          .format(line), file=sys.stderr)
+                    return
+
+                continue
+
+            id_str = columns[darts_id_index]
+            probability_str = columns[darts_post_index]
+            darts_id_to_probability[id_str] = probability_str
+
+    with open(istat, 'rt') as counts_handle:
+        with open(ostat_fdr, 'wt') as fdr_out_handle:
+            for line_i, line in enumerate(counts_handle):
+                columns = line.rstrip('\n').split('\t')
+                if line_i == 0:
+                    columns.extend(['PValue', 'FDR'])
+                else:
+                    id_str = columns[0]
+                    # DARTS will not produce an output value for an event if
+                    # there are 0 counts for a replicate.
+                    probability_str = darts_id_to_probability.get(id_str, 'NA')
+                    columns.extend([probability_str, 'NA'])
+
+                fdr_out_handle.write('{}\n'.format('\t'.join(columns)))
 
 
 def print_file_to_stderr(filename):
@@ -477,17 +571,20 @@ def filter_countfile_by_imbalance_ratio(
 
     if error:
         formatted_message = (
-            'error in filter_countfile_by_imbalance_ratio({}, {}, {}, {}, {})'
+            'error in filter_countfile_by_imbalance_ratio({}, {}, {}, {}, {}): {}'
             .format(counts_file_name, indiv_counts_file_name, temp_file_name,
-                    imbalance_ratio, splicing_event_type))
+                    imbalance_ratio, splicing_event_type, error))
         print(formatted_message, file=sys.stderr)
-
-    shutil.move(temp_file_name, counts_file_name)
+    else:
+        shutil.move(temp_file_name, counts_file_name)
 
 
 def filter_countfile_by_imbalance_ratio_with_handles(
         counts_file_handle, indiv_counts_file_handle, temp_file_handle,
         imbalance_ratio, splicing_event_type):
+    if imbalance_ratio == 0:
+        return 'imbalance_ratio == 0'
+
     inverse_imbalance_ratio = 1 / imbalance_ratio
     calculate_ratios = get_calculate_ratios_for_event_type(splicing_event_type)
     if calculate_ratios is None:
@@ -535,8 +632,8 @@ def append_individual_counts(counts_file_name, mats_file_name, temp_file_name):
             'error in append_individual_counts({}, {}, {}): {}'
             .format(counts_file_name, mats_file_name, temp_file_name, error))
         print(formatted_message, file=sys.stderr)
-
-    shutil.move(temp_file_name, mats_file_name)
+    else:
+        shutil.move(temp_file_name, mats_file_name)
 
 
 def append_individual_counts_with_handles(counts_file_handle, mats_file_handle,
@@ -771,7 +868,7 @@ def claim_prep_prefix(task, tmp_dir):
     prep_prefix = None
     while True:
         prep_prefix = datetime.fromtimestamp(time.time()).strftime(
-            '%Y-%m-%d-%H:%M:%S_%f')
+            '%Y-%m-%d-%H_%M_%S_%f')
         file_path = file_name_template.format(prep_prefix)
         if not os.path.exists(file_path):
             with open(file_path, 'wt'):
@@ -786,13 +883,56 @@ def create_output_dirs(args):
     args.out_tmp_sub_dir = os.path.join(args.od, 'tmp')
     for dir_path in [args.od, args.out_tmp_sub_dir, args.tmp]:
         if not os.path.exists(dir_path):
-            os.makedirs(dir_path)   # python2: makedirs() got an unexpected keyword argument 'exist_ok' 
+            os.makedirs(dir_path)   # python2: makedirs() got an unexpected keyword argument 'exist_ok'
+
+
+def apply_id_mapping(event_type, out_dir):
+    id_to_orig = dict()
+    mapping_path = os.path.join(out_dir, 'id_mapping.{}.txt'.format(event_type))
+    with open(mapping_path, 'rt') as map_f:
+        for i, line in enumerate(map_f):
+            values = line.strip().split('\t')
+            if i == 0:
+                expected_mapping_headers = ['original_id', 'mapped_id']
+                if values != expected_mapping_headers:
+                    sys.exit('ERROR: expected headers in {} to be {}'
+                             ' but found {}'.format(
+                                 mapping_path, expected_mapping_headers, values))
+
+                continue
+
+            id_to_orig[values[1]] = values[0]
+
+    file_templates = ['fromGTF.{}.txt', 'JC.raw.input.{}.txt',
+                      'JCEC.raw.input.{}.txt']
+    for file_template in file_templates:
+        file_path = os.path.join(out_dir, file_template.format(event_type))
+        with open(file_path, 'rt') as in_f:
+            # using mapping_path as a temporary file which is then removed
+            with open(mapping_path, 'wt') as out_f:
+                for i, line in enumerate(in_f):
+                    values = line.strip().split('\t')
+                    if i == 0:
+                        id_i = values.index('ID')
+                        out_f.write(line)
+                        continue
+
+                    mapped_id = values[id_i]
+                    values[id_i] = id_to_orig[mapped_id]
+                    out_f.write('{}\n'.format('\t'.join(values)))
+
+        shutil.move(mapping_path, file_path)
 
 
 def main():
-    """TODO: Docstring for main.
-    :returns: TODO
-
+    """Takes no arguments.
+    Processes arguments supplied when rmats.py was called using get_args().
+    If task argument is 'inte', checks BAM and prep file integrity.
+    If task argument is 'prep', 'post', or 'both', runs pipeline using seperate module in rmatspipeline.
+    If task argument is not valid, returns nothing.
+    For each splicing event type, processes counts and outputs files.
+    Generates output summary.
+    Prints 'Done processing count files.' and returns nothing.
     """
     args = get_args()
 
@@ -814,14 +954,17 @@ def main():
 
     print('Processing count files.')
     for event_type in ['SE', 'MXE', 'A3SS', 'A5SS', 'RI']:
+        if args.fixed_event_set:
+            apply_id_mapping(event_type, args.od)
+
         process_counts(jc_it % (event_type), args.tstat, 'JC', event_type,
                        args.cstat, args.od, args.out_tmp_sub_dir, args.stat,
-                       args.paired_stats, python_executable, root_dir,
-                       args.imbalance_ratio)
+                       args.paired_stats, args.darts_model, args.darts_cutoff,
+                       python_executable, root_dir, args.imbalance_ratio)
         process_counts(jcec_it % (event_type), args.tstat, 'JCEC', event_type,
                        args.cstat, args.od, args.out_tmp_sub_dir, args.stat,
-                       args.paired_stats, python_executable, root_dir,
-                       args.imbalance_ratio)
+                       args.paired_stats, args.darts_model, args.darts_cutoff,
+                       python_executable, root_dir, args.imbalance_ratio)
 
     generate_summary(python_executable, args.od, root_dir)
     print('Done processing count files.')

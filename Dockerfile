@@ -1,10 +1,11 @@
-FROM debian:buster
+FROM debian:bullseye
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
        ca-certificates \
        cmake \
-       cython \
+       curl \
+       cython3 \
        g++ \
        gfortran \
        git \
@@ -12,8 +13,8 @@ RUN apt-get update \
        libgsl-dev \
        liblapack-dev \
        make \
-       python-dev \
-       python-numpy \
+       python-is-python3 \
+       python3-dev \
        r-base \
        r-cran-nloptr \
        zlib1g-dev \
@@ -23,6 +24,7 @@ RUN apt-get update \
     && cd /rmats_build \
     && git clone https://github.com/Xinglab/rmats-turbo.git \
     && cd rmats-turbo \
+    # && git checkout {commit} \
     # The build will source setup_environment.sh which will source ~/.bashrc.
     # Skip that by truncating setup_environment.sh
     && echo '' > setup_environment.sh \
@@ -40,9 +42,19 @@ RUN apt-get update \
     && mkdir rMATS_R \
     && cp /rmats_build/rmats-turbo/rMATS_R/*.R ./rMATS_R \
     # Remove build dir
-    && rm -rf /rmats_build
+    && rm -rf /rmats_build \
+    # Build STAR
+    && mkdir /star_build \
+    && cd /star_build \
+    && curl -L -O https://github.com/alexdobin/STAR/archive/refs/tags/2.7.9a.tar.gz \
+    && tar -xvf 2.7.9a.tar.gz \
+    && cd STAR-2.7.9a/source \
+    && make STAR \
+    && cp STAR /usr/local/bin
 
-# Set defaults for running the image
+# Set defaults for running the image.
+# The ENTRYPOINT AND CMD are empty to be compatible with
+# CWL and WDL implementations that cannot override those values
 WORKDIR /rmats
-ENTRYPOINT ["python", "/rmats/rmats.py"]
-CMD ["--help"]
+ENTRYPOINT []
+CMD []

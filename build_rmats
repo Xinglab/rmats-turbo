@@ -1,45 +1,42 @@
 #!/bin/bash
 
 function show_usage() {
-  echo "$0 [--conda] [--no-paired-model]" 1>&2
+  echo "$0 [--conda] [--no-paired-model] [--no-darts-model]" 1>&2
   echo
   echo '--conda: create a conda environment for Python and R dependencies' 1>&2
   echo '--no-paired-model: do not install dependencies for the paired model' 1>&2
+  echo '--no-darts-model: do not install dependencies for the darts model' 1>&2
 }
 
 function parse_arguments() {
   local CONDA_FLAG='--conda'
   local NO_PAIRED_FLAG='--no-paired-model'
+  local NO_DARTS_FLAG='--no-darts-model'
   USE_CONDA=0
   USE_PAIRED=1
-  if [[ "$#" -eq 1 ]]; then
-    if [[ "$1" == "${CONDA_FLAG}" ]]; then
+  USE_DARTS=1
+
+  local ARG_ARRAY=( "$@" )
+  for ARG in "${ARG_ARRAY[@]}"; do
+    if [[ "${ARG}" == "${CONDA_FLAG}" ]]; then
       USE_CONDA=1
-    elif [[ "$1" == "${NO_PAIRED_FLAG}" ]]; then
+    elif [[ "${ARG}" == "${NO_PAIRED_FLAG}" ]]; then
       USE_PAIRED=0
+    elif [[ "${ARG}" == "${NO_DARTS_FLAG}" ]]; then
+      USE_DARTS=0
     else
       show_usage
       return 1
     fi
-  elif [[ "$#" -eq 2 ]]; then
-    if [[ ("$1" == "${CONDA_FLAG}" && "$2" == "${NO_PAIRED_FLAG}")\
-            || ("$1" == "${NO_PAIRED_FLAG}" && "$2" == "${CONDA_FLAG}") ]]; then
-      USE_CONDA=1
-      USE_PAIRED=0
-    else
-      show_usage
-      return 1
-    fi
-  elif [[ "$#" -ne 0 ]]; then
-    show_usage
-    return 1
-  fi
+  done
 }
 
 function set_script_dir() {
+  local ORIG_DIR="$(pwd)" || return 1
   local REL_SCRIPT_DIR="$(dirname ${BASH_SOURCE[0]})" || return 1
   cd "${REL_SCRIPT_DIR}" || return 1
   SCRIPT_DIR="$(pwd)" || return 1
+  cd "${ORIG_DIR}" || return 1
 }
 
 function create_and_activate_conda_env() {
@@ -47,6 +44,9 @@ function create_and_activate_conda_env() {
 
   conda create --prefix "${CONDA_ENV_PATH}" || return 1
   conda activate "${CONDA_ENV_PATH}" || return 1
+
+  # This lets the build find zlib.h from conda
+  export CPATH="${CPATH}:${CONDA_ENV_PATH}/include" || return 1
 }
 
 function install_conda_dependencies() {
@@ -54,14 +54,30 @@ function install_conda_dependencies() {
   # be resolved all at once.
   local ALL_REQUIREMENTS="${SCRIPT_DIR}/conda_requirements.txt"
   local PYTHON_REQUIREMENTS="${SCRIPT_DIR}/python_conda_requirements.txt"
-  local R_REQUIREMENTS="${SCRIPT_DIR}/r_conda_requirements.txt"
+  local PAIRED_REQUIREMENTS="${SCRIPT_DIR}/paired_model_conda_requirements.txt"
+  local DARTS_REQUIREMENTS="${SCRIPT_DIR}/darts_model_conda_requirements.txt"
   cp "${PYTHON_REQUIREMENTS}" "${ALL_REQUIREMENTS}" || return 1
 
   if [[ "${USE_PAIRED}" -eq 1 ]]; then
-    cat "${R_REQUIREMENTS}" >> "${ALL_REQUIREMENTS}" || return 1
+    cat "${PAIRED_REQUIREMENTS}" >> "${ALL_REQUIREMENTS}" || return 1
+  fi
+  if [[ "${USE_DARTS}" -eq 1 ]]; then
+    cat "${DARTS_REQUIREMENTS}" >> "${ALL_REQUIREMENTS}" || return 1
   fi
 
   conda install -c conda-forge --file "${ALL_REQUIREMENTS}" || return 1
+}
+
+function set_compiler_environment_variables() {
+  if [[ -z "${FC}" ]]; then
+    export FC="$(which gfortran)" || return 1
+  fi
+  if [[ -z "${CC}" ]]; then
+    export CC="$(which gcc)" || return 1
+  fi
+  if [[ -z "${CXX}" ]]; then
+    export CXX="$(which g++)" || return 1
+  fi
 }
 
 function build_rmats() {
@@ -77,7 +93,15 @@ function install_pairadise() {
     git clone https://github.com/Xinglab/PAIRADISE.git || return 1
   fi
 
-  Rscript install_r_deps.R || return 1
+  Rscript install_r_deps.R paired || return 1
+}
+
+function install_darts() {
+  if [[ ! -d DARTS ]]; then
+    git clone https://github.com/Xinglab/DARTS.git || return 1
+  fi
+
+  Rscript install_r_deps.R darts || return 1
 }
 
 function main() {
@@ -90,10 +114,15 @@ function main() {
     install_conda_dependencies || return 1
   fi
 
+  set_compiler_environment_variables || return 1
   build_rmats || return 1
 
   if [[ "${USE_PAIRED}" -eq 1 ]]; then
     install_pairadise || return 1
+  fi
+
+  if [[ "${USE_DARTS}" -eq 1 ]]; then
+    install_darts || return 1
   fi
 
   if [[ "${USE_CONDA}" -eq 1 ]]; then

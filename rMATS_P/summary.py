@@ -1,7 +1,6 @@
 from __future__ import print_function
 
 import argparse
-import csv
 import math
 import os.path
 import sys
@@ -68,8 +67,13 @@ def count_events(file_path, args):
     sig_sample_2_higher = 0
     if os.path.exists(file_path):
         with open(file_path, 'rt') as file_handle:
-            reader = csv.DictReader(file_handle, delimiter='\t')
-            for row in reader:
+            for line_i, line in enumerate(file_handle):
+                columns = line.strip().split('\t')
+                if line_i == 0:
+                    headers = columns
+                    continue
+
+                row = dict(zip(headers, columns))
                 total += 1
                 p_value = parse_float(row['PValue'])
                 fdr = parse_float(row['FDR'])
@@ -96,7 +100,8 @@ def count_events(file_path, args):
 
 def summarize(args, output_file_handle):
     headers = [
-        'EventType', 'TotalEventsJC', 'TotalEventsJCEC', 'SignificantEventsJC',
+        'EventType', 'EventTypeDescription', 'TotalEventsJC',
+        'TotalEventsJCEC', 'SignificantEventsJC',
         'SigEventsJCSample1HigherInclusion',
         'SigEventsJCSample2HigherInclusion', 'SignificantEventsJCEC',
         'SigEventsJCECSample1HigherInclusion',
@@ -104,7 +109,15 @@ def summarize(args, output_file_handle):
     ]
 
     print('\t'.join(headers), file=output_file_handle)
+    event_types = {
+        'SE': 'skipped exon',
+        'A5SS': "alternative 5' splice sites",
+        'A3SS': "alternative 3' splice sites",
+        'MXE': 'mutually exclusive exons',
+        'RI': 'retained intron'
+    }
     for event in ['SE', 'A5SS', 'A3SS', 'MXE', 'RI']:
+        description = event_types[event]
         jc_path = os.path.join(args.output_dir, '{}.MATS.JC.txt'.format(event))
         jcec_path = os.path.join(args.output_dir,
                                  '{}.MATS.JCEC.txt'.format(event))
@@ -114,7 +127,7 @@ def summarize(args, output_file_handle):
         jcec_total = jcec_event_counts['total']
 
         values = [
-            event, jc_total, jcec_total, jc_event_counts['sig'],
+            event, description, jc_total, jcec_total, jc_event_counts['sig'],
             jc_event_counts['sig_sample_1_higher'],
             jc_event_counts['sig_sample_2_higher'], jcec_event_counts['sig'],
             jcec_event_counts['sig_sample_1_higher'],
