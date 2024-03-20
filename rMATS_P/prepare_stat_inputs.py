@@ -66,15 +66,6 @@ def prepare_stat_inputs(args):
         print('copying {} to {}'.format(old_from_gtf, new_from_gtf))
         shutil.copy(old_from_gtf, new_from_gtf)
 
-        indiv_name = 'individualCounts.{}.txt'.format(event_type)
-        old_indiv = os.path.join(args.old_output_dir, indiv_name)
-        new_indiv = os.path.join(args.new_output_dir, indiv_name)
-        print('creating {} based on {}'.format(new_indiv, old_indiv))
-        with open(old_indiv, 'rt') as old_indiv_handle:
-            with open(new_indiv, 'wt') as new_indiv_handle:
-                create_indiv_file(old_indiv_handle, new_indiv_handle,
-                                  group_1_indices, group_2_indices)
-
         for count_type in ['JC', 'JCEC']:
             count_name = '{}.raw.input.{}.txt'.format(count_type, event_type)
             old_counts = os.path.join(args.old_output_dir, count_name)
@@ -128,31 +119,6 @@ def create_indiv_file(old_indiv_handle, new_indiv_handle, group_1_indices,
             new_values.append(','.join(new_sub_values))
 
         write_tsv_line(new_indiv_handle, new_values)
-
-
-def create_indiv_file(old_indiv_handle, new_indiv_handle, group_1_indices,
-                      group_2_indices):
-    header = old_indiv_handle.readline()
-    header_columns = header.strip().split('\t')
-    if not header_columns or header_columns[0] != 'ID':
-        sys.exit('Unexpected header columns: {}. Expected ID to be the first'
-                 ' column'.format(header_columns))
-
-    new_indiv_handle.write(header)
-    for line in old_indiv_handle:
-        values = line.strip().split('\t')
-        id_val = values[0]
-        new_values = [id_val]
-        for value in values[1:]:
-            sub_values = value.split(',')
-            new_sub_values = list()
-            for i in group_1_indices + group_2_indices:
-                new_sub_values.append(sub_values[i])
-
-            new_values.append(','.join(new_sub_values))
-
-        new_line = '\t'.join(new_values)
-        new_indiv_handle.write('{}\n'.format(new_line))
 
 
 def split_and_combine(vals_1, vals_2):
