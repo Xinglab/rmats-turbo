@@ -21,15 +21,25 @@ class Test(tests.base_test.BaseTest):
                                                  'generated_input')
         self._out_dir_all = os.path.join(self._test_dir, 'out_all')
         self._tmp_dir_all = os.path.join(self._test_dir, 'tmp_all')
+        self._out_dir_all_junctions = os.path.join(self._test_dir,
+                                                   'out_all_junctions')
+        self._tmp_dir_all_junctions = os.path.join(self._test_dir,
+                                                   'tmp_all_junctions')
         self._out_dir_select = os.path.join(self._test_dir, 'out_select')
         self._tmp_dir_select = os.path.join(self._test_dir, 'tmp_select')
+        self._out_dir_select_junctions = os.path.join(self._test_dir,
+                                                      'out_select_junctions')
+        self._tmp_dir_select_junctions = os.path.join(self._test_dir,
+                                                      'tmp_select_junctions')
         self._out_dir_just_se = os.path.join(self._test_dir, 'out_just_se')
         self._tmp_dir_just_se = os.path.join(self._test_dir, 'tmp_just_se')
 
         tests.util.recreate_dirs([
             self._generated_input_dir, self._out_dir_all, self._tmp_dir_all,
-            self._out_dir_select, self._tmp_dir_select, self._out_dir_just_se,
-            self._tmp_dir_just_se,
+            self._out_dir_all_junctions, self._tmp_dir_all_junctions,
+            self._out_dir_select, self._tmp_dir_select,
+            self._out_dir_select_junctions, self._tmp_dir_select_junctions,
+            self._out_dir_just_se, self._tmp_dir_just_se,
             self._command_output_dir()
         ])
 
@@ -55,7 +65,9 @@ class Test(tests.base_test.BaseTest):
             self._gtf_path, self._exons_by_transcript())
         self._sub_steps = [
             'statoff',
+            'statoff_junctions',
             'selected_stat',
+            'selected_stat_junctions',
             'just_se',
             'deferred_stat',
         ]
@@ -78,10 +90,23 @@ class Test(tests.base_test.BaseTest):
                 self._tmp_dir_all, '--b1', self._sample_1_bams_path, '--b2',
                 self._sample_2_bams_path, '--task', 'both', '--statoff'
             ]
+        if self._sub_step == 'statoff_junctions':
+            return [
+                '--gtf', self._gtf_path, '-t', self._read_type, '--readLength',
+                str(self._read_length), '--od', self._out_dir_all_junctions,
+                '--tmp', self._tmp_dir_all_junctions, '--b1',
+                self._sample_1_bams_path, '--b2', self._sample_2_bams_path,
+                '--task', 'both', '--statoff', '--individual-counts'
+            ]
         if self._sub_step == 'selected_stat':
             return [
                 '--od', self._out_dir_select, '--tmp', self._tmp_dir_select,
                 '--task', 'stat'
+            ]
+        if self._sub_step == 'selected_stat_junctions':
+            return [
+                '--od', self._out_dir_select_junctions, '--tmp',
+                self._tmp_dir_select_junctions, '--task', 'stat'
             ]
         if self._sub_step == 'just_se':
             return [
@@ -99,12 +124,18 @@ class Test(tests.base_test.BaseTest):
     def _setup_sub_step(self):
         if self._sub_step == 'selected_stat':
             self._setup_selected_stat()
+        if self._sub_step == 'selected_stat_junctions':
+            self._setup_selected_stat_junctions()
         if self._sub_step == 'just_se':
             self._setup_just_se()
 
     def _setup_selected_stat(self):
         self._prepare_stat_inputs(self._out_dir_select, self._out_dir_all, [1],
                                   [0, 3])
+
+    def _setup_selected_stat_junctions(self):
+        self._prepare_stat_inputs(self._out_dir_select_junctions,
+                                  self._out_dir_all_junctions, [1], [0, 3])
 
     def _setup_just_se(self):
         orig_from_gtf = os.path.join(self._out_dir_all, 'fromGTF.SE.txt')
@@ -241,9 +272,13 @@ class Test(tests.base_test.BaseTest):
 
     def _check_results(self):
         if self._sub_step == 'statoff':
-            self._check_results_statoff()
+            self._check_results_statoff(junctions=False)
+        elif self._sub_step == 'statoff_junctions':
+            self._check_results_statoff(junctions=True)
         elif self._sub_step == 'selected_stat':
-            self._check_results_selected_stat()
+            self._check_results_selected_stat(junctions=False)
+        elif self._sub_step == 'selected_stat_junctions':
+            self._check_results_selected_stat(junctions=True)
         elif self._sub_step == 'just_se':
             self._check_results_just_se()
         elif self._sub_step == 'deferred_stat':
@@ -263,14 +298,18 @@ class Test(tests.base_test.BaseTest):
 
         return floats
 
-    def _check_results_statoff(self):
+    def _check_results_statoff(self, junctions=False):
         self._check_no_error_results()
+        out_dir = self._out_dir_all
+        if junctions:
+            out_dir = self._out_dir_all_junctions
 
-        se_mats_jc_path = os.path.join(self._out_dir_all, 'SE.MATS.JC.txt')
+        se_mats_jc_path = os.path.join(out_dir, 'SE.MATS.JC.txt')
         se_mats_jc_header, se_mats_jc_rows, error = output_parser.parse_mats_jc(
             se_mats_jc_path)
         self.assertFalse(error)
-        self._check_se_mats_jc_header(se_mats_jc_header)
+        self._check_se_mats_jc_header(se_mats_jc_header,
+                                      has_individual=junctions)
         self.assertEqual(len(se_mats_jc_rows), 2)
         for row in se_mats_jc_rows:
             self.assertIn(row['exonStart_0base'], ['200', '800'])
@@ -286,6 +325,16 @@ class Test(tests.base_test.BaseTest):
                 self.assertEqual(self._read_floats(row['IncLevel2']),
                                  [1.0, 1.0])
                 self.assertEqual(float(row['IncLevelDifference']), -0.533)
+                if junctions:
+                    self.assertEqual(row['upstream_to_target_count'],
+                                     '10,15,10,10')
+                    self.assertEqual(row['target_to_downstream_count'],
+                                     '0,0,0,0')
+                    self.assertEqual(row['target_count'], '10,15,10,10')
+                    self.assertEqual(row['upstream_to_downstream_count'],
+                                     '10,5,0,0')
+                else:
+                    self.assertNotIn('upstream_to_target_count', row)
             elif row['exonStart_0base'] == '800':
                 self.assertEqual(row['IJC_SAMPLE_1'], '10,10')
                 self.assertEqual(row['SJC_SAMPLE_1'], '0,0')
@@ -298,12 +347,23 @@ class Test(tests.base_test.BaseTest):
                 self.assertEqual(self._read_floats(row['IncLevel2']),
                                  [0.333, 0.6])
                 self.assertEqual(float(row['IncLevelDifference']), 0.533)
+                if junctions:
+                    self.assertEqual(row['upstream_to_target_count'],
+                                     '10,10,10,15')
+                    self.assertEqual(row['target_to_downstream_count'],
+                                     '0,0,0,0')
+                    self.assertEqual(row['target_count'], '10,10,10,15')
+                    self.assertEqual(row['upstream_to_downstream_count'],
+                                     '0,0,10,5')
+                else:
+                    self.assertNotIn('upstream_to_target_count', row)
 
-        se_mats_jcec_path = os.path.join(self._out_dir_all, 'SE.MATS.JCEC.txt')
+        se_mats_jcec_path = os.path.join(out_dir, 'SE.MATS.JCEC.txt')
         se_mats_jcec_header, se_mats_jcec_rows, error = (
             output_parser.parse_mats_jcec(se_mats_jcec_path))
         self.assertFalse(error)
-        self._check_se_mats_jcec_header(se_mats_jcec_header)
+        self._check_se_mats_jcec_header(se_mats_jcec_header,
+                                        has_individual=junctions)
         self.assertEqual(len(se_mats_jcec_rows), 2)
         for row in se_mats_jcec_rows:
             self.assertIn(row['exonStart_0base'], ['200', '800'])
@@ -319,82 +379,101 @@ class Test(tests.base_test.BaseTest):
                 self.assertEqual(self._read_floats(row['IncLevel2']),
                                  [1.0, 1.0])
                 self.assertEqual(float(row['IncLevelDifference']), -0.47)
+                if junctions:
+                    self.assertEqual(row['upstream_to_target_count'],
+                                     '10,15,10,10')
+                    self.assertEqual(row['target_to_downstream_count'],
+                                     '0,0,0,0')
+                    self.assertEqual(row['target_count'], '10,15,10,10')
+                    self.assertEqual(row['upstream_to_downstream_count'],
+                                     '10,5,0,0')
+                else:
+                    self.assertNotIn('upstream_to_target_count', row)
 
-        mxe_mats_jc_path = os.path.join(self._out_dir_all, 'MXE.MATS.JC.txt')
+        mxe_mats_jc_path = os.path.join(out_dir, 'MXE.MATS.JC.txt')
         mxe_mats_jc_header, mxe_mats_jc_rows, error = (
             output_parser.parse_mats_jc(mxe_mats_jc_path))
         self.assertFalse(error)
-        self._check_mxe_mats_jc_header(mxe_mats_jc_header)
+        self._check_mxe_mats_jc_header(mxe_mats_jc_header,
+                                       has_individual=junctions)
         self.assertEqual(len(mxe_mats_jc_rows), 1)
         self.assertEqual(mxe_mats_jc_rows[0]['FDR'], 'NA')
 
-        mxe_mats_jcec_path = os.path.join(self._out_dir_all,
-                                          'MXE.MATS.JCEC.txt')
+        mxe_mats_jcec_path = os.path.join(out_dir, 'MXE.MATS.JCEC.txt')
         mxe_mats_jcec_header, mxe_mats_jcec_rows, error = (
             output_parser.parse_mats_jcec(mxe_mats_jcec_path))
         self.assertFalse(error)
-        self._check_mxe_mats_jcec_header(mxe_mats_jcec_header)
+        self._check_mxe_mats_jcec_header(mxe_mats_jcec_header,
+                                         has_individual=junctions)
         self.assertEqual(len(mxe_mats_jcec_rows), 1)
         self.assertEqual(mxe_mats_jcec_rows[0]['FDR'], 'NA')
 
-        a5ss_mats_jc_path = os.path.join(self._out_dir_all, 'A5SS.MATS.JC.txt')
+        a5ss_mats_jc_path = os.path.join(out_dir, 'A5SS.MATS.JC.txt')
         a5ss_mats_jc_header, a5ss_mats_jc_rows, error = (
             output_parser.parse_mats_jc(a5ss_mats_jc_path))
         self.assertFalse(error)
-        self._check_a35ss_mats_jc_header(a5ss_mats_jc_header)
+        self._check_a35ss_mats_jc_header(a5ss_mats_jc_header,
+                                         has_individual=junctions)
         self.assertEqual(len(a5ss_mats_jc_rows), 1)
         self.assertEqual(a5ss_mats_jc_rows[0]['FDR'], 'NA')
 
-        a5ss_mats_jcec_path = os.path.join(self._out_dir_all,
-                                           'A5SS.MATS.JCEC.txt')
+        a5ss_mats_jcec_path = os.path.join(out_dir, 'A5SS.MATS.JCEC.txt')
         a5ss_mats_jcec_header, a5ss_mats_jcec_rows, error = (
             output_parser.parse_mats_jcec(a5ss_mats_jcec_path))
         self.assertFalse(error)
-        self._check_a35ss_mats_jcec_header(a5ss_mats_jcec_header)
+        self._check_a35ss_mats_jcec_header(a5ss_mats_jcec_header,
+                                           has_individual=junctions)
         self.assertEqual(len(a5ss_mats_jcec_rows), 1)
         self.assertEqual(a5ss_mats_jcec_rows[0]['FDR'], 'NA')
 
-        a3ss_mats_jc_path = os.path.join(self._out_dir_all, 'A3SS.MATS.JC.txt')
+        a3ss_mats_jc_path = os.path.join(out_dir, 'A3SS.MATS.JC.txt')
         a3ss_mats_jc_header, a3ss_mats_jc_rows, error = (
             output_parser.parse_mats_jc(a3ss_mats_jc_path))
         self.assertFalse(error)
-        self._check_a35ss_mats_jc_header(a3ss_mats_jc_header)
+        self._check_a35ss_mats_jc_header(a3ss_mats_jc_header,
+                                         has_individual=junctions)
         self.assertEqual(len(a3ss_mats_jc_rows), 1)
         self.assertEqual(a3ss_mats_jc_rows[0]['FDR'], 'NA')
 
-        a3ss_mats_jcec_path = os.path.join(self._out_dir_all,
-                                           'A3SS.MATS.JCEC.txt')
+        a3ss_mats_jcec_path = os.path.join(out_dir, 'A3SS.MATS.JCEC.txt')
         a3ss_mats_jcec_header, a3ss_mats_jcec_rows, error = (
             output_parser.parse_mats_jcec(a3ss_mats_jcec_path))
         self.assertFalse(error)
-        self._check_a35ss_mats_jcec_header(a3ss_mats_jcec_header)
+        self._check_a35ss_mats_jcec_header(a3ss_mats_jcec_header,
+                                           has_individual=junctions)
         self.assertEqual(len(a3ss_mats_jcec_rows), 1)
         self.assertEqual(a3ss_mats_jcec_rows[0]['FDR'], 'NA')
 
-        ri_mats_jc_path = os.path.join(self._out_dir_all, 'RI.MATS.JC.txt')
+        ri_mats_jc_path = os.path.join(out_dir, 'RI.MATS.JC.txt')
         ri_mats_jc_header, ri_mats_jc_rows, error = output_parser.parse_mats_jc(
             ri_mats_jc_path)
         self.assertFalse(error)
-        self._check_ri_mats_jc_header(ri_mats_jc_header)
+        self._check_ri_mats_jc_header(ri_mats_jc_header,
+                                      has_individual=junctions)
         self.assertEqual(len(ri_mats_jc_rows), 1)
         self.assertEqual(ri_mats_jc_rows[0]['FDR'], 'NA')
 
-        ri_mats_jcec_path = os.path.join(self._out_dir_all, 'RI.MATS.JCEC.txt')
+        ri_mats_jcec_path = os.path.join(out_dir, 'RI.MATS.JCEC.txt')
         ri_mats_jcec_header, ri_mats_jcec_rows, error = (
             output_parser.parse_mats_jcec(ri_mats_jcec_path))
         self.assertFalse(error)
-        self._check_ri_mats_jcec_header(ri_mats_jcec_header)
+        self._check_ri_mats_jcec_header(ri_mats_jcec_header,
+                                        has_individual=junctions)
         self.assertEqual(len(ri_mats_jcec_rows), 1)
         self.assertEqual(ri_mats_jcec_rows[0]['FDR'], 'NA')
 
-    def _check_results_selected_stat(self):
+    def _check_results_selected_stat(self, junctions=False):
         self._check_no_error_results()
+        out_dir = self._out_dir_select
+        if junctions:
+            out_dir = self._out_dir_select_junctions
 
-        se_mats_jc_path = os.path.join(self._out_dir_select, 'SE.MATS.JC.txt')
+        se_mats_jc_path = os.path.join(out_dir, 'SE.MATS.JC.txt')
         se_mats_jc_header, se_mats_jc_rows, error = output_parser.parse_mats_jc(
             se_mats_jc_path)
         self.assertFalse(error)
-        self._check_se_mats_jc_header(se_mats_jc_header)
+        self._check_se_mats_jc_header(se_mats_jc_header,
+                                      has_individual=junctions)
         self.assertEqual(len(se_mats_jc_rows), 2)
         for row in se_mats_jc_rows:
             self.assertIn(row['exonStart_0base'], ['200', '800'])
@@ -410,6 +489,16 @@ class Test(tests.base_test.BaseTest):
                 self.assertEqual(self._read_floats(row['IncLevel2']),
                                  [0.333, 1.0])
                 self.assertEqual(float(row['IncLevelDifference']), -0.067)
+                if junctions:
+                    self.assertEqual(row['upstream_to_target_count'],
+                                     '15,10,10')
+                    self.assertEqual(row['target_to_downstream_count'],
+                                     '0,0,0')
+                    self.assertEqual(row['target_count'], '15,10,10')
+                    self.assertEqual(row['upstream_to_downstream_count'],
+                                     '5,10,0')
+                else:
+                    self.assertNotIn('upstream_to_target_count', row)
             elif row['exonStart_0base'] == '800':
                 self.assertEqual(row['IJC_SAMPLE_1'], '10')
                 self.assertEqual(row['SJC_SAMPLE_1'], '0')
@@ -422,13 +511,23 @@ class Test(tests.base_test.BaseTest):
                 self.assertEqual(self._read_floats(row['IncLevel2']),
                                  [1.0, 0.6])
                 self.assertEqual(float(row['IncLevelDifference']), 0.2)
+                if junctions:
+                    self.assertEqual(row['upstream_to_target_count'],
+                                     '10,10,15')
+                    self.assertEqual(row['target_to_downstream_count'],
+                                     '0,0,0')
+                    self.assertEqual(row['target_count'], '10,10,15')
+                    self.assertEqual(row['upstream_to_downstream_count'],
+                                     '0,0,5')
+                else:
+                    self.assertNotIn('upstream_to_target_count', row)
 
-        se_mats_jcec_path = os.path.join(self._out_dir_select,
-                                         'SE.MATS.JCEC.txt')
+        se_mats_jcec_path = os.path.join(out_dir, 'SE.MATS.JCEC.txt')
         se_mats_jcec_header, se_mats_jcec_rows, error = (
             output_parser.parse_mats_jcec(se_mats_jcec_path))
         self.assertFalse(error)
-        self._check_se_mats_jcec_header(se_mats_jcec_header)
+        self._check_se_mats_jcec_header(se_mats_jcec_header,
+                                        has_individual=junctions)
         self.assertEqual(len(se_mats_jcec_rows), 2)
         for row in se_mats_jcec_rows:
             self.assertIn(row['exonStart_0base'], ['200', '800'])
@@ -444,88 +543,99 @@ class Test(tests.base_test.BaseTest):
                 self.assertEqual(self._read_floats(row['IncLevel2']),
                                  [0.397, 1.0])
                 self.assertEqual(float(row['IncLevelDifference']), -0.034)
+                if junctions:
+                    self.assertEqual(row['upstream_to_target_count'],
+                                     '15,10,10')
+                    self.assertEqual(row['target_to_downstream_count'],
+                                     '0,0,0')
+                    self.assertEqual(row['target_count'], '15,10,10')
+                    self.assertEqual(row['upstream_to_downstream_count'],
+                                     '5,10,0')
+                else:
+                    self.assertNotIn('upstream_to_target_count', row)
 
-        mxe_mats_jc_path = os.path.join(self._out_dir_select,
-                                        'MXE.MATS.JC.txt')
+        mxe_mats_jc_path = os.path.join(out_dir, 'MXE.MATS.JC.txt')
         mxe_mats_jc_header, mxe_mats_jc_rows, error = (
             output_parser.parse_mats_jc(mxe_mats_jc_path))
         self.assertFalse(error)
-        self._check_mxe_mats_jc_header(mxe_mats_jc_header)
+        self._check_mxe_mats_jc_header(mxe_mats_jc_header,
+                                       has_individual=junctions)
         self.assertEqual(len(mxe_mats_jc_rows), 1)
         tests.util.assert_within_bounds(self,
                                         float(mxe_mats_jc_rows[0]['FDR']), 0,
                                         1)
 
-        mxe_mats_jcec_path = os.path.join(self._out_dir_select,
-                                          'MXE.MATS.JCEC.txt')
+        mxe_mats_jcec_path = os.path.join(out_dir, 'MXE.MATS.JCEC.txt')
         mxe_mats_jcec_header, mxe_mats_jcec_rows, error = (
             output_parser.parse_mats_jcec(mxe_mats_jcec_path))
         self.assertFalse(error)
-        self._check_mxe_mats_jcec_header(mxe_mats_jcec_header)
+        self._check_mxe_mats_jcec_header(mxe_mats_jcec_header,
+                                         has_individual=junctions)
         self.assertEqual(len(mxe_mats_jcec_rows), 1)
         tests.util.assert_within_bounds(self,
                                         float(mxe_mats_jcec_rows[0]['FDR']), 0,
                                         1)
 
-        a5ss_mats_jc_path = os.path.join(self._out_dir_select,
-                                         'A5SS.MATS.JC.txt')
+        a5ss_mats_jc_path = os.path.join(out_dir, 'A5SS.MATS.JC.txt')
         a5ss_mats_jc_header, a5ss_mats_jc_rows, error = (
             output_parser.parse_mats_jc(a5ss_mats_jc_path))
         self.assertFalse(error)
-        self._check_a35ss_mats_jc_header(a5ss_mats_jc_header)
+        self._check_a35ss_mats_jc_header(a5ss_mats_jc_header,
+                                         has_individual=junctions)
         self.assertEqual(len(a5ss_mats_jc_rows), 1)
         tests.util.assert_within_bounds(self,
                                         float(a5ss_mats_jc_rows[0]['FDR']), 0,
                                         1)
 
-        a5ss_mats_jcec_path = os.path.join(self._out_dir_select,
-                                           'A5SS.MATS.JCEC.txt')
+        a5ss_mats_jcec_path = os.path.join(out_dir, 'A5SS.MATS.JCEC.txt')
         a5ss_mats_jcec_header, a5ss_mats_jcec_rows, error = (
             output_parser.parse_mats_jcec(a5ss_mats_jcec_path))
         self.assertFalse(error)
-        self._check_a35ss_mats_jcec_header(a5ss_mats_jcec_header)
+        self._check_a35ss_mats_jcec_header(a5ss_mats_jcec_header,
+                                           has_individual=junctions)
         self.assertEqual(len(a5ss_mats_jcec_rows), 1)
         tests.util.assert_within_bounds(self,
                                         float(a5ss_mats_jcec_rows[0]['FDR']),
                                         0, 1)
 
-        a3ss_mats_jc_path = os.path.join(self._out_dir_select,
-                                         'A3SS.MATS.JC.txt')
+        a3ss_mats_jc_path = os.path.join(out_dir, 'A3SS.MATS.JC.txt')
         a3ss_mats_jc_header, a3ss_mats_jc_rows, error = (
             output_parser.parse_mats_jc(a3ss_mats_jc_path))
         self.assertFalse(error)
-        self._check_a35ss_mats_jc_header(a3ss_mats_jc_header)
+        self._check_a35ss_mats_jc_header(a3ss_mats_jc_header,
+                                         has_individual=junctions)
         self.assertEqual(len(a3ss_mats_jc_rows), 1)
         tests.util.assert_within_bounds(self,
                                         float(a3ss_mats_jc_rows[0]['FDR']), 0,
                                         1)
 
-        a3ss_mats_jcec_path = os.path.join(self._out_dir_select,
-                                           'A3SS.MATS.JCEC.txt')
+        a3ss_mats_jcec_path = os.path.join(out_dir, 'A3SS.MATS.JCEC.txt')
         a3ss_mats_jcec_header, a3ss_mats_jcec_rows, error = (
             output_parser.parse_mats_jcec(a3ss_mats_jcec_path))
         self.assertFalse(error)
-        self._check_a35ss_mats_jcec_header(a3ss_mats_jcec_header)
+        self._check_a35ss_mats_jcec_header(a3ss_mats_jcec_header,
+                                           has_individual=junctions)
         self.assertEqual(len(a3ss_mats_jcec_rows), 1)
         tests.util.assert_within_bounds(self,
                                         float(a3ss_mats_jcec_rows[0]['FDR']),
                                         0, 1)
 
-        ri_mats_jc_path = os.path.join(self._out_dir_select, 'RI.MATS.JC.txt')
+        ri_mats_jc_path = os.path.join(out_dir, 'RI.MATS.JC.txt')
         ri_mats_jc_header, ri_mats_jc_rows, error = output_parser.parse_mats_jc(
             ri_mats_jc_path)
         self.assertFalse(error)
-        self._check_ri_mats_jc_header(ri_mats_jc_header)
+        self._check_ri_mats_jc_header(ri_mats_jc_header,
+                                      has_individual=junctions)
         self.assertEqual(len(ri_mats_jc_rows), 1)
         tests.util.assert_within_bounds(self, float(ri_mats_jc_rows[0]['FDR']),
                                         0, 1)
 
-        ri_mats_jcec_path = os.path.join(self._out_dir_select,
-                                         'RI.MATS.JCEC.txt')
+        ri_mats_jcec_path = os.path.join(out_dir, 'RI.MATS.JCEC.txt')
         ri_mats_jcec_header, ri_mats_jcec_rows, error = (
             output_parser.parse_mats_jcec(ri_mats_jcec_path))
         self.assertFalse(error)
-        self._check_ri_mats_jcec_header(ri_mats_jcec_header)
+        self._check_ri_mats_jcec_header(ri_mats_jcec_header,
+                                        has_individual=junctions)
         self.assertEqual(len(ri_mats_jcec_rows), 1)
         tests.util.assert_within_bounds(self,
                                         float(ri_mats_jcec_rows[0]['FDR']), 0,

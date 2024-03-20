@@ -342,6 +342,8 @@ optional arguments:
   --fixed-event-set FIXED_EVENT_SET
                         A directory containing fromGTF.[AS].txt files to be
                         used instead of detecting a new set of events
+  --individual-counts   Output individualCounts.[AS_Event].txt files and add
+                        the individual count columns to [AS_Event].MATS.JC.txt
 ```
 
 ## Output
@@ -360,6 +362,7 @@ In rMATS-turbo, each alternative splicing pattern has a corresponding set of out
 - `fromGTF.novelSpliceSite.[AS_Event].txt`: This file contains only events that include an unannotated splice site. Only relevant if `--novelSS` is enabled.
 - `JC.raw.input.[AS_Event].txt`: Event counts including only reads that span junctions defined by rMATS.
 - `JCEC.raw.input.[AS_Event].txt`: Event counts including both reads that span junctions defined by rMATS and reads that do not cross an exon boundary.
+- `individualCounts.[AS_Event].txt`: The breakdown of individual counts which contribute to the inclusion and skipping counts (only if run with `--individual-counts`)
 - Shared columns:
   * `ID`: rMATS event id
   * `GeneID`: Gene id
@@ -377,15 +380,15 @@ In rMATS-turbo, each alternative splicing pattern has a corresponding set of out
   * `IncLevel1`: Inclusion level for sample 1. Replicates are comma separated. Calculated from normalized counts
   * `IncLevel2`: Inclusion level for sample 2. Replicates are comma separated. Calculated from normalized counts
   * `IncLevelDifference`: average(IncLevel1) - average(IncLevel2)
-- Event specific columns (event coordinates):
-  * SE: `exonStart_0base` `exonEnd` `upstreamES` `upstreamEE` `downstreamES` `downstreamEE`
+- Event specific columns (event coordinates and counts):
+  * SE: `exonStart_0base` `exonEnd` `upstreamES` `upstreamEE` `downstreamES` `downstreamEE` `upstream_to_target_count` `target_to_downstream_count` `target_count` `upstream_to_downstream_count`
     + The inclusion form includes the target exon (`exonStart_0base`, `exonEnd`)
-  * MXE: `1stExonStart_0base` `1stExonEnd` `2ndExonStart_0base` `2ndExonEnd` `upstreamES` `upstreamEE` `downstreamES` `downstreamEE`
+  * MXE: `1stExonStart_0base` `1stExonEnd` `2ndExonStart_0base` `2ndExonEnd` `upstreamES` `upstreamEE` `downstreamES` `downstreamEE` `upstream_to_first_count` `first_to_downstream_count` `first_count` `upstream_to_second_count` `second_to_downstream_count` `second_count`
     + If the strand is `+`, then the inclusion form includes the 1st exon (`1stExonStart_0base`, `1stExonEnd`) and skips the 2nd exon
     + If the strand is `-`, then the inclusion form includes the 2nd exon (`2ndExonStart_0base`, `2ndExonEnd`) and skips the 1st exon
-  * A3SS, A5SS: `longExonStart_0base` `longExonEnd` `shortES` `shortEE` `flankingES` `flankingEE`
+  * A3SS, A5SS: `longExonStart_0base` `longExonEnd` `shortES` `shortEE` `flankingES` `flankingEE` `across_short_boundary_count` `long_to_flanking_count` `exclusive_to_long_count` `short_to_flanking_count`
     + The inclusion form includes the long exon (`longExonStart_0base`, `longExonEnd`) instead of the short exon (`shortES` `shortEE`)
-  * RI: `riExonStart_0base` `riExonEnd` `upstreamES` `upstreamEE` `downstreamES` `downstreamEE`
+  * RI: `riExonStart_0base` `riExonEnd` `upstreamES` `upstreamEE` `downstreamES` `downstreamEE` `upstream_to_intron_count` `intron_to_downstream_count` `intron_count` `upstream_to_downstream_count`
     + The inclusion form includes (retains) the intron (`upstreamEE`, `downstreamES`)
 - `summary.txt`: Brief summary of all alternative splicing event types. Includes the total event counts and significant event counts. By default, events are counted as significant if FDR <= 0.05. Summary can be regenerated with different criteria by running [rMATS_P/summary.py](rMATS_P/summary.py)
 
