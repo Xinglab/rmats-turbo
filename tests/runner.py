@@ -3,6 +3,7 @@ import unittest
 import tests.allow_clipping.test as allow_clipping_test
 import tests.alternative_3_splice_site_novel.test as alternative_3_splice_site_novel_test
 import tests.alternative_5_splice_site_novel.test as alternative_5_splice_site_novel_test
+import tests.darts_model.test as darts_model_test
 import tests.fixed_event_set.test as fixed_event_set_test
 import tests.individual_counts.test as individual_counts_test
 import tests.mutually_exclusive_exons_novel.test as mutually_exclusive_exons_novel_test
@@ -27,6 +28,7 @@ def build_test_suite():
         loader.loadTestsFromModule(alternative_3_splice_site_novel_test))
     suite.addTest(
         loader.loadTestsFromModule(alternative_5_splice_site_novel_test))
+    suite.addTest(loader.loadTestsFromModule(darts_model_test))
     suite.addTest(loader.loadTestsFromModule(fixed_event_set_test))
     suite.addTest(loader.loadTestsFromModule(individual_counts_test))
     suite.addTest(

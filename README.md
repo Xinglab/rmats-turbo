@@ -331,6 +331,11 @@ optional arguments:
                         existing output files
   --statoff             Skip the statistical analysis
   --paired-stats        Use the paired stats model
+  --darts-model         Use the DARTS statistical model
+  --darts-cutoff DARTS_CUTOFF
+                        The cutoff of delta-PSI in the DARTS model. The output
+                        posterior probability is P(abs(delta_psi) > cutoff).
+                        The default is 0.05
   --novelSS             Enable detection of novel splice sites (unannotated
                         splice sites). Default is no detection of novel splice
                         sites
