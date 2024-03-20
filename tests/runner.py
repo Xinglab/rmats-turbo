@@ -11,6 +11,7 @@ import tests.only_one_sample.test as only_one_sample_test
 import tests.overlapped_gene.test as overlapped_gene_test
 import tests.paired_stats.test as paired_stats_tests
 import tests.prep_post.test as prep_post_test
+import tests.read_count_edge_cases.test as read_count_edge_cases_test
 import tests.retained_intron_novel.test as retained_intron_novel_test
 import tests.skipped_exon_basic.test as skipped_exon_basic_test
 import tests.skipped_exon_novel.test as skipped_exon_novel_test
@@ -37,6 +38,7 @@ def build_test_suite():
     suite.addTest(loader.loadTestsFromModule(overlapped_gene_test))
     suite.addTest(loader.loadTestsFromModule(paired_stats_tests))
     suite.addTest(loader.loadTestsFromModule(prep_post_test))
+    suite.addTest(loader.loadTestsFromModule(read_count_edge_cases_test))
     suite.addTest(loader.loadTestsFromModule(retained_intron_novel_test))
     suite.addTest(loader.loadTestsFromModule(skipped_exon_basic_test))
     suite.addTest(loader.loadTestsFromModule(skipped_exon_novel_test))
