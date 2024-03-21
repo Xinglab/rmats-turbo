@@ -43,6 +43,7 @@ Tested on Ubuntu (20.04 LTS)
 - gfortran (Fortran 77)
 - CMake (3.15.4)
 - [PAIRADISE](https://github.com/Xinglab/PAIRADISE) (optional)
+- [DARTS](https://github.com/Xinglab/DARTS) (optional)
 - Samtools (optional)
 - STAR (optional)
 
@@ -60,13 +61,14 @@ python rmats.py {arguments}
 
 The [build_rmats](build_rmats) script usage is:
 ```
-./build_rmats [--conda] [--no-paired-model]
+./build_rmats [--conda] [--no-paired-model] [--no-darts-model]
 
 --conda: create a conda environment for Python and R dependencies
 --no-paired-model: do not install dependencies for the paired model
+--no-darts-model: do not install dependencies for the darts model
 ```
 
-With `--conda` [build_rmats](build_rmats) installs a conda environment that satisfies the required Python dependencies and also the R dependencies needed to use the paired model (PAIRADISE). The Python dependencies are listed in [python_conda_requirements.txt](python_conda_requirements.txt) and the R dependencies are handled using [r_conda_requirements.txt](r_conda_requirements.txt) and [install_r_deps.R](install_r_deps.R) after cloning the PAIRADISE git repo.
+With `--conda` [build_rmats](build_rmats) installs a conda environment that satisfies the required Python dependencies and also the R dependencies needed to use the paired model (PAIRADISE) and the DARTS model. The Python dependencies are listed in [python_conda_requirements.txt](python_conda_requirements.txt) and the R dependencies are handled using [paired_model_conda_requirements.txt](paired_model_conda_requirements.txt), [darts_model_conda_requirements.txt](darts_model_conda_requirements.txt), and [install_r_deps.R](install_r_deps.R) after cloning the PAIRADISE and DARTS git repos.
 
 
 [run_rmats](run_rmats) is a wrapper to call [rmats.py](rmats.py) with the conda environment used by [build_rmats](build_rmats). It also sources [setup_environment.sh](setup_environment.sh) which can be modified to handle other setup that might be needed before running rmats (such as Environment Modules).
@@ -291,7 +293,8 @@ optional arguments:
                         for strand-specific data. Only relevant to the prep
                         step, not the post step. Default: fr-unstranded
   --readLength READLENGTH
-                        The length of each read
+                        The length of each read. Required parameter, with the
+                        value set according to the RNA-seq read length
   --variable-read-length
                         Allow reads with lengths that differ from --readLength
                         to be processed. --readLength will still be used to
@@ -301,29 +304,30 @@ optional arguments:
                         counting the number of reads spanning splice
                         junctions. A minimum number of "anchor length"
                         nucleotides must be mapped to each end of a given
-                        junction. The minimum value is 1 and the default value
-                        is set to 1 to make use of all possible splice
-                        junction reads.
+                        splice junction. The minimum value is 1 and the
+                        default value is set to 1 to make use of all possible
+                        splice junction reads.
   --tophatAnchor TOPHATANCHOR
                         The "anchor length" or "overhang length" used in the
-                        aligner. At least "anchor length" NT must be mapped to
-                        each end of a given junction. The default is 1. (Only
-                        if using fastq)
+                        aligner. At least "anchor length" nucleotides must be
+                        mapped to each end of a given splice junction. The
+                        default is 1. (Only if using fastq)
   --bi BINDEX           The directory name of the STAR binary indices (name of
-                        the directory that contains the SA file). (Only if
-                        using fastq)
+                        the directory that contains the suffix array file).
+                        (Only if using fastq)
   --nthread NTHREAD     The number of threads. The optimal number of threads
                         should be equal to the number of CPU cores. Default: 1
   --tstat TSTAT         The number of threads for the statistical model. If
                         not set then the value of --nthread is used
   --cstat CSTAT         The cutoff splicing difference. The cutoff used in the
-                        null hypothesis test for differential splicing. The
-                        default is 0.0001 for 0.01% difference. Valid: 0 <=
-                        cutoff < 1. Does not apply to the paired stats model
+                        null hypothesis test for differential alternative
+                        splicing. The default is 0.0001 for 0.01% difference.
+                        Valid: 0 <= cutoff < 1. Does not apply to the paired
+                        stats model
   --task {prep,post,both,inte,stat}
-                        Specify which step(s) of rMATS to run. Default: both.
-                        prep: preprocess BAMs and generate a .rmats file.
-                        post: load .rmats file(s) into memory, detect and
+                        Specify which step(s) of rMATS-turbo to run. Default:
+                        both. prep: preprocess BAM files and generate .rmats
+                        files. post: load .rmats files into memory, detect and
                         count alternative splicing events, and calculate P
                         value (if not --statoff). both: prep + post. inte
                         (integrity): check that the BAM filenames recorded by
@@ -354,7 +358,7 @@ optional arguments:
 
 ## Output
 
-In rMATS-turbo, each alternative splicing pattern has a corresponding set of output files. In the filename templates below, `[AS_Event]` is replaced by one of the five basic alternative splicing patterns: skipped exon (SE), alternative 5' splice sites (A5SS), alternative 3' splice sites (A3SS), mutually exclusive exons (MXE), or retained intron (RI). As shown in the diagram, the number of supporting reads can be counted by the junction reads only (JC) or by both the junction and exon reads (JCEC). The output file from different counting methods is also indicated in the file name.
+In rMATS-turbo, each alternative splicing pattern has a corresponding set of output files. In the filename templates below, `[AS_Event]` is replaced by one of the five basic alternative splicing patterns: skipped exon (SE), alternative 5' splice sites (A5SS), alternative 3' splice sites (A3SS), mutually exclusive exons (MXE), or retained intron (RI). As shown in the diagram, the number of supporting reads can be counted by the junction reads only (JC) or by both the junction and exon reads (JCEC). The output files from different counting methods are also indicated in the file name.
 
 ![rmats-turbo](docs/rmats_diagram.png)
 
@@ -363,8 +367,8 @@ In rMATS-turbo, each alternative splicing pattern has a corresponding set of out
 
 - `[AS_Event].MATS.JC.txt`: Final output that contains the list of events and read counts. Only splice junction reads are counted.
 - `[AS_Event].MATS.JCEC.txt`: Final output that contains the list of events and read counts. Both splice junction reads and exon body reads are counted.
-- `fromGTF.[AS_Event].txt`: All identified alternative splicing (AS) events derived from GTF and RNA.
-- `fromGTF.novelJunction.[AS_Event].txt`: Alternative splicing (AS) events which were identified only after considering the RNA (as opposed to analyzing the GTF in isolation). Does not include events with an unannotated splice site.
+- `fromGTF.[AS_Event].txt`: All identified alternative splicing (AS) events derived from the GTF file and RNA-seq data.
+- `fromGTF.novelJunction.[AS_Event].txt`: AS events derived from novel combinations of splice sites annotated in the GTF file. Does not include events with an unannotated splice site.
 - `fromGTF.novelSpliceSite.[AS_Event].txt`: This file contains only events that include an unannotated splice site. Only relevant if `--novelSS` is enabled.
 - `JC.raw.input.[AS_Event].txt`: Event counts including only reads that span junctions defined by rMATS.
 - `JCEC.raw.input.[AS_Event].txt`: Event counts including both reads that span junctions defined by rMATS and reads that do not cross an exon boundary.
@@ -400,6 +404,6 @@ In rMATS-turbo, each alternative splicing pattern has a corresponding set of out
 
 `--tmp` contains the intermediate files generated by the prep step:
 
-- `[datetime]_[id].rmats`: Summary generated from processing a BAM
+- `[datetime]_[id].rmats`: Summary generated from processing a BAM file
 - `[datetime]_bam[sample_num]_[replicate_num]/Aligned.sortedByCoord.out.bam`: Result of mapping input FASTQ files
-- `[datetime]_read_outcomes_by_bam.txt`: Counts of the reads used from each BAM along with counts of the reasons that reads were not able to be used
+- `[datetime]_read_outcomes_by_bam.txt`: Counts of the reads used from each BAM file along with counts of the reasons that reads could not be used
