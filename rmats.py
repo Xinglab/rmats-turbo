@@ -128,27 +128,27 @@ def get_args():
                                  'fr-secondstrand',],
                         help='Library type. Use fr-firststrand or fr-secondstrand for strand-specific data. Only relevant to the prep step, not the post step. Default: %(default)s', dest='dt')
     parser.add_argument('--readLength', action='store', type=int,
-                        help='The length of each read', dest='readLength')
+                        help='The length of each read. Required parameter, with the value set according to the RNA-seq read length', dest='readLength')
     parser.add_argument('--variable-read-length', action='store_true',
                         help='Allow reads with lengths that differ from --readLength to be processed. --readLength will still be used to determine IncFormLen and SkipFormLen',
                         dest='variable_read_length')
     parser.add_argument('--anchorLength', action='store', type=int, default=1,
-                        help='The "anchor length" or "overhang length" used when counting the number of reads spanning splice junctions. A minimum number of "anchor length" nucleotides must be mapped to each end of a given junction. The minimum value is 1 and the default value is set to %(default)s to make use of all possible splice junction reads.', dest='anchorLength')
+                        help='The "anchor length" or "overhang length" used when counting the number of reads spanning splice junctions. A minimum number of "anchor length" nucleotides must be mapped to each end of a given splice junction. The minimum value is 1 and the default value is set to %(default)s to make use of all possible splice junction reads.', dest='anchorLength')
     parser.add_argument('--tophatAnchor', action='store', type=int, default=1,
-                        help='The "anchor length" or "overhang length" used in the aligner. At least "anchor length" NT must be mapped to each end of a given junction. The default is %(default)s. (Only if using fastq)', dest='tophatAnchor')
+                        help='The "anchor length" or "overhang length" used in the aligner. At least "anchor length" nucleotides must be mapped to each end of a given splice junction. The default is %(default)s. (Only if using fastq)', dest='tophatAnchor')
     parser.add_argument('--bi', action='store', default='',
-                        help='The directory name of the STAR binary indices (name of the directory that contains the SA file). (Only if using fastq)', dest='bIndex')
+                        help='The directory name of the STAR binary indices (name of the directory that contains the suffix array file). (Only if using fastq)', dest='bIndex')
     parser.add_argument('--nthread', action='store', type=int, default=1,
                         help='The number of threads. The optimal number of threads should be equal to the number of CPU cores. Default: %(default)s', dest='nthread')
 
     parser.add_argument('--tstat', action='store', type=int,
                         help='The number of threads for the statistical model. If not set then the value of --nthread is used', dest='tstat')
     parser.add_argument('--cstat', action='store', type=float, default=0.0001,
-                        help='The cutoff splicing difference. The cutoff used in the null hypothesis test for differential splicing. The default is 0.0001 for 0.01%% difference. Valid: 0 <= cutoff < 1. Does not apply to the paired stats model', dest='cstat')
+                        help='The cutoff splicing difference. The cutoff used in the null hypothesis test for differential alternative splicing. The default is 0.0001 for 0.01%% difference. Valid: 0 <= cutoff < 1. Does not apply to the paired stats model', dest='cstat')
 
     parser.add_argument('--task', action='store', default='both',
                         choices=['prep', 'post', 'both', 'inte', 'stat'],
-                        help='Specify which step(s) of rMATS to run. Default: %(default)s. prep: preprocess BAMs and generate a .rmats file. post: load .rmats file(s) into memory, detect and count alternative splicing events, and calculate P value (if not --statoff). both: prep + post. inte (integrity): check that the BAM filenames recorded by the prep task(s) match the BAM filenames for the current command line. stat: run statistical test on existing output files', dest='task')
+                        help='Specify which step(s) of rMATS-turbo to run. Default: %(default)s. prep: preprocess BAM files and generate .rmats files. post: load .rmats files into memory, detect and count alternative splicing events, and calculate P value (if not --statoff). both: prep + post. inte (integrity): check that the BAM filenames recorded by the prep task(s) match the BAM filenames for the current command line. stat: run statistical test on existing output files', dest='task')
     parser.add_argument('--statoff', action='store_false',
                         help='Skip the statistical analysis', dest='stat')
     parser.add_argument('--paired-stats', action='store_true',
