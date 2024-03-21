@@ -255,6 +255,7 @@ After all of the BAMs have been processed in this way, the output directory will
 - If analyzing a small data set, `--task both` can be used to perform the prep and post steps in a single run.
 - `--novelSS` is an experimental feature that allows splicing events to be detected that involve an unannotated splice site.
 - `--fixed-event-set` can be set to a directory containing the `fromGTF.[AS].txt` files from a previous run of rMATS. The events in the provided files will be used directly instead of detecting events from the input reads. This can be used to run new data against the events detected from a previous rMATS run. The `fromGTF.[AS].txt` files can also be edited manually to specify a custom event set.
+- `--libType` options are based on [TopHat](https://ccb.jhu.edu/software/tophat/manual.shtml) `--library-type`. For `fr-unstranded`, the strand of the alignment is not checked. For `fr-firststrand` and `fr-secondstrand`, the strand is determined for each read and the strand is checked against the annotated strand for the gene. For `fr-firststrand` and `fr-secondstrand`, paired reads must be aligned to opposite strands. For `fr-secondstrand` the aligned strand of the first read is used as the original strand. For `fr-firststrand`, the aligned strand of the first read is not used as the original strand and instead the other strand is used as the original. According to the [salmon](https://salmon.readthedocs.io/en/latest/library_type.html#fraglibtype) library format `fr-firststrand` is ISR and `fr-secondstrand` is ISF
 
 ### All Arguments
 
