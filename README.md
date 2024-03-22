@@ -1,4 +1,4 @@
-# rMATS turbo v4.2.0
+# rMATS turbo v4.3.0
 
 [![Latest Release](https://img.shields.io/github/release/Xinglab/rmats-turbo.svg?label=Latest%20Release)](https://github.com/Xinglab/rmats-turbo/releases/latest)
 [![Total GitHub Downloads](https://img.shields.io/github/downloads/Xinglab/rmats-turbo/total.svg?label=Total%20GitHub%20Downloads)](https://github.com/Xinglab/rmats-turbo/releases)
