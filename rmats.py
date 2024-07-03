@@ -19,7 +19,7 @@ from datetime import datetime
 from rmatspipeline import run_pipe
 
 
-VERSION = 'v4.1.2'
+VERSION = 'v4.3.0'
 USAGE = '''%(prog)s [options]'''
 pipe_tasks = set(['prep', 'post', 'both',])
 
@@ -128,31 +128,35 @@ def get_args():
                                  'fr-secondstrand',],
                         help='Library type. Use fr-firststrand or fr-secondstrand for strand-specific data. Only relevant to the prep step, not the post step. Default: %(default)s', dest='dt')
     parser.add_argument('--readLength', action='store', type=int,
-                        help='The length of each read', dest='readLength')
+                        help='The length of each read. Required parameter, with the value set according to the RNA-seq read length', dest='readLength')
     parser.add_argument('--variable-read-length', action='store_true',
                         help='Allow reads with lengths that differ from --readLength to be processed. --readLength will still be used to determine IncFormLen and SkipFormLen',
                         dest='variable_read_length')
     parser.add_argument('--anchorLength', action='store', type=int, default=1,
-                        help='The "anchor length" or "overhang length" used when counting the number of reads spanning splice junctions. A minimum number of "anchor length" nucleotides must be mapped to each end of a given junction. The minimum value is 1 and the default value is set to %(default)s to make use of all possible splice junction reads.', dest='anchorLength')
+                        help='The "anchor length" or "overhang length" used when counting the number of reads spanning splice junctions. A minimum number of "anchor length" nucleotides must be mapped to each end of a given splice junction. The minimum value is 1 and the default value is set to %(default)s to make use of all possible splice junction reads.', dest='anchorLength')
     parser.add_argument('--tophatAnchor', action='store', type=int, default=1,
-                        help='The "anchor length" or "overhang length" used in the aligner. At least "anchor length" NT must be mapped to each end of a given junction. The default is %(default)s. (Only if using fastq)', dest='tophatAnchor')
+                        help='The "anchor length" or "overhang length" used in the aligner. At least "anchor length" nucleotides must be mapped to each end of a given splice junction. The default is %(default)s. (Only if using fastq)', dest='tophatAnchor')
     parser.add_argument('--bi', action='store', default='',
-                        help='The directory name of the STAR binary indices (name of the directory that contains the SA file). (Only if using fastq)', dest='bIndex')
+                        help='The directory name of the STAR binary indices (name of the directory that contains the suffix array file). (Only if using fastq)', dest='bIndex')
     parser.add_argument('--nthread', action='store', type=int, default=1,
                         help='The number of threads. The optimal number of threads should be equal to the number of CPU cores. Default: %(default)s', dest='nthread')
 
     parser.add_argument('--tstat', action='store', type=int,
                         help='The number of threads for the statistical model. If not set then the value of --nthread is used', dest='tstat')
     parser.add_argument('--cstat', action='store', type=float, default=0.0001,
-                        help='The cutoff splicing difference. The cutoff used in the null hypothesis test for differential splicing. The default is 0.0001 for 0.01%% difference. Valid: 0 <= cutoff < 1. Does not apply to the paired stats model', dest='cstat')
+                        help='The cutoff splicing difference. The cutoff used in the null hypothesis test for differential alternative splicing. The default is 0.0001 for 0.01%% difference. Valid: 0 <= cutoff < 1. Does not apply to the paired stats model', dest='cstat')
 
     parser.add_argument('--task', action='store', default='both',
                         choices=['prep', 'post', 'both', 'inte', 'stat'],
-                        help='Specify which step(s) of rMATS to run. Default: %(default)s. prep: preprocess BAMs and generate a .rmats file. post: load .rmats file(s) into memory, detect and count alternative splicing events, and calculate P value (if not --statoff). both: prep + post. inte (integrity): check that the BAM filenames recorded by the prep task(s) match the BAM filenames for the current command line. stat: run statistical test on existing output files', dest='task')
+                        help='Specify which step(s) of rMATS-turbo to run. Default: %(default)s. prep: preprocess BAM files and generate .rmats files. post: load .rmats files into memory, detect and count alternative splicing events, and calculate P value (if not --statoff). both: prep + post. inte (integrity): check that the BAM filenames recorded by the prep task(s) match the BAM filenames for the current command line. stat: run statistical test on existing output files', dest='task')
     parser.add_argument('--statoff', action='store_false',
                         help='Skip the statistical analysis', dest='stat')
     parser.add_argument('--paired-stats', action='store_true',
                         help='Use the paired stats model', dest='paired_stats')
+    parser.add_argument('--darts-model', action='store_true',
+                        help='Use the DARTS statistical model', dest='darts_model')
+    parser.add_argument('--darts-cutoff', action='store', type=float, default=0.05,
+                        help='The cutoff of delta-PSI in the DARTS model. The output posterior probability is P(abs(delta_psi) > cutoff). The default is %(default)s', dest='darts_cutoff')
 
     parser.add_argument('--novelSS', action='store_true',
                         help='Enable detection of novel splice sites (unannotated splice sites). Default is no detection of novel splice sites', dest='novelSS')
@@ -164,7 +168,24 @@ def get_args():
                         help='Allow alignments with soft or hard clipping to be used',
                         dest='allow_clipping')
     parser.add_argument('--fixed-event-set', action='store', help='A directory containing fromGTF.[AS].txt files to be used instead of detecting a new set of events')
+    parser.add_argument('--individual-counts', action='store_true',
+                        help='Output individualCounts.[AS_Event].txt files and add the individual count columns to [AS_Event].MATS.JC.txt',
+                        dest='individual_counts')
+    # The help text for --imbalance ratio is not added to the parser
+    # since the parameter is only intended for internal use and it
+    # defaults to no filtering.
+    #
+    # Filter events where the ratio of upstream junction reads to
+    # downstream junction reads (or downstream to upstream) exceeds
+    # --imbalance-ratio. The events are filtered before running the
+    # stats model so that the FDR is based on the filtered
+    # events. If not specified then no events are filtered.
+    # Requires --individual-counts
+    parser.add_argument('--imbalance-ratio', type=float,
+                        help=argparse.SUPPRESS,
+                        dest='imbalance_ratio')
     parser.add_argument('--drop-zero-read-replicates-for-stat', action='store_true', help='When calculating the pvalue, for each event ignore replicates that do not have any reads for that event')
+
 
     args = parser.parse_args()
 
@@ -184,6 +205,8 @@ def get_args():
         sys.exit('ERROR: output folder and temporary folder required. Please check --od and --tmp.')
     if (args.s1 != '' or args.s2 != '') and args.bIndex == '':
         sys.exit('ERROR: STAR binary indexes required. Please check --bi.')
+    if args.imbalance_ratio is not None and not args.individual_counts:
+        sys.exit('ERROR: --imbalance-ratio requires --individual-counts')
 
     if len(args.b1) > 0:
         with open(args.b1, 'r') as fp:
@@ -287,6 +310,7 @@ def check_integrity(input_bams_string, tmp_dir):
 def check_if_has_counts(counts_file_path):
     has_sample_1_counts = False
     has_sample_2_counts = False
+    has_replicates = False
     with open(counts_file_path, 'rt') as f_handle:
         for i, line in enumerate(f_handle):
             if i == 0:
@@ -295,11 +319,19 @@ def check_if_has_counts(counts_file_path):
             values = line.strip().split('\t')
             inc_sample_1_vs = values[1]
             inc_sample_2_vs = values[3]
+            sample_1_counts = inc_sample_1_vs.split(',')
+            sample_2_counts = inc_sample_2_vs.split(',')
             has_sample_1_counts = inc_sample_1_vs != ''
             has_sample_2_counts = inc_sample_2_vs != ''
+            has_replicates = ((len(sample_1_counts) > 1)
+                              or (len(sample_2_counts) > 1))
             break  # only check the first row
 
-    return has_sample_1_counts, has_sample_2_counts
+    return {
+        'has_sample_1_counts': has_sample_1_counts,
+        'has_sample_2_counts': has_sample_2_counts,
+        'has_replicates': has_replicates
+    }
 
 
 def filter_countfile(fn):
@@ -349,7 +381,8 @@ def filter_countfile(fn):
 
 
 def process_counts(istat, tstat, counttype, ase, cstat, od, od_tmp, stat,
-                   paired_stats, python_executable, root_dir,
+                   paired_stats, use_darts_model, darts_cutoff,
+                   python_executable, root_dir, imbalance_ratio,
                    drop_zero_read_replicates_for_stat):
     """TODO: Docstring for process_counts.
     :returns: TODO
@@ -368,8 +401,16 @@ def process_counts(istat, tstat, counttype, ase, cstat, od, od_tmp, stat,
               file=sys.stderr)
         return
 
+    indiv_counts_file_name = os.path.join(
+        od, 'individualCounts.{}.txt'.format(ase))
+    indiv_counts_temp_file_name = '{}.tmp'.format(indiv_counts_file_name)
+    has_indiv_counts = os.path.exists(indiv_counts_file_name)
+
     if stat:
-        has_sample_1_counts, has_sample_2_counts = check_if_has_counts(istat)
+        has_counts_result = check_if_has_counts(istat)
+        has_sample_1_counts = has_counts_result['has_sample_1_counts']
+        has_sample_2_counts = has_counts_result['has_sample_2_counts']
+        has_replicates = has_counts_result['has_replicates']
         if has_sample_1_counts and has_sample_2_counts:
             filter_countfile(istat)
         elif has_sample_1_counts or has_sample_2_counts:
@@ -378,6 +419,11 @@ def process_counts(istat, tstat, counttype, ase, cstat, od, od_tmp, stat,
                   file=sys.stderr)
             stat = False
 
+    if imbalance_ratio is not None:
+        filter_countfile_by_imbalance_ratio(
+            istat, indiv_counts_file_name, indiv_counts_temp_file_name,
+            imbalance_ratio, ase)
+
     sec_tmp = os.path.join(od_tmp, '%s_%s' % (counttype, ase))
     if os.path.exists(sec_tmp):
         if os.path.isdir(sec_tmp):
@@ -385,7 +431,7 @@ def process_counts(istat, tstat, counttype, ase, cstat, od, od_tmp, stat,
         else:
             os.unlink(sec_tmp)
     os.mkdir(sec_tmp)
-    ostat = os.path.join(sec_tmp, 'rMATS_result_%s.txt' % ('%s'))
+    ostat = os.path.join(sec_tmp, 'rMATS_result_%s.txt')
 
     FNULL = open(os.devnull, 'w')
     resfp = open(ostat % (''), 'w')
@@ -396,9 +442,11 @@ def process_counts(istat, tstat, counttype, ase, cstat, od, od_tmp, stat,
     ostat_pv = ostat % ('P-V')
     ostat_fdr = ostat % ('FDR')
     ostat_paired = ostat % ('paired')
+    ostat_darts = ostat % ('darts')
 
     rmats_c = os.path.join(root_dir, 'rMATS_C/rMATSexe')
     paired_model = os.path.join(root_dir, 'rMATS_R/paired_model.R')
+    darts_model = os.path.join(root_dir, 'rMATS_R/darts_model.R')
     pas_out = os.path.join(root_dir, 'rMATS_P/paste.py')
     inc_lvl = os.path.join(root_dir, 'rMATS_P/inclusion_level.py')
     fdr_cal = os.path.join(root_dir, 'rMATS_P/FDR.py')
@@ -427,6 +475,19 @@ def process_counts(istat, tstat, counttype, ase, cstat, od, od_tmp, stat,
             if paired_model_return_code != 0:
                 print('error in paired model', file=sys.stderr)
                 print_file_to_stderr(ostat_paired)
+        elif use_darts_model:
+            has_replicates_str = 'true' if has_replicates else 'false'
+            darts_command = ['Rscript', darts_model, istat, ostat_pv,
+                             str(tstat), str(darts_cutoff), has_replicates_str]
+            with open(ostat_darts, 'wb') as darts_fp:
+                darts_return_code = subprocess.call(
+                    darts_command, stdout=darts_fp, stderr=subprocess.STDOUT)
+
+            if darts_return_code != 0:
+                print('error running darts', file=sys.stderr)
+                print_file_to_stderr(ostat_darts)
+            else:
+                write_fdr_file_from_darts_output(istat, ostat_pv, ostat_fdr)
         else:
             stat_in_file = istat
             stat_out_file = ostat_pv
@@ -446,6 +507,8 @@ def process_counts(istat, tstat, counttype, ase, cstat, od, od_tmp, stat,
     # Combine into final output
     subprocess.call(['paste', ostat_fdr, ostat_il,], stdout=resfp)
     subprocess.call([python_executable, join_2f, from_gtf_path, resfp.name, '0', '0', finfn,], stdout=FNULL)
+    if has_indiv_counts:
+        append_individual_counts(indiv_counts_file_name, finfn, indiv_counts_temp_file_name)
 
     FNULL.close()
     resfp.close()
@@ -526,6 +589,42 @@ def drop_items_by_index(drop_list, item_lists):
     return out_lists
 
 
+def write_fdr_file_from_darts_output(istat, ostat_pv, ostat_fdr):
+    darts_id_to_probability = dict()
+    with open(ostat_pv, 'rt') as darts_out_handle:
+        for line_i, line in enumerate(darts_out_handle):
+            columns = line.rstrip('\n').split('\t')
+            if line_i == 0:
+                try:
+                    darts_id_index = columns.index('ID')
+                    darts_post_index = columns.index('post_pr')
+                except ValueError:
+                    print('error parsing column names in darts output: {}'
+                          .format(line), file=sys.stderr)
+                    return
+
+                continue
+
+            id_str = columns[darts_id_index]
+            probability_str = columns[darts_post_index]
+            darts_id_to_probability[id_str] = probability_str
+
+    with open(istat, 'rt') as counts_handle:
+        with open(ostat_fdr, 'wt') as fdr_out_handle:
+            for line_i, line in enumerate(counts_handle):
+                columns = line.rstrip('\n').split('\t')
+                if line_i == 0:
+                    columns.extend(['PValue', 'FDR'])
+                else:
+                    id_str = columns[0]
+                    # DARTS will not produce an output value for an event if
+                    # there are 0 counts for a replicate.
+                    probability_str = darts_id_to_probability.get(id_str, 'NA')
+                    columns.extend([probability_str, 'NA'])
+
+                fdr_out_handle.write('{}\n'.format('\t'.join(columns)))
+
+
 def print_file_to_stderr(filename):
     with open(filename, 'rt') as file_handle:
         for line in file_handle:
@@ -559,6 +658,285 @@ def append_columns_with_defaults(in_file_name, out_file_name, column_names, defa
                     out_file.write(column_names_addition)
                 else:
                     out_file.write(default_values_addition)
+
+
+def filter_countfile_by_imbalance_ratio(
+        counts_file_name, indiv_counts_file_name, temp_file_name,
+        imbalance_ratio, splicing_event_type):
+    with open(counts_file_name, 'rt') as counts_file_handle:
+        with open(indiv_counts_file_name, 'rt') as indiv_counts_file_handle:
+            with open(temp_file_name, 'wt') as temp_file_handle:
+                error = filter_countfile_by_imbalance_ratio_with_handles(
+                    counts_file_handle, indiv_counts_file_handle,
+                    temp_file_handle, imbalance_ratio, splicing_event_type)
+
+    if error:
+        formatted_message = (
+            'error in filter_countfile_by_imbalance_ratio({}, {}, {}, {}, {}): {}'
+            .format(counts_file_name, indiv_counts_file_name, temp_file_name,
+                    imbalance_ratio, splicing_event_type, error))
+        print(formatted_message, file=sys.stderr)
+    else:
+        shutil.move(temp_file_name, counts_file_name)
+
+
+def filter_countfile_by_imbalance_ratio_with_handles(
+        counts_file_handle, indiv_counts_file_handle, temp_file_handle,
+        imbalance_ratio, splicing_event_type):
+    if imbalance_ratio == 0:
+        return 'imbalance_ratio == 0'
+
+    inverse_imbalance_ratio = 1 / imbalance_ratio
+    calculate_ratios = get_calculate_ratios_for_event_type(splicing_event_type)
+    if calculate_ratios is None:
+        return 'unexpected splicing_event_type: {}'.format(splicing_event_type)
+
+    for i, counts_line in enumerate(counts_file_handle):
+        counts_line = counts_line.rstrip('\n')
+        if i == 0:
+            temp_file_handle.write('{}\n'.format(counts_line))
+            indiv_counts_header_line = (
+                indiv_counts_file_handle.readline().rstrip('\n'))
+            indiv_counts_header_columns = indiv_counts_header_line.split('\t')
+            continue
+
+        counts_columns = counts_line.split('\t')
+        counts_id = counts_columns[0]
+        indiv_counts_columns = get_indiv_counts_columns_for_id(
+            counts_id, indiv_counts_file_handle)
+        if indiv_counts_columns is None:
+            return 'ID: {} not found in individual count file'.format(counts_id)
+
+        is_imbalanced, error = check_if_imbalanced(
+            imbalance_ratio, inverse_imbalance_ratio,
+            indiv_counts_header_columns, indiv_counts_columns, calculate_ratios)
+        if error:
+            return error
+
+        if is_imbalanced:
+            continue
+
+        temp_file_handle.write('{}\n'.format(counts_line))
+
+    return None
+
+
+def append_individual_counts(counts_file_name, mats_file_name, temp_file_name):
+    with open(counts_file_name, 'rt') as counts_file_handle:
+        with open(mats_file_name, 'rt') as mats_file_handle:
+            with open(temp_file_name, 'wt') as temp_file_handle:
+                error = append_individual_counts_with_handles(
+                    counts_file_handle, mats_file_handle, temp_file_handle)
+
+    if error:
+        formatted_message = (
+            'error in append_individual_counts({}, {}, {}): {}'
+            .format(counts_file_name, mats_file_name, temp_file_name, error))
+        print(formatted_message, file=sys.stderr)
+    else:
+        shutil.move(temp_file_name, mats_file_name)
+
+
+def append_individual_counts_with_handles(counts_file_handle, mats_file_handle,
+                                          temp_file_handle):
+    for i, mats_line in enumerate(mats_file_handle):
+        mats_line = mats_line.rstrip('\n')
+        mats_columns = mats_line.split('\t')
+        if i == 0:
+            counts_header_line = counts_file_handle.readline().rstrip('\n')
+            counts_header_columns = counts_header_line.split('\t')
+            counts_header_cols_without_id = counts_header_columns[1:]
+            combined_line = '\t'.join(mats_columns
+                                      + counts_header_cols_without_id)
+            temp_file_handle.write('{}\n'.format(combined_line))
+            continue
+
+        mats_id = mats_columns[0]
+        counts_columns = get_indiv_counts_columns_for_id(mats_id,
+                                                         counts_file_handle)
+        if counts_columns is None:
+            return 'ID: {} not found in individual count file'.format(mats_id)
+
+        counts_cols_without_id = counts_columns[1:]
+        combined_line = '\t'.join(mats_columns + counts_cols_without_id)
+        temp_file_handle.write('{}\n'.format(combined_line))
+
+    return None
+
+
+def try_parse_float(float_str):
+    try:
+        return float(float_str), None
+    except ValueError as e:
+        return None, 'error in try_parse_float({}): {}'.format(float_str, e)
+
+
+def try_sum_floats(floats_string):
+    float_strings = floats_string.split(',')
+    float_sum = 0
+    for float_string in float_strings:
+        parsed_float, error = try_parse_float(float_string)
+        if error:
+            return None, 'try_sum_floats({}): {}'.format(floats_string, error)
+
+        float_sum += parsed_float
+
+    return float_sum, None
+
+
+def calculate_ratio(a, b):
+    if 0 in [a, b]:
+        return 0
+
+    return a / b
+
+
+def calculate_ratios_se(headers, values):
+    upstream_to_target_count = None
+    target_to_downstream_count = None
+    for i, header in enumerate(headers):
+        if header == 'upstream_to_target_count':
+            upstream_to_target_count, error = try_sum_floats(values[i])
+            if error:
+                return None, error
+
+        if header == 'target_to_downstream_count':
+            target_to_downstream_count, error = try_sum_floats(values[i])
+            if error:
+                return None, error
+
+    if None in [upstream_to_target_count, target_to_downstream_count]:
+        error = ('Missing expected headers in calculate_ratios_se({}, {})'
+                 .format(headers, values))
+        return None, error
+
+    ratio = calculate_ratio(upstream_to_target_count, target_to_downstream_count)
+    return [ratio], None
+
+
+def calculate_ratios_mxe(headers, values):
+    upstream_to_first_count = None
+    first_to_downstream_count = None
+    upstream_to_second_count = None
+    second_to_downstream_count = None
+    for i, header in enumerate(headers):
+        if header == 'upstream_to_first_count':
+            upstream_to_first_count, error = try_sum_floats(values[i])
+            if error:
+                return None, error
+
+        if header == 'first_to_downstream_count':
+            first_to_downstream_count, error = try_sum_floats(values[i])
+            if error:
+                return None, error
+
+        if header == 'upstream_to_second_count':
+            upstream_to_second_count, error = try_sum_floats(values[i])
+            if error:
+                return None, error
+
+        if header == 'second_to_downstream_count':
+            second_to_downstream_count, error = try_sum_floats(values[i])
+            if error:
+                return None, error
+
+    if None in [upstream_to_first_count, first_to_downstream_count,
+                upstream_to_second_count, second_to_downstream_count]:
+        error = ('Missing expected headers in calculate_ratios_mxe({}, {})'
+                 .format(headers, values))
+        return None, error
+
+    first_ratio = calculate_ratio(upstream_to_first_count,
+                                  first_to_downstream_count)
+    second_ratio = calculate_ratio(upstream_to_second_count,
+                                   second_to_downstream_count)
+    return [first_ratio, second_ratio], None
+
+
+def calculate_ratios_alt_ss(headers, values):
+    across_short_boundary_count = None
+    long_to_flanking_count = None
+    for i, header in enumerate(headers):
+        if header == 'across_short_boundary_count':
+            across_short_boundary_count, error = try_sum_floats(values[i])
+            if error:
+                return None, error
+
+        if header == 'long_to_flanking_count':
+            long_to_flanking_count, error = try_sum_floats(values[i])
+            if error:
+                return None, error
+
+    if None in [across_short_boundary_count, long_to_flanking_count]:
+        error = ('Missing expected headers in calculate_ratios_alt_ss({}, {})'
+                 .format(headers, values))
+        return None, error
+
+    ratio = calculate_ratio(across_short_boundary_count, long_to_flanking_count)
+    return [ratio], None
+
+
+def calculate_ratios_ri(headers, values):
+    upstream_to_intron_count = None
+    intron_to_downstream_count = None
+    for i, header in enumerate(headers):
+        if header == 'upstream_to_intron_count':
+            upstream_to_intron_count, error = try_sum_floats(values[i])
+            if error:
+                return None, error
+
+        if header == 'intron_to_downstream_count':
+            intron_to_downstream_count, error = try_sum_floats(values[i])
+            if error:
+                return None, error
+
+    if None in [upstream_to_intron_count, intron_to_downstream_count]:
+        error = ('Missing expected headers in calculate_ratios_ri({}, {})'
+                 .format(headers, values))
+        return None, error
+
+    ratio = calculate_ratio(upstream_to_intron_count, intron_to_downstream_count)
+    return [ratio], None
+
+
+def get_calculate_ratios_for_event_type(event_type):
+    if event_type == 'SE':
+        return calculate_ratios_se
+    if event_type == 'MXE':
+        return calculate_ratios_mxe
+    if event_type in ['A3SS', 'A5SS']:
+        return calculate_ratios_alt_ss
+    if event_type == 'RI':
+        return calculate_ratios_ri
+
+    return None
+
+
+def check_if_imbalanced(imbalance_ratio, inverse_imbalance_ratio,
+                        header_columns, counts_columns, calculate_ratios_func):
+    ratios, error = calculate_ratios_func(header_columns,
+                                          counts_columns)
+    if error:
+        return None, error
+
+    for ratio in ratios:
+        if ratio > imbalance_ratio or ratio < inverse_imbalance_ratio:
+            return True, None
+
+    return False, None
+
+
+def get_indiv_counts_columns_for_id(mats_id, counts_file_handle):
+    # The IDs have the same order in both files, but some IDs may only be
+    # in the counts file.
+    for counts_line in counts_file_handle:
+        counts_line = counts_line.rstrip('\n')
+        counts_columns = counts_line.split('\t')
+        counts_id = counts_columns[0]
+        if counts_id == mats_id:
+            return counts_columns
+
+    return None
 
 
 def get_python_executable():
@@ -627,9 +1005,12 @@ def apply_id_mapping(event_type, out_dir):
             id_to_orig[values[1]] = values[0]
 
     file_templates = ['fromGTF.{}.txt', 'JC.raw.input.{}.txt',
-                      'JCEC.raw.input.{}.txt']
+                      'JCEC.raw.input.{}.txt', 'individualCounts.{}.txt']
     for file_template in file_templates:
         file_path = os.path.join(out_dir, file_template.format(event_type))
+        if not os.path.exists(file_path):
+            continue
+
         with open(file_path, 'rt') as in_f:
             # using mapping_path as a temporary file which is then removed
             with open(mapping_path, 'wt') as out_f:
@@ -682,11 +1063,13 @@ def main():
 
         process_counts(jc_it % (event_type), args.tstat, 'JC', event_type,
                        args.cstat, args.od, args.out_tmp_sub_dir, args.stat,
-                       args.paired_stats, python_executable, root_dir,
+                       args.paired_stats, args.darts_model, args.darts_cutoff,
+                       python_executable, root_dir, args.imbalance_ratio,
                        args.drop_zero_read_replicates_for_stat)
         process_counts(jcec_it % (event_type), args.tstat, 'JCEC', event_type,
                        args.cstat, args.od, args.out_tmp_sub_dir, args.stat,
-                       args.paired_stats, python_executable, root_dir,
+                       args.paired_stats, args.darts_model, args.darts_cutoff,
+                       python_executable, root_dir, args.imbalance_ratio,
                        args.drop_zero_read_replicates_for_stat)
 
     generate_summary(python_executable, args.od, root_dir)

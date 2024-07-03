@@ -84,6 +84,15 @@ cdef:
     char* count_header = 'ID\tIJC_SAMPLE_1\tSJC_SAMPLE_1\tIJC_SAMPLE_2\tSJC_SAMPLE_2\tIncFormLen\tSkipFormLen\n'
     char* count_tmp = '%d\t%s\t%s\t%s\t%s\t%d\t%d\n'
 
+    char* se_count_header = 'ID\tupstream_to_target_count\ttarget_to_downstream_count\ttarget_count\tupstream_to_downstream_count\n'
+    char* se_count_template = '%d\t%s\t%s\t%s\t%s\n'
+    char* mxe_count_header = 'ID\tupstream_to_first_count\tfirst_to_downstream_count\tfirst_count\tupstream_to_second_count\tsecond_to_downstream_count\tsecond_count\n'
+    char* mxe_count_template = '%d\t%s\t%s\t%s\t%s\t%s\t%s\n'
+    char* alt35_count_header = 'ID\tacross_short_boundary_count\tlong_to_flanking_count\texclusive_to_long_count\tshort_to_flanking_count\n'
+    char* alt35_count_template = '%d\t%s\t%s\t%s\t%s\n'
+    char* ri_count_header = 'ID\tupstream_to_intron_count\tintron_to_downstream_count\tintron_count\tupstream_to_downstream_count\n'
+    char* ri_count_template = '%d\t%s\t%s\t%s\t%s\n'
+
     inline int c_max(long a, long b) nogil: return a if a >= b else b
     inline int c_min(long a, long b) nogil: return a if a <= b else b
 
@@ -780,7 +789,7 @@ cdef void parse_bam(long fidx, string bam,
 
     if not br.Open(bam):
         with gil:
-            print 'Fail to open %s' % (bam)
+            print('Fail to open {}: {}'.format(bam, br.GetErrorString()))
         return
 
     refv = br.GetReferenceData()
@@ -1933,15 +1942,70 @@ cdef void detect_ri(const string& gID, Gene& gene, SupInfo& supInfo,
 
 @boundscheck(False)
 @wraparound(False)
+cdef void count_se_junction(const vector[pair[long,long]]& junction_read,
+                            int read_count, const SE_info& se_event,
+                            SE_counts_for_event& se_counts) nogil:
+    cdef:
+        size_t i
+
+    for i in range(1, junction_read.size()-1):
+        if ((i == 1
+             and junction_read[i].first == se_event.te
+             and junction_read[i].second == se_event.ds
+             and junction_read[0].second >= se_event.ts)):
+            se_counts.target_to_downstream_count += read_count
+            se_counts.jc_counts.inc_count += read_count
+            se_counts.jcec_counts.inc_count += read_count
+            return
+        if ((i == junction_read.size() - 2
+             and junction_read[i].first == se_event.ue
+             and junction_read[i].second == se_event.ts
+             and junction_read[junction_read.size()-1].first != -1
+             and junction_read[junction_read.size()-1].first <= se_event.te)):
+            se_counts.upstream_to_target_count += read_count
+            se_counts.jc_counts.inc_count += read_count
+            se_counts.jcec_counts.inc_count += read_count
+            return
+        if ((i < junction_read.size()-2
+             and junction_read[i].first == se_event.ue
+             and junction_read[i].second == se_event.ts
+             and junction_read[i+1].first == se_event.te
+             and junction_read[i+1].second == se_event.ds)):
+            se_counts.upstream_to_target_count += read_count
+            se_counts.target_to_downstream_count += read_count
+            se_counts.jc_counts.inc_count += read_count
+            se_counts.jcec_counts.inc_count += read_count
+            return
+        if ((junction_read[i].first == se_event.ue
+             and junction_read[i].second == se_event.ds)):
+            se_counts.upstream_to_downstream_count += read_count
+            se_counts.jc_counts.skp_count += read_count
+            se_counts.jcec_counts.skp_count += read_count
+            return
+
+
+@boundscheck(False)
+@wraparound(False)
+cdef void count_se_exon(const Tetrad& exon_read,
+                        const int count,
+                        const SE_info& se_event,
+                        SE_counts_for_event& se_counts) nogil:
+    if ((exon_read.first > se_event.ts
+         and exon_read.fourth != -1
+         and exon_read.fourth <= se_event.te)):
+        se_counts.target_count += count
+        se_counts.jcec_counts.inc_count += count
+
+
+@boundscheck(False)
+@wraparound(False)
 cdef void count_se(cset[SE_info]& junction_se,
-                   vector[unordered_map[string,cmap[Tetrad,int]]]& exons,
-                   vector[unordered_map[string,cmap[vector[pair[long,long]],int]]]& juncs,
-                   vector[Read_count_table]& jc_se, vector[Read_count_table]& jcec_se,
-                   vector[size_t]& residx) nogil:
+                   unordered_map[string,cmap[Tetrad,int]]& exons,
+                   unordered_map[string,cmap[vector[pair[long,long]],int]]& juncs,
+                   vector[SE_counts_for_event_by_bam]& se_counts,
+                   const int bam_i) nogil:
     cdef:
         int idx
-        size_t i, j, 
-        Tetrad tetrad
         cmap[Tetrad,int].iterator imap2
         cmap[vector[pair[long,long]],int].iterator imap
         unordered_map[string,cmap[Tetrad,int]].iterator iunmap2
@@ -1951,60 +2015,118 @@ cdef void count_se(cset[SE_info]& junction_se,
     while ise != junction_se.end():
         idx = deref(ise).iid
 
-        for i in residx:
-            iunmap = juncs[i].find(deref(ise).gID)
-            if iunmap != juncs[i].end():
-                imap = deref(iunmap).second.begin()
-                while imap != deref(iunmap).second.end():
-                    for j in range(1, deref(imap).first.size()-1):
-                        if (j == 1 and\
-                                deref(imap).first[j].first == deref(ise).te and\
-                                deref(imap).first[j].second == deref(ise).ds and\
-                                deref(imap).first[0].second >= deref(ise).ts) or\
-                           (j == deref(imap).first.size() - 2 and\
-                                deref(imap).first[j].first == deref(ise).ue and\
-                                deref(imap).first[j].second == deref(ise).ts and\
-                                deref(imap).first[deref(imap).first.size()-1].first <= deref(ise).te) or\
-                           (j < deref(imap).first.size()-2 and\
-                                deref(imap).first[j].first == deref(ise).ue and\
-                                deref(imap).first[j].second == deref(ise).ts and\
-                                deref(imap).first[j+1].first == deref(ise).te and\
-                                deref(imap).first[j+1].second == deref(ise).ds):
-                            jc_se[idx].incv[i] += deref(imap).second
-                            jcec_se[idx].incv[i] += deref(imap).second
-                            break
-                        elif deref(imap).first[j].first == deref(ise).ue and\
-                                deref(imap).first[j].second == deref(ise).ds:
-                            jc_se[idx].skpv[i] += deref(imap).second
-                            jcec_se[idx].skpv[i] += deref(imap).second
-                            break
+        iunmap = juncs.find(deref(ise).gID)
+        if iunmap != juncs.end():
+            imap = deref(iunmap).second.begin()
+            while imap != deref(iunmap).second.end():
+                count_se_junction(deref(imap).first, deref(imap).second,
+                                  deref(ise), se_counts[idx].counts[bam_i])
+                inc(imap)
 
-                    inc(imap)
-
-            iunmap2 = exons[i].find(deref(ise).gID)
-            if iunmap2 != exons[i].end():
-                imap2 = deref(iunmap2).second.begin()
-                while imap2 != deref(iunmap2).second.end():
-                    if deref(imap2).first.first > deref(ise).ts and\
-                            deref(imap2).first.fourth != -1 and\
-                            deref(imap2).first.fourth <= deref(ise).te:
-                        jcec_se[idx].incv[i] += deref(imap2).second
-                    inc(imap2)
+        iunmap2 = exons.find(deref(ise).gID)
+        if iunmap2 != exons.end():
+            imap2 = deref(iunmap2).second.begin()
+            while imap2 != deref(iunmap2).second.end():
+                count_se_exon(deref(imap2).first, deref(imap2).second,
+                              deref(ise), se_counts[idx].counts[bam_i])
+                inc(imap2)
 
         inc(ise)
 
 
 @boundscheck(False)
 @wraparound(False)
+cdef void count_mxe_junction(const vector[pair[long,long]]& junction_read,
+                             int read_count, const MXE_info& mxe_event,
+                             MXE_counts_for_event& mxe_counts) nogil:
+    cdef:
+        size_t i
+
+    for i in range(1, junction_read.size()-1):
+        if ((i == 1
+             and junction_read[i].first == mxe_event.te
+             and junction_read[i].second == mxe_event.ds
+             and junction_read[0].second >= mxe_event.ts)):
+            mxe_counts.first_to_downstream_count += read_count
+            mxe_counts.jc_counts.inc_count += read_count
+            mxe_counts.jcec_counts.inc_count += read_count
+            return
+        if ((i == junction_read.size()-2
+             and junction_read[i].first == mxe_event.ue
+             and junction_read[i].second == mxe_event.ts
+             and junction_read[junction_read.size()-1].first != -1
+             and junction_read[junction_read.size()-1].first <= mxe_event.te)):
+            mxe_counts.upstream_to_first_count += read_count
+            mxe_counts.jc_counts.inc_count += read_count
+            mxe_counts.jcec_counts.inc_count += read_count
+            return
+        if ((i < junction_read.size()-2
+             and junction_read[i].first == mxe_event.ue
+             and junction_read[i].second == mxe_event.ts
+             and junction_read[i+1].first == mxe_event.te
+             and junction_read[i+1].second == mxe_event.ds)):
+            mxe_counts.upstream_to_first_count += read_count
+            mxe_counts.first_to_downstream_count += read_count
+            mxe_counts.jc_counts.inc_count += read_count
+            mxe_counts.jcec_counts.inc_count += read_count
+            return
+        if ((i == 1
+             and junction_read[i].first == mxe_event.se
+             and junction_read[i].second == mxe_event.ds
+             and junction_read[0].second >= mxe_event.ss)):
+            mxe_counts.second_to_downstream_count += read_count
+            mxe_counts.jc_counts.skp_count += read_count
+            mxe_counts.jcec_counts.skp_count += read_count
+            return
+        if ((i == junction_read.size()-2
+             and junction_read[i].first == mxe_event.ue
+             and junction_read[i].second == mxe_event.ss
+             and junction_read[junction_read.size()-1].first != -1
+             and junction_read[junction_read.size()-1].first <= mxe_event.se)):
+            mxe_counts.upstream_to_second_count += read_count
+            mxe_counts.jc_counts.skp_count += read_count
+            mxe_counts.jcec_counts.skp_count += read_count
+            return
+        if ((i < junction_read.size()-2
+             and junction_read[i].first == mxe_event.ue
+             and junction_read[i].second == mxe_event.ss
+             and junction_read[i+1].first == mxe_event.se
+             and junction_read[i+1].second == mxe_event.ds)):
+            mxe_counts.upstream_to_second_count += read_count
+            mxe_counts.second_to_downstream_count += read_count
+            mxe_counts.jc_counts.skp_count += read_count
+            mxe_counts.jcec_counts.skp_count += read_count
+            return
+
+
+@boundscheck(False)
+@wraparound(False)
+cdef void count_mxe_exon(const Tetrad& exon_read,
+                         const int count,
+                         const MXE_info& mxe_event,
+                         MXE_counts_for_event& mxe_counts) nogil:
+    if ((exon_read.first > mxe_event.ts
+         and exon_read.fourth != -1
+         and exon_read.fourth <= mxe_event.te)):
+        mxe_counts.first_count += count
+        mxe_counts.jcec_counts.inc_count += count
+        return
+    if ((exon_read.first > mxe_event.ss
+           and exon_read.fourth != -1
+           and exon_read.fourth <= mxe_event.se)):
+        mxe_counts.second_count += count
+        mxe_counts.jcec_counts.skp_count += count
+
+
+@boundscheck(False)
+@wraparound(False)
 cdef void count_mxe(cset[MXE_info]& junction_mxe,
-                    vector[unordered_map[string,cmap[Tetrad,int]]]& exons,
-                    vector[unordered_map[string,cmap[vector[pair[long,long]],int]]]& juncs,
-                    vector[Read_count_table]& jc_mxe, vector[Read_count_table]& jcec_mxe,
-                    vector[size_t]& residx) nogil:
+                    unordered_map[string,cmap[Tetrad,int]]& exons,
+                    unordered_map[string,cmap[vector[pair[long,long]],int]]& juncs,
+                    vector[MXE_counts_for_event_by_bam]& mxe_counts,
+                    const int bam_i) nogil:
     cdef:
         int idx
-        size_t i, j
-        Tetrad tetrad
         cmap[Tetrad,int].iterator imap2
         cmap[vector[pair[long,long]],int].iterator imap
         unordered_map[string,cmap[Tetrad,int]].iterator iunmap2
@@ -2014,303 +2136,274 @@ cdef void count_mxe(cset[MXE_info]& junction_mxe,
     while imxe != junction_mxe.end():
         idx = deref(imxe).iid
 
-        for i in residx:
-            iunmap = juncs[i].find(deref(imxe).gID)
-            if iunmap != juncs[i].end():
-                imap = deref(iunmap).second.begin()
-                while imap != deref(iunmap).second.end():
-                    for j in range(1, deref(imap).first.size()-1):
-                        if (j == 1 and\
-                                deref(imap).first[j].first == deref(imxe).te and\
-                                deref(imap).first[j].second == deref(imxe).ds and\
-                                deref(imap).first[0].second >= deref(imxe).ts) or\
-                           (j == deref(imap).first.size()-2 and\
-                                deref(imap).first[j].first == deref(imxe).ue and\
-                                deref(imap).first[j].second == deref(imxe).ts and\
-                                deref(imap).first[deref(imap).first.size()-1].first <= deref(imxe).te) or\
-                           (j < deref(imap).first.size()-2 and\
-                                deref(imap).first[j].first == deref(imxe).ue and\
-                                deref(imap).first[j].second == deref(imxe).ts and\
-                                deref(imap).first[j+1].first == deref(imxe).te and\
-                                deref(imap).first[j+1].second == deref(imxe).ds):
-                            jc_mxe[idx].incv[i] += deref(imap).second
-                            jcec_mxe[idx].incv[i] += deref(imap).second
-                            break
-                        elif (j == 1 and\
-                                deref(imap).first[j].first == deref(imxe).se and\
-                                deref(imap).first[j].second == deref(imxe).ds and\
-                                deref(imap).first[0].second >= deref(imxe).ss) or\
-                           (j == deref(imap).first.size()-2 and\
-                                deref(imap).first[j].first == deref(imxe).ue and\
-                                deref(imap).first[j].second == deref(imxe).ss and\
-                                deref(imap).first[deref(imap).first.size()-1].first <= deref(imxe).se) or\
-                           (j < deref(imap).first.size()-2 and\
-                                deref(imap).first[j].first == deref(imxe).ue and\
-                                deref(imap).first[j].second == deref(imxe).ss and\
-                                deref(imap).first[j+1].first == deref(imxe).se and\
-                                deref(imap).first[j+1].second == deref(imxe).ds):
-                            jc_mxe[idx].skpv[i] += deref(imap).second
-                            jcec_mxe[idx].skpv[i] += deref(imap).second
-                            break
+        iunmap = juncs.find(deref(imxe).gID)
+        if iunmap != juncs.end():
+            imap = deref(iunmap).second.begin()
+            while imap != deref(iunmap).second.end():
+                count_mxe_junction(deref(imap).first, deref(imap).second,
+                                   deref(imxe), mxe_counts[idx].counts[bam_i])
+                inc(imap)
 
-                    inc(imap)
-
-            iunmap2 = exons[i].find(deref(imxe).gID)
-            if iunmap2 != exons[i].end():
-                imap2 = deref(iunmap2).second.begin()
-                while imap2 != deref(iunmap2).second.end():
-                    if deref(imap2).first.first > deref(imxe).ts and\
-                            deref(imap2).first.fourth != -1 and\
-                            deref(imap2).first.fourth <= deref(imxe).te:
-                        jcec_mxe[idx].incv[i] += deref(imap2).second
-                    elif deref(imap2).first.first > deref(imxe).ss and\
-                            deref(imap2).first.fourth != -1 and\
-                            deref(imap2).first.fourth <= deref(imxe).se:
-                        jcec_mxe[idx].skpv[i] += deref(imap2).second
-
-                    inc(imap2)
+        iunmap2 = exons.find(deref(imxe).gID)
+        if iunmap2 != exons.end():
+            imap2 = deref(iunmap2).second.begin()
+            while imap2 != deref(iunmap2).second.end():
+                count_mxe_exon(deref(imap2).first, deref(imap2).second,
+                               deref(imxe), mxe_counts[idx].counts[bam_i])
+                inc(imap2)
 
         inc(imxe)
 
 
 @boundscheck(False)
 @wraparound(False)
-cdef void count_alt3(cset[ALT35_info]& junction_3,
-                     vector[unordered_map[string,cmap[Tetrad,int]]]& exons,
-                     vector[unordered_map[string,cmap[vector[pair[long,long]],int]]]& juncs,
-                     vector[Read_count_table]& jc_alt3, vector[Read_count_table]& jcec_alt3,
-                     int& jld2, int& rl, vector[size_t]& residx) nogil:
+cdef void count_alt35_right_flank_junction(
+    const vector[pair[long,long]]& junction_read,
+    int read_count, const ALT35_info& alt35_event, int rl_jl,
+    ALT35_counts_for_event& alt35_counts) nogil:
+
     cdef:
-        int idx
-        size_t i, j
-        int rl_jl = rl - jld2
-        Tetrad tetrad
-        cmap[Tetrad,int].iterator imap2
-        cmap[vector[pair[long,long]],int].iterator imap
-        unordered_map[string,cmap[Tetrad,int]].iterator iunmap2
-        unordered_map[string,cmap[vector[pair[long,long]],int]].iterator iunmap
-        cset[ALT35_info].iterator ialt3 = junction_3.begin()
+        size_t i
 
-    while ialt3 != junction_3.end():
-        idx = deref(ialt3).iid
-
-        if deref(ialt3).fs > deref(ialt3).le:
-            for i in residx:
-                iunmap = juncs[i].find(deref(ialt3).gID)
-                if iunmap != juncs[i].end():
-                    imap = deref(iunmap).second.begin()
-                    while imap != deref(iunmap).second.end():
-                        for j in range(1, deref(imap).first.size()-1):
-                            if deref(imap).first[j].first == deref(ialt3).le and\
-                                    deref(imap).first[j].second == deref(ialt3).fs:
-                                jc_alt3[idx].incv[i] += deref(imap).second
-                                jcec_alt3[idx].incv[i] += deref(imap).second
-                                break
-                            elif deref(imap).first[j].first == deref(ialt3).se and\
-                                    deref(imap).first[j].second == deref(ialt3).fs:
-                                jc_alt3[idx].skpv[i] += deref(imap).second
-                                jcec_alt3[idx].skpv[i] += deref(imap).second
-                                break
-                            elif j == deref(imap).first.size()-2 and\
-                                    deref(imap).first[j].second <= deref(ialt3).se-rl_jl and\
-                                    deref(imap).first[j+1].first >= deref(ialt3).se+rl_jl and\
-                                    deref(imap).first[j+1].first <= deref(ialt3).le:
-                                jc_alt3[idx].incv[i] += deref(imap).second
-                                jcec_alt3[idx].incv[i] += deref(imap).second
-                                break
-
-                        inc(imap)
-
-                iunmap2 = exons[i].find(deref(ialt3).gID)
-                if iunmap2 != exons[i].end():
-                    imap2 = deref(iunmap2).second.begin()
-                    while imap2 != deref(iunmap2).second.end():
-                        if deref(imap2).first.second <= deref(ialt3).se-rl_jl+1 and\
-                                deref(imap2).first.second != -1 and\
-                                deref(imap2).first.fourth != -1 and\
-                                deref(imap2).first.fourth <= deref(ialt3).le and\
-                                deref(imap2).first.third >= deref(ialt3).se+rl_jl:
-                            jc_alt3[idx].incv[i] += deref(imap2).second
-                            jcec_alt3[idx].incv[i] += deref(imap2).second
-                        if deref(imap2).first.first > deref(ialt3).se and\
-                                deref(imap2).first.fourth != -1 and\
-                                deref(imap2).first.fourth <= deref(ialt3).le:
-                            jcec_alt3[idx].incv[i] += deref(imap2).second
-
-                        inc(imap2)
-
-        else:
-            for i in residx:
-                iunmap = juncs[i].find(deref(ialt3).gID)
-                if iunmap != juncs[i].end():
-                    imap = deref(iunmap).second.begin()
-                    while imap != deref(iunmap).second.end():
-                        for j in range(1, deref(imap).first.size()-1):
-                            if deref(imap).first[j].first == deref(ialt3).fe and\
-                                    deref(imap).first[j].second == deref(ialt3).ls:
-                                jc_alt3[idx].incv[i] += deref(imap).second
-                                jcec_alt3[idx].incv[i] += deref(imap).second
-                                break
-                            elif deref(imap).first[j].first == deref(ialt3).fe and\
-                                    deref(imap).first[j].second == deref(ialt3).ss:
-                                jc_alt3[idx].skpv[i] += deref(imap).second
-                                jcec_alt3[idx].skpv[i] += deref(imap).second
-                                break
-                            elif j == 1 and\
-                                    deref(imap).first[0].second >= deref(ialt3).ls and\
-                                    deref(imap).first[0].second <= deref(ialt3).ss-rl_jl and\
-                                    deref(imap).first[1].first >= deref(ialt3).ss+rl_jl:
-                                jc_alt3[idx].incv[i] += deref(imap).second
-                                jcec_alt3[idx].incv[i] += deref(imap).second
-                                break
-
-                        inc(imap)
-
-                iunmap2 = exons[i].find(deref(ialt3).gID)
-                if iunmap2 != exons[i].end():
-                    imap2 = deref(iunmap2).second.begin()
-                    while imap2 != deref(iunmap2).second.end():
-                        if deref(imap2).first.first > deref(ialt3).ls and\
-                                deref(imap2).first.second != -1 and\
-                                deref(imap2).first.second <= deref(ialt3).ss-rl_jl+1 and\
-                                deref(imap2).first.third >= deref(ialt3).ss+rl_jl:
-                            jc_alt3[idx].incv[i] += deref(imap2).second
-                            jcec_alt3[idx].incv[i] += deref(imap2).second
-                        if deref(imap2).first.first > deref(ialt3).ls and\
-                                deref(imap2).first.fourth != -1 and\
-                                deref(imap2).first.fourth <= deref(ialt3).ss:
-                            jcec_alt3[idx].incv[i] += deref(imap2).second
-
-                        inc(imap2)
-
-        inc(ialt3)
+    for i in range(1, junction_read.size()-1):
+        if ((junction_read[i].first == alt35_event.le
+             and junction_read[i].second == alt35_event.fs)):
+            alt35_counts.long_to_flanking_count += read_count
+            alt35_counts.jc_counts.inc_count += read_count
+            alt35_counts.jcec_counts.inc_count += read_count
+            return
+        if ((junction_read[i].first == alt35_event.se
+               and junction_read[i].second == alt35_event.fs)):
+            alt35_counts.short_to_flanking_count += read_count
+            alt35_counts.jc_counts.skp_count += read_count
+            alt35_counts.jcec_counts.skp_count += read_count
+            return
+        if ((i == junction_read.size()-2
+             and junction_read[i].second != -1
+             and junction_read[i].second <= alt35_event.se-rl_jl
+             and junction_read[i+1].first >= alt35_event.se+rl_jl
+             and junction_read[i+1].first <= alt35_event.le)):
+            alt35_counts.across_short_boundary_count += read_count
+            alt35_counts.jc_counts.inc_count += read_count
+            alt35_counts.jcec_counts.inc_count += read_count
+            return
 
 
 @boundscheck(False)
 @wraparound(False)
-cdef void count_alt5(cset[ALT35_info]& junction_5,
-                     vector[unordered_map[string,cmap[Tetrad,int]]]& exons,
-                     vector[unordered_map[string,cmap[vector[pair[long,long]],int]]]& juncs,
-                     vector[Read_count_table]& jc_alt5, vector[Read_count_table]& jcec_alt5,
-                     int& jld2, int& rl, vector[size_t]& residx) nogil:
+cdef void count_alt35_right_flank_exon(
+    const Tetrad& exon_read,
+    const int count,
+    const ALT35_info& alt35_event, int rl_jl,
+    ALT35_counts_for_event& alt35_counts) nogil:
+
+    if ((exon_read.second <= alt35_event.se-rl_jl+1
+         and exon_read.second != -1
+         and exon_read.fourth != -1
+         and exon_read.fourth <= alt35_event.le
+         and exon_read.third >= alt35_event.se+rl_jl)):
+        alt35_counts.across_short_boundary_count += count
+        alt35_counts.jc_counts.inc_count += count
+        alt35_counts.jcec_counts.inc_count += count
+    if ((exon_read.first > alt35_event.se
+         and exon_read.fourth != -1
+         and exon_read.fourth <= alt35_event.le)):
+        alt35_counts.exclusive_to_long_count += count
+        alt35_counts.jcec_counts.inc_count += count
+
+
+@boundscheck(False)
+@wraparound(False)
+cdef void count_alt35_left_flank_junction(
+    const vector[pair[long,long]]& junction_read,
+    int read_count, const ALT35_info& alt35_event, int rl_jl,
+    ALT35_counts_for_event& alt35_counts) nogil:
+
+    cdef:
+        size_t i
+
+    for i in range(1, junction_read.size()-1):
+        if ((junction_read[i].first == alt35_event.fe
+             and junction_read[i].second == alt35_event.ls)):
+            alt35_counts.long_to_flanking_count += read_count
+            alt35_counts.jc_counts.inc_count += read_count
+            alt35_counts.jcec_counts.inc_count += read_count
+            return
+        if ((junction_read[i].first == alt35_event.fe
+             and junction_read[i].second == alt35_event.ss)):
+            alt35_counts.short_to_flanking_count += read_count
+            alt35_counts.jc_counts.skp_count += read_count
+            alt35_counts.jcec_counts.skp_count += read_count
+            return
+        if ((i == 1
+             and junction_read[0].second >= alt35_event.ls
+             and junction_read[0].second <= alt35_event.ss-rl_jl
+             and junction_read[1].first >= alt35_event.ss+rl_jl)):
+            alt35_counts.across_short_boundary_count += read_count
+            alt35_counts.jc_counts.inc_count += read_count
+            alt35_counts.jcec_counts.inc_count += read_count
+            return
+
+
+@boundscheck(False)
+@wraparound(False)
+cdef void count_alt35_left_flank_exon(
+    const Tetrad& exon_read,
+    const int count,
+    const ALT35_info& alt35_event, int rl_jl,
+    ALT35_counts_for_event& alt35_counts) nogil:
+
+    if ((exon_read.first > alt35_event.ls
+         and exon_read.second != -1
+         and exon_read.second <= alt35_event.ss-rl_jl+1
+         and exon_read.third >= alt35_event.ss+rl_jl)):
+        alt35_counts.across_short_boundary_count += count
+        alt35_counts.jc_counts.inc_count += count
+        alt35_counts.jcec_counts.inc_count += count
+    if ((exon_read.first > alt35_event.ls
+         and exon_read.fourth != -1
+         and exon_read.fourth <= alt35_event.ss)):
+        alt35_counts.exclusive_to_long_count += count
+        alt35_counts.jcec_counts.inc_count += count
+
+
+@boundscheck(False)
+@wraparound(False)
+cdef void count_alt35(cset[ALT35_info]& junction_35,
+                      unordered_map[string,cmap[Tetrad,int]]& exons,
+                      unordered_map[string,cmap[vector[pair[long,long]],int]]& juncs,
+                      vector[ALT35_counts_for_event_by_bam]& alt35_counts,
+                      int& jld2, int& rl, const int bam_i) nogil:
     cdef:
         int idx
-        size_t i, j
-        long rl_jl = rl - jld2
-        Tetrad tetrad
+        int rl_jl = rl - jld2
         cmap[Tetrad,int].iterator imap2
         cmap[vector[pair[long,long]],int].iterator imap
         unordered_map[string,cmap[Tetrad,int]].iterator iunmap2
         unordered_map[string,cmap[vector[pair[long,long]],int]].iterator iunmap
-        cset[ALT35_info].iterator ialt5 = junction_5.begin()
+        cset[ALT35_info].iterator ialt35 = junction_35.begin()
 
-    while ialt5 != junction_5.end():
-        idx = deref(ialt5).iid
+    while ialt35 != junction_35.end():
+        idx = deref(ialt35).iid
 
-        if deref(ialt5).fs > deref(ialt5).le:
-            for i in residx:
-                iunmap = juncs[i].find(deref(ialt5).gID)
-                if iunmap != juncs[i].end():
-                    imap = deref(iunmap).second.begin()
-                    while imap != deref(iunmap).second.end():
-                        for j in range(1, deref(imap).first.size()-1):
-                            if deref(imap).first[j].first == deref(ialt5).le and\
-                                    deref(imap).first[j].second == deref(ialt5).fs:
-                                jc_alt5[idx].incv[i] += deref(imap).second
-                                jcec_alt5[idx].incv[i] += deref(imap).second
-                                break
-                            elif deref(imap).first[j].first == deref(ialt5).se and\
-                                    deref(imap).first[j].second == deref(ialt5).fs:
-                                jc_alt5[idx].skpv[i] += deref(imap).second
-                                jcec_alt5[idx].skpv[i] += deref(imap).second
-                                break
-                            elif j == deref(imap).first.size()-2 and\
-                                    deref(imap).first[j].second <= deref(ialt5).se-rl_jl and\
-                                    deref(imap).first[j+1].first >= deref(ialt5).se+rl_jl and\
-                                    deref(imap).first[j+1].first <= deref(ialt5).le:
-                                jc_alt5[idx].incv[i] += deref(imap).second
-                                jcec_alt5[idx].incv[i] += deref(imap).second
-                                break
+        if deref(ialt35).fs > deref(ialt35).le:
+            iunmap = juncs.find(deref(ialt35).gID)
+            if iunmap != juncs.end():
+                imap = deref(iunmap).second.begin()
+                while imap != deref(iunmap).second.end():
+                    count_alt35_right_flank_junction(
+                        deref(imap).first, deref(imap).second,
+                        deref(ialt35), rl_jl,
+                        alt35_counts[idx].counts[bam_i])
+                    inc(imap)
 
-                        inc(imap)
-
-                iunmap2 = exons[i].find(deref(ialt5).gID)
-                if iunmap2 != exons[i].end():
-                    imap2 = deref(iunmap2).second.begin()
-                    while imap2 != deref(iunmap2).second.end():
-                        if deref(imap2).first.second <= deref(ialt5).se-rl_jl+1 and\
-                                deref(imap2).first.second != -1 and\
-                                deref(imap2).first.fourth != -1 and\
-                                deref(imap2).first.fourth <= deref(ialt5).le and\
-                                deref(imap2).first.third >= deref(ialt5).se+rl_jl:
-                            jc_alt5[idx].incv[i] += deref(imap2).second
-                            jcec_alt5[idx].incv[i] += deref(imap2).second
-                        if deref(imap2).first.first > deref(ialt5).se and\
-                                deref(imap2).first.fourth != -1 and\
-                                deref(imap2).first.fourth <= deref(ialt5).le:
-                            jcec_alt5[idx].incv[i] += deref(imap2).second
-
-                        inc(imap2)
-
+            iunmap2 = exons.find(deref(ialt35).gID)
+            if iunmap2 != exons.end():
+                imap2 = deref(iunmap2).second.begin()
+                while imap2 != deref(iunmap2).second.end():
+                    count_alt35_right_flank_exon(
+                        deref(imap2).first, deref(imap2).second,
+                        deref(ialt35), rl_jl,
+                        alt35_counts[idx].counts[bam_i])
+                    inc(imap2)
         else:
-            for i in residx:
-                iunmap = juncs[i].find(deref(ialt5).gID)
-                if iunmap != juncs[i].end():
-                    imap = deref(iunmap).second.begin()
-                    while imap != deref(iunmap).second.end():
-                        for j in range(1, deref(imap).first.size()-1):
-                            if deref(imap).first[j].first == deref(ialt5).fe and\
-                                    deref(imap).first[j].second == deref(ialt5).ls:
-                                jc_alt5[idx].incv[i] += deref(imap).second
-                                jcec_alt5[idx].incv[i] += deref(imap).second
-                                break
-                            elif deref(imap).first[j].first == deref(ialt5).fe and\
-                                    deref(imap).first[j].second == deref(ialt5).ss:
-                                jc_alt5[idx].skpv[i] += deref(imap).second
-                                jcec_alt5[idx].skpv[i] += deref(imap).second
-                                break
-                            elif j == 1 and\
-                                    deref(imap).first[0].second >= deref(ialt5).ls and\
-                                    deref(imap).first[0].second <= deref(ialt5).ss-rl_jl and\
-                                    deref(imap).first[1].first >= deref(ialt5).ss+rl_jl:
-                                jc_alt5[idx].incv[i] += deref(imap).second
-                                jcec_alt5[idx].incv[i] += deref(imap).second
-                                break
+            iunmap = juncs.find(deref(ialt35).gID)
+            if iunmap != juncs.end():
+                imap = deref(iunmap).second.begin()
+                while imap != deref(iunmap).second.end():
+                    count_alt35_left_flank_junction(
+                        deref(imap).first, deref(imap).second,
+                        deref(ialt35), rl_jl,
+                        alt35_counts[idx].counts[bam_i])
+                    inc(imap)
 
-                        inc(imap)
+            iunmap2 = exons.find(deref(ialt35).gID)
+            if iunmap2 != exons.end():
+                imap2 = deref(iunmap2).second.begin()
+                while imap2 != deref(iunmap2).second.end():
+                    count_alt35_left_flank_exon(
+                        deref(imap2).first, deref(imap2).second,
+                        deref(ialt35), rl_jl,
+                        alt35_counts[idx].counts[bam_i])
+                    inc(imap2)
 
-                iunmap2 = exons[i].find(deref(ialt5).gID)
-                if iunmap2 != exons[i].end():
-                    imap2 = deref(iunmap2).second.begin()
-                    while imap2 != deref(iunmap2).second.end():
-                        if deref(imap2).first.first > deref(ialt5).ls and\
-                                deref(imap2).first.second != -1 and\
-                                deref(imap2).first.second <= deref(ialt5).ss-rl_jl+1 and\
-                                deref(imap2).first.third >= deref(ialt5).ss+rl_jl:
-                            jc_alt5[idx].incv[i] += deref(imap2).second
-                            jcec_alt5[idx].incv[i] += deref(imap2).second
-                        if deref(imap2).first.first > deref(ialt5).ls and\
-                                deref(imap2).first.fourth != -1 and\
-                                deref(imap2).first.fourth <= deref(ialt5).ss:
-                            jcec_alt5[idx].incv[i] += deref(imap2).second
+        inc(ialt35)
 
-                        inc(imap2)
 
-        inc(ialt5)
+@boundscheck(False)
+@wraparound(False)
+cdef void count_ri_junction(const vector[pair[long,long]]& junction_read,
+                            int read_count, const RI_info& ri_event,
+                            int rl_jl,
+                            RI_counts_for_event& ri_counts) nogil:
+    cdef:
+        size_t i
+
+    for i in range(1, junction_read.size()-1):
+        if ((junction_read[i].first == ri_event.ue
+             and junction_read[i].second == ri_event.ds)):
+            ri_counts.upstream_to_downstream_count += read_count
+            ri_counts.jc_counts.skp_count += read_count
+            ri_counts.jcec_counts.skp_count += read_count
+            return
+        if ((i == 1
+             and junction_read[0].second != -1
+             and junction_read[0].second <= ri_event.ds-rl_jl
+             and junction_read[1].first >= ri_event.ds+rl_jl)):
+            ri_counts.intron_to_downstream_count += read_count
+            ri_counts.jc_counts.inc_count += read_count
+            ri_counts.jcec_counts.inc_count += read_count
+            return
+        if ((i == junction_read.size()-2
+             and junction_read[i].second != -1
+             and junction_read[i].second <= ri_event.ue-rl_jl
+             and junction_read[i+1].first >= ri_event.ue+rl_jl)):
+            ri_counts.upstream_to_intron_count += read_count
+            ri_counts.jc_counts.inc_count += read_count
+            ri_counts.jcec_counts.inc_count += read_count
+            return
+
+
+@boundscheck(False)
+@wraparound(False)
+cdef void count_ri_exon(const Tetrad& exon_read,
+                        const int count,
+                        const RI_info& ri_event, int rl_jl,
+                        RI_counts_for_event& ri_counts) nogil:
+    cdef:
+        cbool counted = False
+
+    if ((exon_read.second <= ri_event.ue-rl_jl+1
+         and exon_read.second != -1
+         and exon_read.third >= ri_event.ue+rl_jl)):
+        ri_counts.upstream_to_intron_count += count
+        ri_counts.jc_counts.inc_count += count
+        ri_counts.jcec_counts.inc_count += count
+        counted = True
+    if ((exon_read.second != -1
+         and exon_read.second <= ri_event.ds-rl_jl+1
+         and exon_read.third >= ri_event.ds+rl_jl)):
+        ri_counts.intron_to_downstream_count += count
+        if not counted:
+            ri_counts.jc_counts.inc_count += count
+            ri_counts.jcec_counts.inc_count += count
+    if ((exon_read.first > ri_event.ue
+         and exon_read.fourth != -1
+         and exon_read.fourth <= ri_event.ds)):
+        ri_counts.intron_count += count
+        ri_counts.jcec_counts.inc_count += count
 
 
 @boundscheck(False)
 @wraparound(False)
 cdef void count_ri(cset[RI_info]& junction_ri,
-                   vector[unordered_map[string,cmap[Tetrad,int]]]& exons,
-                   vector[unordered_map[string,cmap[vector[pair[long,long]],int]]]& juncs,
-                   vector[Read_count_table]& jc_ri, vector[Read_count_table]& jcec_ri,
-                   int& jld2, int& rl, vector[size_t]& residx) nogil:
+                   unordered_map[string,cmap[Tetrad,int]]& exons,
+                   unordered_map[string,cmap[vector[pair[long,long]],int]]& juncs,
+                   vector[RI_counts_for_event_by_bam]& ri_counts,
+                   int& jld2, int& rl, const int bam_i) nogil:
     cdef:
         int idx
-        size_t i, j
         long rl_jl = rl - jld2
-        Tetrad tetrad
         cmap[Tetrad,int].iterator imap2
         cmap[vector[pair[long,long]],int].iterator imap
         unordered_map[string,cmap[Tetrad,int]].iterator iunmap2
@@ -2320,52 +2413,24 @@ cdef void count_ri(cset[RI_info]& junction_ri,
     while iri != junction_ri.end():
         idx = deref(iri).iid
 
-        for i in residx:
-            iunmap = juncs[i].find(deref(iri).gID)
-            if iunmap != juncs[i].end():
-                imap = deref(iunmap).second.begin()
-                while imap != deref(iunmap).second.end():
-                    for j in range(1, deref(imap).first.size()-1):
-                        if deref(imap).first[j].first == deref(iri).ue and\
-                                deref(imap).first[j].second == deref(iri).ds:
-                            jc_ri[idx].skpv[i] += deref(imap).second
-                            jcec_ri[idx].skpv[i] += deref(imap).second
-                            break
-                        elif j == 1 and\
-                                deref(imap).first[0].second <= deref(iri).ds-rl_jl and\
-                                deref(imap).first[1].first >= deref(iri).ds+rl_jl:
-                            jc_ri[idx].incv[i] += deref(imap).second
-                            jcec_ri[idx].incv[i] += deref(imap).second
-                            break
-                        elif j == deref(imap).first.size()-2 and\
-                                deref(imap).first[j].second <= deref(iri).ue-rl_jl and\
-                                deref(imap).first[j+1].first >= deref(iri).ue+rl_jl:
-                            jc_ri[idx].incv[i] += deref(imap).second
-                            jcec_ri[idx].incv[i] += deref(imap).second
-                            break
+        iunmap = juncs.find(deref(iri).gID)
+        if iunmap != juncs.end():
+            imap = deref(iunmap).second.begin()
+            while imap != deref(iunmap).second.end():
+                count_ri_junction(deref(imap).first, deref(imap).second,
+                                  deref(iri), rl_jl,
+                                  ri_counts[idx].counts[bam_i])
+                inc(imap)
 
-                    inc(imap)
+        iunmap2 = exons.find(deref(iri).gID)
+        if iunmap2 != exons.end():
+            imap2 = deref(iunmap2).second.begin()
 
-            iunmap2 = exons[i].find(deref(iri).gID)
-            if iunmap2 != exons[i].end():
-                imap2 = deref(iunmap2).second.begin()
-
-                while imap2 != deref(iunmap2).second.end():
-                    if (deref(imap2).first.second <= deref(iri).ue-rl_jl+1 and\
-                            deref(imap2).first.second != -1 and\
-                            deref(imap2).first.third >= deref(iri).ue+rl_jl)\
-                        or\
-                       (deref(imap2).first.second != -1 and\
-                            deref(imap2).first.second <= deref(iri).ds-rl_jl+1 and\
-                            deref(imap2).first.third >= deref(iri).ds+rl_jl):
-                        jc_ri[idx].incv[i] += deref(imap2).second
-                        jcec_ri[idx].incv[i] += deref(imap2).second
-                    if deref(imap2).first.first > deref(iri).ue and\
-                            deref(imap2).first.fourth != -1 and\
-                            deref(imap2).first.fourth <= deref(iri).ds:
-                        jcec_ri[idx].incv[i] += deref(imap2).second
-
-                    inc(imap2)
+            while imap2 != deref(iunmap2).second.end():
+                count_ri_exon(deref(imap2).first, deref(imap2).second,
+                              deref(iri), rl_jl,
+                              ri_counts[idx].counts[bam_i])
+                inc(imap2)
 
         inc(iri)
 
@@ -2376,129 +2441,263 @@ cdef count_occurrence(str bams, list dot_rmats_paths, str od,
                       cset[SE_info]& se, cset[MXE_info]& mxe,
                       cset[ALT35_info]& alt3, cset[ALT35_info]& alt5,
                       cset[RI_info]& ri, int sam1len, int& jld2, int& rl,
-                      int& nthread, cbool stat):
+                      int& nthread, cbool stat, cbool individual_counts):
     cdef:
         size_t idx = 0
         list vbams = bams.split(',')
-        int num = len(vbams), vlen, fidx
+        int num = len(vbams), vlen, fidx, bam_i
         cset[SE_info].iterator ise = se.begin()
         cset[MXE_info].iterator imxe = mxe.begin()
         cset[ALT35_info].iterator ialt3 = alt3.begin()
         cset[ALT35_info].iterator ialt5 = alt5.begin()
         cset[RI_info].iterator iri = ri.begin()
-        vector[Read_count_table] jc_se = vector[Read_count_table](se.size())
-        vector[Read_count_table] jc_mxe = vector[Read_count_table](mxe.size())
-        vector[Read_count_table] jc_alt3 = vector[Read_count_table](alt3.size())
-        vector[Read_count_table] jc_alt5 = vector[Read_count_table](alt5.size())
-        vector[Read_count_table] jc_ri = vector[Read_count_table](ri.size())
-        vector[Read_count_table] jcec_se = vector[Read_count_table](se.size())
-        vector[Read_count_table] jcec_mxe = vector[Read_count_table](mxe.size())
-        vector[Read_count_table] jcec_alt3 = vector[Read_count_table](alt3.size())
-        vector[Read_count_table] jcec_alt5 = vector[Read_count_table](alt5.size())
-        vector[Read_count_table] jcec_ri = vector[Read_count_table](ri.size())
+        vector[SE_counts_for_event_by_bam] se_counts = (
+            vector[SE_counts_for_event_by_bam](se.size()))
+        vector[MXE_counts_for_event_by_bam] mxe_counts = (
+            vector[MXE_counts_for_event_by_bam](mxe.size()))
+        vector[ALT35_counts_for_event_by_bam] alt3_counts = (
+            vector[ALT35_counts_for_event_by_bam](alt3.size()))
+        vector[ALT35_counts_for_event_by_bam] alt5_counts = (
+            vector[ALT35_counts_for_event_by_bam](alt5.size()))
+        vector[RI_counts_for_event_by_bam] ri_counts = (
+            vector[RI_counts_for_event_by_bam](ri.size()))
         vector[unordered_map[string,cmap[Tetrad,int]]] exons
         vector[unordered_map[string,cmap[vector[pair[long,long]],int]]] juncs
-        vector[vector[size_t]] resindice
 
     while ise != se.end():
         idx = deref(ise).iid
-        jc_se[idx].incv = vector[int](num, 0)
-        jc_se[idx].skpv = vector[int](num, 0)
-        jc_se[idx].inc_len = deref(ise).inc_len
-        jc_se[idx].skp_len = deref(ise).skp_len
-        jc_se[idx].strand = deref(ise).supInfo.strand
-        jcec_se[idx].incv = vector[int](num, 0)
-        jcec_se[idx].skpv = vector[int](num, 0)
-        jcec_se[idx].inc_len = deref(ise).inc_len_jcec
-        jcec_se[idx].skp_len = deref(ise).skp_len_jcec
-        jcec_se[idx].strand = deref(ise).supInfo.strand
+        se_counts[idx].counts = vector[SE_counts_for_event](num)
+        se_counts[idx].jc_lengths.inc_len = deref(ise).inc_len
+        se_counts[idx].jc_lengths.skp_len = deref(ise).skp_len
+        se_counts[idx].jcec_lengths.inc_len = deref(ise).inc_len_jcec
+        se_counts[idx].jcec_lengths.skp_len = deref(ise).skp_len_jcec
+        se_counts[idx].strand = deref(ise).supInfo.strand
         inc(ise)
 
     while imxe != mxe.end():
         idx = deref(imxe).iid
-        jc_mxe[idx].incv = vector[int](num, 0)
-        jc_mxe[idx].skpv = vector[int](num, 0)
-        jc_mxe[idx].inc_len = deref(imxe).inc_len
-        jc_mxe[idx].skp_len = deref(imxe).skp_len
-        jc_mxe[idx].strand = deref(imxe).supInfo.strand
-        jcec_mxe[idx].incv = vector[int](num, 0)
-        jcec_mxe[idx].skpv = vector[int](num, 0)
-        jcec_mxe[idx].inc_len = deref(imxe).inc_len_jcec
-        jcec_mxe[idx].skp_len = deref(imxe).skp_len_jcec
-        jcec_mxe[idx].strand = deref(imxe).supInfo.strand
+        mxe_counts[idx].counts = vector[MXE_counts_for_event](num)
+        mxe_counts[idx].jc_lengths.inc_len = deref(imxe).inc_len
+        mxe_counts[idx].jc_lengths.skp_len = deref(imxe).skp_len
+        mxe_counts[idx].jcec_lengths.inc_len = deref(imxe).inc_len_jcec
+        mxe_counts[idx].jcec_lengths.skp_len = deref(imxe).skp_len_jcec
+        mxe_counts[idx].strand = deref(imxe).supInfo.strand
         inc(imxe)
 
     while ialt3 != alt3.end():
         idx = deref(ialt3).iid
-        jc_alt3[idx].incv = vector[int](num, 0)
-        jc_alt3[idx].skpv = vector[int](num, 0)
-        jc_alt3[idx].inc_len = deref(ialt3).inc_len
-        jc_alt3[idx].skp_len = deref(ialt3).skp_len
-        jc_alt3[idx].strand = deref(ialt3).supInfo.strand
-        jcec_alt3[idx].incv = vector[int](num, 0)
-        jcec_alt3[idx].skpv = vector[int](num, 0)
-        jcec_alt3[idx].inc_len = deref(ialt3).inc_len_jcec
-        jcec_alt3[idx].skp_len = deref(ialt3).skp_len_jcec
-        jcec_alt3[idx].strand = deref(ialt3).supInfo.strand
+        alt3_counts[idx].counts = vector[ALT35_counts_for_event](num)
+        alt3_counts[idx].jc_lengths.inc_len = deref(ialt3).inc_len
+        alt3_counts[idx].jc_lengths.skp_len = deref(ialt3).skp_len
+        alt3_counts[idx].jcec_lengths.inc_len = deref(ialt3).inc_len_jcec
+        alt3_counts[idx].jcec_lengths.skp_len = deref(ialt3).skp_len_jcec
+        alt3_counts[idx].strand = deref(ialt3).supInfo.strand
         inc(ialt3)
 
     while ialt5 != alt5.end():
         idx = deref(ialt5).iid
-        jc_alt5[idx].incv = vector[int](num, 0)
-        jc_alt5[idx].skpv = vector[int](num, 0)
-        jc_alt5[idx].inc_len = deref(ialt5).inc_len
-        jc_alt5[idx].skp_len = deref(ialt5).skp_len
-        jc_alt5[idx].strand = deref(ialt5).supInfo.strand
-        jcec_alt5[idx].incv = vector[int](num, 0)
-        jcec_alt5[idx].skpv = vector[int](num, 0)
-        jcec_alt5[idx].inc_len = deref(ialt5).inc_len_jcec
-        jcec_alt5[idx].skp_len = deref(ialt5).skp_len_jcec
-        jcec_alt5[idx].strand = deref(ialt5).supInfo.strand
+        alt5_counts[idx].counts = vector[ALT35_counts_for_event](num)
+        alt5_counts[idx].jc_lengths.inc_len = deref(ialt5).inc_len
+        alt5_counts[idx].jc_lengths.skp_len = deref(ialt5).skp_len
+        alt5_counts[idx].jcec_lengths.inc_len = deref(ialt5).inc_len_jcec
+        alt5_counts[idx].jcec_lengths.skp_len = deref(ialt5).skp_len_jcec
+        alt5_counts[idx].strand = deref(ialt5).supInfo.strand
         inc(ialt5)
 
     while iri != ri.end():
         idx = deref(iri).iid
-        jc_ri[idx].incv = vector[int](num, 0)
-        jc_ri[idx].skpv = vector[int](num, 0)
-        jc_ri[idx].inc_len = deref(iri).inc_len
-        jc_ri[idx].skp_len = deref(iri).skp_len
-        jc_ri[idx].strand = deref(iri).supInfo.strand
-        jcec_ri[idx].incv = vector[int](num, 0)
-        jcec_ri[idx].skpv = vector[int](num, 0)
-        jcec_ri[idx].inc_len = deref(iri).inc_len_jcec
-        jcec_ri[idx].skp_len = deref(iri).skp_len_jcec
-        jcec_ri[idx].strand = deref(iri).supInfo.strand
+        ri_counts[idx].counts = vector[RI_counts_for_event](num)
+        ri_counts[idx].jc_lengths.inc_len = deref(iri).inc_len
+        ri_counts[idx].jc_lengths.skp_len = deref(iri).skp_len
+        ri_counts[idx].jcec_lengths.inc_len = deref(iri).inc_len_jcec
+        ri_counts[idx].jcec_lengths.skp_len = deref(iri).skp_len_jcec
+        ri_counts[idx].strand = deref(iri).supInfo.strand
         inc(iri)
 
     vlen = len(dot_rmats_paths)
-    resindice.resize(vlen)
     for fidx in prange(vlen, schedule='static', num_threads=nthread, nogil=True):
         with gil:
-            resindice[fidx] = load_read(bams, dot_rmats_paths[fidx], exons, juncs)
+            bam_i = load_read(bams, dot_rmats_paths[fidx], exons, juncs)
 
-        count_se(se, exons, juncs, jc_se, jcec_se, resindice[fidx])
-        count_mxe(mxe, exons, juncs, jc_mxe, jcec_mxe, resindice[fidx])
-        count_alt3(alt3, exons, juncs, jc_alt3, jcec_alt3, jld2, rl, resindice[fidx])
-        count_alt5(alt5, exons, juncs, jc_alt5, jcec_alt5, jld2, rl, resindice[fidx])
-        count_ri(ri, exons, juncs, jc_ri, jcec_ri, jld2, rl, resindice[fidx])
+        count_se(se, exons[bam_i], juncs[bam_i], se_counts, bam_i)
+        count_mxe(mxe, exons[bam_i], juncs[bam_i], mxe_counts, bam_i)
+        count_alt35(alt3, exons[bam_i], juncs[bam_i], alt3_counts, jld2, rl, bam_i)
+        count_alt35(alt5, exons[bam_i], juncs[bam_i], alt5_counts, jld2, rl, bam_i)
+        count_ri(ri, exons[bam_i], juncs[bam_i], ri_counts, jld2, rl, bam_i)
 
-        for idx in resindice[fidx]:
-            exons[idx].clear()
-            juncs[idx].clear()
+        exons[bam_i].clear()
+        juncs[bam_i].clear()
 
-    save_ct(od, jc_se, jc_mxe, jc_alt3, jc_alt5, jc_ri,
-            jcec_se, jcec_mxe, jcec_alt3, jcec_alt5, jcec_ri, sam1len, stat)
+    save_ct(od, se_counts, mxe_counts, alt3_counts, alt5_counts, ri_counts,
+            sam1len, stat, individual_counts)
 
 
 @boundscheck(False)
 @wraparound(False)
-cdef save_ct(str od, vector[Read_count_table]& jc_se,
-             vector[Read_count_table]& jc_mxe, vector[Read_count_table]& jc_alt3,
-             vector[Read_count_table]& jc_alt5, vector[Read_count_table]& jc_ri,
-             vector[Read_count_table]& jcec_se,
-             vector[Read_count_table]& jcec_mxe, vector[Read_count_table]& jcec_alt3,
-             vector[Read_count_table]& jcec_alt5, vector[Read_count_table]& jcec_ri,
-             int sam1len, cbool stat):
+cdef void write_se_count_rows(const vector[SE_counts_for_event_by_bam]& se_counts,
+                              int sam1len, FILE* se_fp,
+                              FILE* se_fp_n, FILE* se_fp_individual,
+                              cbool individual_counts):
+    cdef:
+        SE_joined_count_strings joined_strings
+
+    for i in range(se_counts.size()):
+        se_counts[i].join_counts_across_bams(sam1len, &joined_strings)
+        fprintf(se_fp, count_tmp, i,
+                joined_strings.jc_inc_1.c_str(),
+                joined_strings.jc_skp_1.c_str(),
+                joined_strings.jc_inc_2.c_str(),
+                joined_strings.jc_skp_2.c_str(),
+                se_counts[i].jc_lengths.inc_len,
+                se_counts[i].jc_lengths.skp_len)
+        fprintf(se_fp_n, count_tmp, i,
+                joined_strings.jcec_inc_1.c_str(),
+                joined_strings.jcec_skp_1.c_str(),
+                joined_strings.jcec_inc_2.c_str(),
+                joined_strings.jcec_skp_2.c_str(),
+                se_counts[i].jcec_lengths.inc_len,
+                se_counts[i].jcec_lengths.skp_len)
+        if individual_counts:
+            fprintf(se_fp_individual, se_count_template, i,
+                    joined_strings.upstream_to_target.c_str(),
+                    joined_strings.target_to_downstream.c_str(),
+                    joined_strings.target.c_str(),
+                    joined_strings.upstream_to_downstream.c_str())
+
+
+@boundscheck(False)
+@wraparound(False)
+cdef void write_mxe_count_rows(const vector[MXE_counts_for_event_by_bam]& mxe_counts,
+                               int sam1len, FILE* mxe_fp,
+                               FILE* mxe_fp_n, FILE* mxe_fp_individual,
+                               cbool individual_counts):
+    cdef:
+        MXE_joined_count_strings joined_strings
+
+    for i in range(mxe_counts.size()):
+        mxe_counts[i].join_counts_across_bams(sam1len, &joined_strings)
+        if mxe_counts[i].strand == plus_mark:
+            fprintf(mxe_fp, count_tmp, i,
+                    joined_strings.jc_inc_1.c_str(),
+                    joined_strings.jc_skp_1.c_str(),
+                    joined_strings.jc_inc_2.c_str(),
+                    joined_strings.jc_skp_2.c_str(),
+                    mxe_counts[i].jc_lengths.inc_len,
+                    mxe_counts[i].jc_lengths.skp_len)
+            fprintf(mxe_fp_n, count_tmp, i,
+                    joined_strings.jcec_inc_1.c_str(),
+                    joined_strings.jcec_skp_1.c_str(),
+                    joined_strings.jcec_inc_2.c_str(),
+                    joined_strings.jcec_skp_2.c_str(),
+                    mxe_counts[i].jcec_lengths.inc_len,
+                    mxe_counts[i].jcec_lengths.skp_len)
+            if individual_counts:
+                fprintf(mxe_fp_individual, mxe_count_template, i,
+                        joined_strings.upstream_to_first.c_str(),
+                        joined_strings.first_to_downstream.c_str(),
+                        joined_strings.first.c_str(),
+                        joined_strings.upstream_to_second.c_str(),
+                        joined_strings.second_to_downstream.c_str(),
+                        joined_strings.second.c_str())
+        else:
+            fprintf(mxe_fp, count_tmp, i,
+                    joined_strings.jc_skp_1.c_str(),
+                    joined_strings.jc_inc_1.c_str(),
+                    joined_strings.jc_skp_2.c_str(),
+                    joined_strings.jc_inc_2.c_str(),
+                    mxe_counts[i].jc_lengths.inc_len,
+                    mxe_counts[i].jc_lengths.skp_len)
+            fprintf(mxe_fp_n, count_tmp, i,
+                    joined_strings.jcec_skp_1.c_str(),
+                    joined_strings.jcec_inc_1.c_str(),
+                    joined_strings.jcec_skp_2.c_str(),
+                    joined_strings.jcec_inc_2.c_str(),
+                    mxe_counts[i].jcec_lengths.inc_len,
+                    mxe_counts[i].jcec_lengths.skp_len)
+            if individual_counts:
+                fprintf(mxe_fp_individual, mxe_count_template, i,
+                        joined_strings.upstream_to_second.c_str(),
+                        joined_strings.second_to_downstream.c_str(),
+                        joined_strings.second.c_str(),
+                        joined_strings.upstream_to_first.c_str(),
+                        joined_strings.first_to_downstream.c_str(),
+                        joined_strings.first.c_str())
+
+
+@boundscheck(False)
+@wraparound(False)
+cdef void write_alt35_count_rows(const vector[ALT35_counts_for_event_by_bam]& alt35_counts,
+                                 int sam1len, FILE* alt35_fp,
+                                 FILE* alt35_fp_n, FILE* alt35_fp_individual,
+                                 cbool individual_counts):
+    cdef:
+        ALT35_joined_count_strings joined_strings
+
+    for i in range(alt35_counts.size()):
+        alt35_counts[i].join_counts_across_bams(sam1len, &joined_strings)
+        fprintf(alt35_fp, count_tmp, i,
+                joined_strings.jc_inc_1.c_str(),
+                joined_strings.jc_skp_1.c_str(),
+                joined_strings.jc_inc_2.c_str(),
+                joined_strings.jc_skp_2.c_str(),
+                alt35_counts[i].jc_lengths.inc_len,
+                alt35_counts[i].jc_lengths.skp_len)
+        fprintf(alt35_fp_n, count_tmp, i,
+                joined_strings.jcec_inc_1.c_str(),
+                joined_strings.jcec_skp_1.c_str(),
+                joined_strings.jcec_inc_2.c_str(),
+                joined_strings.jcec_skp_2.c_str(),
+                alt35_counts[i].jcec_lengths.inc_len,
+                alt35_counts[i].jcec_lengths.skp_len)
+        if individual_counts:
+            fprintf(alt35_fp_individual, alt35_count_template, i,
+                    joined_strings.across_short_boundary.c_str(),
+                    joined_strings.long_to_flanking.c_str(),
+                    joined_strings.exclusive_to_long.c_str(),
+                    joined_strings.short_to_flanking.c_str())
+
+
+@boundscheck(False)
+@wraparound(False)
+cdef void write_ri_count_rows(const vector[RI_counts_for_event_by_bam]& ri_counts,
+                              int sam1len, FILE* ri_fp,
+                              FILE* ri_fp_n, FILE* ri_fp_individual,
+                              cbool individual_counts):
+    cdef:
+        RI_joined_count_strings joined_strings
+
+    for i in range(ri_counts.size()):
+        ri_counts[i].join_counts_across_bams(sam1len, &joined_strings)
+        fprintf(ri_fp, count_tmp, i,
+                joined_strings.jc_inc_1.c_str(),
+                joined_strings.jc_skp_1.c_str(),
+                joined_strings.jc_inc_2.c_str(),
+                joined_strings.jc_skp_2.c_str(),
+                ri_counts[i].jc_lengths.inc_len,
+                ri_counts[i].jc_lengths.skp_len)
+        fprintf(ri_fp_n, count_tmp, i,
+                joined_strings.jcec_inc_1.c_str(),
+                joined_strings.jcec_skp_1.c_str(),
+                joined_strings.jcec_inc_2.c_str(),
+                joined_strings.jcec_skp_2.c_str(),
+                ri_counts[i].jcec_lengths.inc_len,
+                ri_counts[i].jcec_lengths.skp_len)
+        if individual_counts:
+            fprintf(ri_fp_individual, ri_count_template, i,
+                    joined_strings.upstream_to_intron.c_str(),
+                    joined_strings.intron_to_downstream.c_str(),
+                    joined_strings.intron.c_str(),
+                    joined_strings.upstream_to_downstream.c_str())
+
+
+@boundscheck(False)
+@wraparound(False)
+cdef save_ct(str od, vector[SE_counts_for_event_by_bam]& se_counts,
+             vector[MXE_counts_for_event_by_bam]& mxe_counts,
+             vector[ALT35_counts_for_event_by_bam]& alt3_counts,
+             vector[ALT35_counts_for_event_by_bam]& alt5_counts,
+             vector[RI_counts_for_event_by_bam]& ri_counts,
+             int sam1len, cbool stat, cbool individual_counts):
     cdef:
         size_t i
         FILE *se_fp
@@ -2511,6 +2710,11 @@ cdef save_ct(str od, vector[Read_count_table]& jc_se,
         FILE *alt3_fp_n
         FILE *alt5_fp_n
         FILE *ri_fp_n
+        FILE *se_fp_individual
+        FILE *mxe_fp_individual
+        FILE *alt3_fp_individual
+        FILE *alt5_fp_individual
+        FILE *ri_fp_individual
         int total
 
     se_fp = fopen('%s/JC.raw.input.SE.txt' % (od), 'w')
@@ -2523,6 +2727,12 @@ cdef save_ct(str od, vector[Read_count_table]& jc_se,
     alt5_fp_n = fopen('%s/JCEC.raw.input.A5SS.txt' % (od), 'w')
     ri_fp = fopen('%s/JC.raw.input.RI.txt' % (od), 'w')
     ri_fp_n = fopen('%s/JCEC.raw.input.RI.txt' % (od), 'w')
+    if individual_counts:
+        se_fp_individual = fopen('%s/individualCounts.SE.txt' % (od), 'w')
+        mxe_fp_individual = fopen('%s/individualCounts.MXE.txt' % (od), 'w')
+        alt3_fp_individual = fopen('%s/individualCounts.A3SS.txt' % (od), 'w')
+        alt5_fp_individual = fopen('%s/individualCounts.A5SS.txt' % (od), 'w')
+        ri_fp_individual = fopen('%s/individualCounts.RI.txt' % (od), 'w')
 
     fprintf(se_fp, count_header)
     fprintf(se_fp_n, count_header)
@@ -2535,89 +2745,23 @@ cdef save_ct(str od, vector[Read_count_table]& jc_se,
     fprintf(ri_fp, count_header)
     fprintf(ri_fp_n, count_header)
 
-    for i in range(jc_se.size()):
-        fprintf(se_fp, count_tmp, i,
-                cjoin[vector[int].iterator](jc_se[i].incv.begin(), jc_se[i].incv.begin()+sam1len, ',').c_str(),
-                cjoin[vector[int].iterator](jc_se[i].skpv.begin(), jc_se[i].skpv.begin()+sam1len, ',').c_str(),
-                cjoin[vector[int].iterator](jc_se[i].incv.begin()+sam1len, jc_se[i].incv.end(), ',').c_str(),
-                cjoin[vector[int].iterator](jc_se[i].skpv.begin()+sam1len, jc_se[i].skpv.end(), ',').c_str(),
-                jc_se[i].inc_len, jc_se[i].skp_len)
-        fprintf(se_fp_n, count_tmp, i,
-                cjoin[vector[int].iterator](jcec_se[i].incv.begin(), jcec_se[i].incv.begin()+sam1len, ',').c_str(),
-                cjoin[vector[int].iterator](jcec_se[i].skpv.begin(), jcec_se[i].skpv.begin()+sam1len, ',').c_str(),
-                cjoin[vector[int].iterator](jcec_se[i].incv.begin()+sam1len, jcec_se[i].incv.end(), ',').c_str(),
-                cjoin[vector[int].iterator](jcec_se[i].skpv.begin()+sam1len, jcec_se[i].skpv.end(), ',').c_str(),
-                jcec_se[i].inc_len, jcec_se[i].skp_len)
+    if individual_counts:
+        fprintf(se_fp_individual, se_count_header)
+        fprintf(mxe_fp_individual, mxe_count_header)
+        fprintf(alt3_fp_individual, alt35_count_header)
+        fprintf(alt5_fp_individual, alt35_count_header)
+        fprintf(ri_fp_individual, ri_count_header)
 
-    for i in range(jc_mxe.size()):
-        if jc_mxe[i].strand == plus_mark:
-            fprintf(mxe_fp, count_tmp, i,
-                    cjoin[vector[int].iterator](jc_mxe[i].incv.begin(), jc_mxe[i].incv.begin()+sam1len, ',').c_str(),
-                    cjoin[vector[int].iterator](jc_mxe[i].skpv.begin(), jc_mxe[i].skpv.begin()+sam1len, ',').c_str(),
-                    cjoin[vector[int].iterator](jc_mxe[i].incv.begin()+sam1len, jc_mxe[i].incv.end(), ',').c_str(),
-                    cjoin[vector[int].iterator](jc_mxe[i].skpv.begin()+sam1len, jc_mxe[i].skpv.end(), ',').c_str(),
-                    jc_mxe[i].inc_len, jc_mxe[i].skp_len)
-            fprintf(mxe_fp_n, count_tmp, i,
-                    cjoin[vector[int].iterator](jcec_mxe[i].incv.begin(), jcec_mxe[i].incv.begin()+sam1len, ',').c_str(),
-                    cjoin[vector[int].iterator](jcec_mxe[i].skpv.begin(), jcec_mxe[i].skpv.begin()+sam1len, ',').c_str(),
-                    cjoin[vector[int].iterator](jcec_mxe[i].incv.begin()+sam1len, jcec_mxe[i].incv.end(), ',').c_str(),
-                    cjoin[vector[int].iterator](jcec_mxe[i].skpv.begin()+sam1len, jcec_mxe[i].skpv.end(), ',').c_str(),
-                    jcec_mxe[i].inc_len, jcec_mxe[i].skp_len)
-        else:
-            fprintf(mxe_fp, count_tmp, i,
-                    cjoin[vector[int].iterator](jc_mxe[i].skpv.begin(), jc_mxe[i].skpv.begin()+sam1len, ',').c_str(),
-                    cjoin[vector[int].iterator](jc_mxe[i].incv.begin(), jc_mxe[i].incv.begin()+sam1len, ',').c_str(),
-                    cjoin[vector[int].iterator](jc_mxe[i].skpv.begin()+sam1len, jc_mxe[i].skpv.end(), ',').c_str(),
-                    cjoin[vector[int].iterator](jc_mxe[i].incv.begin()+sam1len, jc_mxe[i].incv.end(), ',').c_str(),
-                    jc_mxe[i].inc_len, jc_mxe[i].skp_len)
-            fprintf(mxe_fp_n, count_tmp, i,
-                    cjoin[vector[int].iterator](jcec_mxe[i].skpv.begin(), jcec_mxe[i].skpv.begin()+sam1len, ',').c_str(),
-                    cjoin[vector[int].iterator](jcec_mxe[i].incv.begin(), jcec_mxe[i].incv.begin()+sam1len, ',').c_str(),
-                    cjoin[vector[int].iterator](jcec_mxe[i].skpv.begin()+sam1len, jcec_mxe[i].skpv.end(), ',').c_str(),
-                    cjoin[vector[int].iterator](jcec_mxe[i].incv.begin()+sam1len, jcec_mxe[i].incv.end(), ',').c_str(),
-                    jcec_mxe[i].inc_len, jcec_mxe[i].skp_len)
-
-    for i in range(jc_alt3.size()):
-        fprintf(alt3_fp, count_tmp, i,
-                cjoin[vector[int].iterator](jc_alt3[i].incv.begin(), jc_alt3[i].incv.begin()+sam1len, ',').c_str(),
-                cjoin[vector[int].iterator](jc_alt3[i].skpv.begin(), jc_alt3[i].skpv.begin()+sam1len, ',').c_str(),
-                cjoin[vector[int].iterator](jc_alt3[i].incv.begin()+sam1len, jc_alt3[i].incv.end(), ',').c_str(),
-                cjoin[vector[int].iterator](jc_alt3[i].skpv.begin()+sam1len, jc_alt3[i].skpv.end(), ',').c_str(),
-                jc_alt3[i].inc_len, jc_alt3[i].skp_len)
-        fprintf(alt3_fp_n, count_tmp, i,
-                cjoin[vector[int].iterator](jcec_alt3[i].incv.begin(), jcec_alt3[i].incv.begin()+sam1len, ',').c_str(),
-                cjoin[vector[int].iterator](jcec_alt3[i].skpv.begin(), jcec_alt3[i].skpv.begin()+sam1len, ',').c_str(),
-                cjoin[vector[int].iterator](jcec_alt3[i].incv.begin()+sam1len, jcec_alt3[i].incv.end(), ',').c_str(),
-                cjoin[vector[int].iterator](jcec_alt3[i].skpv.begin()+sam1len, jcec_alt3[i].skpv.end(), ',').c_str(),
-                jcec_alt3[i].inc_len, jcec_alt3[i].skp_len)
-
-    for i in range(jc_alt5.size()):
-        fprintf(alt5_fp, count_tmp, i,
-                cjoin[vector[int].iterator](jc_alt5[i].incv.begin(), jc_alt5[i].incv.begin()+sam1len, ',').c_str(),
-                cjoin[vector[int].iterator](jc_alt5[i].skpv.begin(), jc_alt5[i].skpv.begin()+sam1len, ',').c_str(),
-                cjoin[vector[int].iterator](jc_alt5[i].incv.begin()+sam1len, jc_alt5[i].incv.end(), ',').c_str(),
-                cjoin[vector[int].iterator](jc_alt5[i].skpv.begin()+sam1len, jc_alt5[i].skpv.end(), ',').c_str(),
-                jc_alt5[i].inc_len, jc_alt5[i].skp_len)
-        fprintf(alt5_fp_n, count_tmp, i,
-                cjoin[vector[int].iterator](jcec_alt5[i].incv.begin(), jcec_alt5[i].incv.begin()+sam1len, ',').c_str(),
-                cjoin[vector[int].iterator](jcec_alt5[i].skpv.begin(), jcec_alt5[i].skpv.begin()+sam1len, ',').c_str(),
-                cjoin[vector[int].iterator](jcec_alt5[i].incv.begin()+sam1len, jcec_alt5[i].incv.end(), ',').c_str(),
-                cjoin[vector[int].iterator](jcec_alt5[i].skpv.begin()+sam1len, jcec_alt5[i].skpv.end(), ',').c_str(),
-                jcec_alt5[i].inc_len, jcec_alt5[i].skp_len)
-
-    for i in range(jc_ri.size()):
-        fprintf(ri_fp, count_tmp, i,
-                cjoin[vector[int].iterator](jc_ri[i].incv.begin(), jc_ri[i].incv.begin()+sam1len, ',').c_str(),
-                cjoin[vector[int].iterator](jc_ri[i].skpv.begin(), jc_ri[i].skpv.begin()+sam1len, ',').c_str(),
-                cjoin[vector[int].iterator](jc_ri[i].incv.begin()+sam1len, jc_ri[i].incv.end(), ',').c_str(),
-                cjoin[vector[int].iterator](jc_ri[i].skpv.begin()+sam1len, jc_ri[i].skpv.end(), ',').c_str(),
-                jc_ri[i].inc_len, jc_ri[i].skp_len)
-        fprintf(ri_fp_n, count_tmp, i,
-                cjoin[vector[int].iterator](jcec_ri[i].incv.begin(), jcec_ri[i].incv.begin()+sam1len, ',').c_str(),
-                cjoin[vector[int].iterator](jcec_ri[i].skpv.begin(), jcec_ri[i].skpv.begin()+sam1len, ',').c_str(),
-                cjoin[vector[int].iterator](jcec_ri[i].incv.begin()+sam1len, jcec_ri[i].incv.end(), ',').c_str(),
-                cjoin[vector[int].iterator](jcec_ri[i].skpv.begin()+sam1len, jcec_ri[i].skpv.end(), ',').c_str(),
-                jcec_ri[i].inc_len, jcec_ri[i].skp_len)
+    write_se_count_rows(se_counts, sam1len, se_fp, se_fp_n,
+                        se_fp_individual, individual_counts)
+    write_mxe_count_rows(mxe_counts, sam1len, mxe_fp, mxe_fp_n,
+                         mxe_fp_individual, individual_counts)
+    write_alt35_count_rows(alt3_counts, sam1len, alt3_fp, alt3_fp_n,
+                           alt3_fp_individual, individual_counts)
+    write_alt35_count_rows(alt5_counts, sam1len, alt5_fp, alt5_fp_n,
+                           alt5_fp_individual, individual_counts)
+    write_ri_count_rows(ri_counts, sam1len, ri_fp, ri_fp_n,
+                        ri_fp_individual, individual_counts)
 
     fclose(se_fp)
     fclose(se_fp_n)
@@ -2629,6 +2773,13 @@ cdef save_ct(str od, vector[Read_count_table]& jc_se,
     fclose(alt5_fp_n)
     fclose(ri_fp)
     fclose(ri_fp_n)
+
+    if individual_counts:
+        fclose(se_fp_individual)
+        fclose(mxe_fp_individual)
+        fclose(alt3_fp_individual)
+        fclose(alt5_fp_individual)
+        fclose(ri_fp_individual)
 
 
 @boundscheck(False)
@@ -3211,9 +3362,15 @@ cdef read_mxe_event_set(str from_gtf_path, const int jld2, const int rl,
 
             sup_info.set_info(shared_col_values.g_sym, shared_col_values.chrom,
                               shared_col_values.strand)
-            ms_inclen(first_ex_start, first_ex_end, second_ex_start,
-                      second_ex_end, up_start, up_end, down_start, down_end,
-                      &inc_skip_lens, jld2, rl, rl_jl)
+            if shared_col_values.strand == '-':
+                ms_inclen(second_ex_start, second_ex_end, first_ex_start,
+                          first_ex_end, up_start, up_end, down_start, down_end,
+                          &inc_skip_lens, jld2, rl, rl_jl)
+            else:
+                ms_inclen(first_ex_start, first_ex_end, second_ex_start,
+                          second_ex_end, up_start, up_end, down_start, down_end,
+                          &inc_skip_lens, jld2, rl, rl_jl)
+
             is_novel_junc = False
             is_novel_ss = False
             mxe_info.set(shared_col_values.event_id, shared_col_values.g_id,
@@ -3537,18 +3694,18 @@ cdef int try_get_index(list values, object value, cbool* found):
 
 @boundscheck(False)
 @wraparound(False)
-cdef size_t _load_job(str rmatsf, list vbams, list prep_counts_by_bam,
-                      vector[unordered_map[string,vector[Triad]]]& novel_juncs,
-                      vector[unordered_map[string,cmap[Tetrad,int]]]& exons,
-                      vector[unordered_map[string,cmap[vector[pair[long,long]],int]]]& juncs,
-                      int mode):
+cdef int _load_job(str rmatsf, list vbams,
+                   vector[unordered_map[string,vector[Triad]]]& novel_juncs,
+                   vector[unordered_map[string,cmap[Tetrad,int]]]& exons,
+                   vector[unordered_map[string,cmap[vector[pair[long,long]],int]]]& juncs,
+                   int mode):
     cdef:
-        int i = 0, j = 0, k = 0, num = 0, idx = 0
+        int i = 0, j = 0, num = 0, idx = 0
         size_t vlen
         Triad triad
         Tetrad tetrad
         vector[pair[long,long]] vp
-        str line, gene_id
+        str line, gene_id, bam
         list bams, ele, eles, aligns, coords
         cbool index_found
 
@@ -3562,86 +3719,67 @@ cdef size_t _load_job(str rmatsf, list vbams, list prep_counts_by_bam,
 
     with open(rmatsf, 'r') as fp:
         bams = fp.readline().strip().split(',')
+        if len(bams) != 1:
+            sys.exit('Expected 1 bam per .rmats but got: {}\n'.format(bams))
+
+        bam = bams[0]
+        idx = try_get_index(vbams, bam, &index_found)
+        if not index_found:
+            sys.exit('Found data for unexpected bam in .rmats: {}\n'
+                     .format(bam))
+
+        novel_juncs[idx].clear()
+        exons[idx].clear()
+        juncs[idx].clear()
+
         # Skip over read length line. Already handled in split_sg_files_by_bam.
         fp.readline()
-        for i in range(len(bams)):
-            idx = try_get_index(vbams, bams[i], &index_found)
-            if not index_found:
-            # It's ok to have data for bams besides vbams
-                continue
-
-            novel_juncs[idx].clear()
-            exons[idx].clear()
-            juncs[idx].clear()
-            prep_counts_by_bam[idx] += 1
 
         # processing novel junctions
-        for i in range(len(bams)):
-            num = int(fp.readline())
-            idx = try_get_index(vbams, bams[i], &index_found)
+        num = int(fp.readline())
+        for i in range(num):
+            line = fp.readline().strip()
+            if mode == read_mode:
+                continue
 
-            for j in range(num):
-                line = fp.readline().strip()
-
-                # Still need to read past the lines for this bam
-                # even if not index_found
-                if mode == read_mode or not index_found:
-                    continue
-
-                eles = line.split(';')
-                gene_id = eles[0]
-
-                for line in eles[1:]:
-                    ele = [int(s) for s in line.split(',')]
-                    triad.set(ele[0], ele[1], ele[2])
-                    novel_juncs[idx][gene_id].push_back(triad)
+            eles = line.split(';')
+            gene_id = eles[0]
+            for line in eles[1:]:
+                ele = [int(s) for s in line.split(',')]
+                triad.set(ele[0], ele[1], ele[2])
+                novel_juncs[idx][gene_id].push_back(triad)
 
         if mode == sg_mode:
-            return len(bams)
+            return idx
 
         # processing exonic reads
-        for i in range(len(bams)):
-            num = int(fp.readline())
-            idx = try_get_index(vbams, bams[i], &index_found)
-            for j in range(num):
-                line = fp.readline().strip()
-
-                if not index_found:
-                    continue
-
-                eles = line.split(';')
-                gene_id = eles[0]
-
-                for line in eles[1:]:
-                    ele = [int(s) for s in line.split(',')]
-                    tetrad.set(ele[0], ele[1], ele[2], ele[3])
-                    exons[idx][gene_id][tetrad] = ele[4]
+        num = int(fp.readline())
+        for i in range(num):
+            line = fp.readline().strip()
+            eles = line.split(';')
+            gene_id = eles[0]
+            for line in eles[1:]:
+                ele = [int(s) for s in line.split(',')]
+                tetrad.set(ele[0], ele[1], ele[2], ele[3])
+                exons[idx][gene_id][tetrad] = ele[4]
 
         # processing junction reads
-        for i in range(len(bams)):
-            num = int(fp.readline())
-            idx = try_get_index(vbams, bams[i], &index_found)
+        num = int(fp.readline())
+        for i in range(num):
+            line = fp.readline().strip()
+            eles = line.split(';')
+            gene_id = eles[0]
+            for line in eles[1:]:
+                ele = [s for s in line.split(',')]
+                aligns = ele[0].split('=')
+                vp = vector[pair[long,long]](len(aligns))
+                for j in range(len(aligns)):
+                    coords = [int(s) for s in aligns[j].split(':')]
+                    vp[j].first = coords[0]
+                    vp[j].second = coords[1]
+                juncs[idx][gene_id][vp] = int(ele[1])
 
-            for j in range(num):
-                line = fp.readline().strip()
-
-                if not index_found:
-                    continue
-
-                eles = line.split(';')
-                gene_id = eles[0]
-
-                for line in eles[1:]:
-                    ele = [s for s in line.split(',')]
-                    aligns = ele[0].split('=')
-                    vp = vector[pair[long,long]](len(aligns))
-                    for k in range(len(aligns)):
-                        coords = [int(s) for s in aligns[k].split(':')]
-                        vp[k].first = coords[0]
-                        vp[k].second = coords[1]
-                    juncs[idx][gene_id][vp] = int(ele[1])
-
-        return len(bams)
+        return idx
 
 
 @boundscheck(False)
@@ -3649,7 +3787,7 @@ cdef size_t _load_job(str rmatsf, list vbams, list prep_counts_by_bam,
 cdef load_sg(str bams, list dot_rmats_paths,
              vector[unordered_map[string,vector[Triad]]]& novel_juncs):
     cdef:
-        int num = 0, num_file = 0
+        int num = 0, bam_i
         list vbams = bams.split(',')
         list prep_counts_by_bam
         vector[unordered_map[string,cmap[Tetrad,int]]] exons
@@ -3659,7 +3797,8 @@ cdef load_sg(str bams, list dot_rmats_paths,
     prep_counts_by_bam = [0 for i in range(num)]
 
     for name in dot_rmats_paths:
-        _load_job(name, vbams, prep_counts_by_bam, novel_juncs, exons, juncs, sg_mode)
+        bam_i = _load_job(name, vbams, novel_juncs, exons, juncs, sg_mode)
+        prep_counts_by_bam[bam_i] += 1
 
     prep_counts_by_bam_name = {bam_name: 0 for bam_name in vbams}
     input_counts_by_bam_name = {bam_name: 0 for bam_name in vbams}
@@ -3687,6 +3826,7 @@ cdef load_sg(str bams, list dot_rmats_paths,
 
     if any_error:
         sys.exit(1)
+
 
 @boundscheck(False)
 @wraparound(False)
@@ -3797,23 +3937,16 @@ cdef dict split_sg_files_by_bam(str bams, str tmp_dir, str out_dir,
 
 @boundscheck(False)
 @wraparound(False)
-cdef vector[size_t] load_read(str bams, str fn,
-                              vector[unordered_map[string,cmap[Tetrad,int]]]& exons,
-                              vector[unordered_map[string,cmap[vector[pair[long,long]],int]]]& juncs):
+cdef int load_read(str bams, str fn,
+                   vector[unordered_map[string,cmap[Tetrad,int]]]& exons,
+                   vector[unordered_map[string,cmap[vector[pair[long,long]],int]]]& juncs):
     cdef:
-        int num = 0, num_file = 0
+        int bam_i
         list vbams = bams.split(',')
-        list prep_counts_by_bam
         vector[unordered_map[string,vector[Triad]]] novel_juncs
-        vector[size_t] residx
 
-    num = len(vbams)
-    prep_counts_by_bam = [0 for i in range(num)]
-
-    _load_job(fn, vbams, prep_counts_by_bam, novel_juncs, exons, juncs, read_mode)
-    residx = [i for i in range(num) if prep_counts_by_bam[i] == 1]
-
-    return residx
+    bam_i = _load_job(fn, vbams, novel_juncs, exons, juncs, read_mode)
+    return bam_i
 
 
 def run_pipe(args):
@@ -3898,7 +4031,8 @@ def run_pipe(args):
         start = time.time()
         count_occurrence(args.bams, dot_rmats_file_paths, args.od, se, mxe,
                          alt3, alt5, ri, sam1len, jld2,
-                         args.readLength, args.nthread, args.stat)
+                         args.readLength, args.nthread, args.stat,
+                         args.individual_counts)
         print 'count:', time.time() - start
 
         shutil.rmtree(split_dot_rmats_dir_path)

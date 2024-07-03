@@ -1,4 +1,4 @@
-# rMATS turbo v4.1.2
+# rMATS turbo v4.3.0
 
 [![Latest Release](https://img.shields.io/github/release/Xinglab/rmats-turbo.svg?label=Latest%20Release)](https://github.com/Xinglab/rmats-turbo/releases/latest)
 [![Total GitHub Downloads](https://img.shields.io/github/downloads/Xinglab/rmats-turbo/total.svg?label=Total%20GitHub%20Downloads)](https://github.com/Xinglab/rmats-turbo/releases)
@@ -43,6 +43,7 @@ Tested on Ubuntu (20.04 LTS)
 - gfortran (Fortran 77)
 - CMake (3.15.4)
 - [PAIRADISE](https://github.com/Xinglab/PAIRADISE) (optional)
+- [DARTS](https://github.com/Xinglab/DARTS) (optional)
 - Samtools (optional)
 - STAR (optional)
 
@@ -60,13 +61,14 @@ python rmats.py {arguments}
 
 The [build_rmats](build_rmats) script usage is:
 ```
-./build_rmats [--conda] [--no-paired-model]
+./build_rmats [--conda] [--no-paired-model] [--no-darts-model]
 
 --conda: create a conda environment for Python and R dependencies
 --no-paired-model: do not install dependencies for the paired model
+--no-darts-model: do not install dependencies for the darts model
 ```
 
-With `--conda` [build_rmats](build_rmats) installs a conda environment that satisfies the required Python dependencies and also the R dependencies needed to use the paired model (PAIRADISE). The Python dependencies are listed in [python_conda_requirements.txt](python_conda_requirements.txt) and the R dependencies are handled using [r_conda_requirements.txt](r_conda_requirements.txt) and [install_r_deps.R](install_r_deps.R) after cloning the PAIRADISE git repo.
+With `--conda` [build_rmats](build_rmats) installs a conda environment that satisfies the required Python dependencies and also the R dependencies needed to use the paired model (PAIRADISE) and the DARTS model. The Python dependencies are listed in [python_conda_requirements.txt](python_conda_requirements.txt) and the R dependencies are handled using [paired_model_conda_requirements.txt](paired_model_conda_requirements.txt), [darts_model_conda_requirements.txt](darts_model_conda_requirements.txt), and [install_r_deps.R](install_r_deps.R) after cloning the PAIRADISE and DARTS git repos.
 
 
 [run_rmats](run_rmats) is a wrapper to call [rmats.py](rmats.py) with the conda environment used by [build_rmats](build_rmats). It also sources [setup_environment.sh](setup_environment.sh) which can be modified to handle other setup that might be needed before running rmats (such as Environment Modules).
@@ -255,6 +257,7 @@ After all of the BAMs have been processed in this way, the output directory will
 - If analyzing a small data set, `--task both` can be used to perform the prep and post steps in a single run.
 - `--novelSS` is an experimental feature that allows splicing events to be detected that involve an unannotated splice site.
 - `--fixed-event-set` can be set to a directory containing the `fromGTF.[AS].txt` files from a previous run of rMATS. The events in the provided files will be used directly instead of detecting events from the input reads. This can be used to run new data against the events detected from a previous rMATS run. The `fromGTF.[AS].txt` files can also be edited manually to specify a custom event set.
+- `--libType` options are based on [TopHat](https://ccb.jhu.edu/software/tophat/manual.shtml) `--library-type`. For `fr-unstranded`, the strand of the alignment is not checked. For `fr-firststrand` and `fr-secondstrand`, the strand is determined for each read and the strand is checked against the annotated strand for the gene. For `fr-firststrand` and `fr-secondstrand`, paired reads must be aligned to opposite strands. For `fr-secondstrand` the aligned strand of the first read is used as the original strand. For `fr-firststrand`, the aligned strand of the first read is not used as the original strand and instead the other strand is used as the original. According to the [salmon](https://salmon.readthedocs.io/en/latest/library_type.html#fraglibtype) library format `fr-firststrand` is ISR and `fr-secondstrand` is ISF
 
 ### All Arguments
 
@@ -290,7 +293,8 @@ optional arguments:
                         for strand-specific data. Only relevant to the prep
                         step, not the post step. Default: fr-unstranded
   --readLength READLENGTH
-                        The length of each read
+                        The length of each read. Required parameter, with the
+                        value set according to the RNA-seq read length
   --variable-read-length
                         Allow reads with lengths that differ from --readLength
                         to be processed. --readLength will still be used to
@@ -300,29 +304,30 @@ optional arguments:
                         counting the number of reads spanning splice
                         junctions. A minimum number of "anchor length"
                         nucleotides must be mapped to each end of a given
-                        junction. The minimum value is 1 and the default value
-                        is set to 1 to make use of all possible splice
-                        junction reads.
+                        splice junction. The minimum value is 1 and the
+                        default value is set to 1 to make use of all possible
+                        splice junction reads.
   --tophatAnchor TOPHATANCHOR
                         The "anchor length" or "overhang length" used in the
-                        aligner. At least "anchor length" NT must be mapped to
-                        each end of a given junction. The default is 1. (Only
-                        if using fastq)
+                        aligner. At least "anchor length" nucleotides must be
+                        mapped to each end of a given splice junction. The
+                        default is 1. (Only if using fastq)
   --bi BINDEX           The directory name of the STAR binary indices (name of
-                        the directory that contains the SA file). (Only if
-                        using fastq)
+                        the directory that contains the suffix array file).
+                        (Only if using fastq)
   --nthread NTHREAD     The number of threads. The optimal number of threads
                         should be equal to the number of CPU cores. Default: 1
   --tstat TSTAT         The number of threads for the statistical model. If
                         not set then the value of --nthread is used
   --cstat CSTAT         The cutoff splicing difference. The cutoff used in the
-                        null hypothesis test for differential splicing. The
-                        default is 0.0001 for 0.01% difference. Valid: 0 <=
-                        cutoff < 1. Does not apply to the paired stats model
+                        null hypothesis test for differential alternative
+                        splicing. The default is 0.0001 for 0.01% difference.
+                        Valid: 0 <= cutoff < 1. Does not apply to the paired
+                        stats model
   --task {prep,post,both,inte,stat}
-                        Specify which step(s) of rMATS to run. Default: both.
-                        prep: preprocess BAMs and generate a .rmats file.
-                        post: load .rmats file(s) into memory, detect and
+                        Specify which step(s) of rMATS-turbo to run. Default:
+                        both. prep: preprocess BAM files and generate .rmats
+                        files. post: load .rmats files into memory, detect and
                         count alternative splicing events, and calculate P
                         value (if not --statoff). both: prep + post. inte
                         (integrity): check that the BAM filenames recorded by
@@ -331,6 +336,11 @@ optional arguments:
                         existing output files
   --statoff             Skip the statistical analysis
   --paired-stats        Use the paired stats model
+  --darts-model         Use the DARTS statistical model
+  --darts-cutoff DARTS_CUTOFF
+                        The cutoff of delta-PSI in the DARTS model. The output
+                        posterior probability is P(abs(delta_psi) > cutoff).
+                        The default is 0.05
   --novelSS             Enable detection of novel splice sites (unannotated
                         splice sites). Default is no detection of novel splice
                         sites
@@ -342,6 +352,8 @@ optional arguments:
   --fixed-event-set FIXED_EVENT_SET
                         A directory containing fromGTF.[AS].txt files to be
                         used instead of detecting a new set of events
+  --individual-counts   Output individualCounts.[AS_Event].txt files and add
+                        the individual count columns to [AS_Event].MATS.JC.txt
   --drop-zero-read-replicates-for-stat
                         When calculating the pvalue, for each event ignore
                         replicates that do not have any reads for that event
@@ -349,7 +361,7 @@ optional arguments:
 
 ## Output
 
-In rMATS-turbo, each alternative splicing pattern has a corresponding set of output files. In the filename templates below, `[AS_Event]` is replaced by one of the five basic alternative splicing patterns: skipped exon (SE), alternative 5' splice sites (A5SS), alternative 3' splice sites (A3SS), mutually exclusive exons (MXE), or retained intron (RI). As shown in the diagram, the number of supporting reads can be counted by the junction reads only (JC) or by both the junction and exon reads (JCEC). The output file from different counting methods is also indicated in the file name.
+In rMATS-turbo, each alternative splicing pattern has a corresponding set of output files. In the filename templates below, `[AS_Event]` is replaced by one of the five basic alternative splicing patterns: skipped exon (SE), alternative 5' splice sites (A5SS), alternative 3' splice sites (A3SS), mutually exclusive exons (MXE), or retained intron (RI). As shown in the diagram, the number of supporting reads can be counted by the junction reads only (JC) or by both the junction and exon reads (JCEC). The output files from different counting methods are also indicated in the file name.
 
 ![rmats-turbo](docs/rmats_diagram.png)
 
@@ -358,11 +370,12 @@ In rMATS-turbo, each alternative splicing pattern has a corresponding set of out
 
 - `[AS_Event].MATS.JC.txt`: Final output that contains the list of events and read counts. Only splice junction reads are counted.
 - `[AS_Event].MATS.JCEC.txt`: Final output that contains the list of events and read counts. Both splice junction reads and exon body reads are counted.
-- `fromGTF.[AS_Event].txt`: All identified alternative splicing (AS) events derived from GTF and RNA.
-- `fromGTF.novelJunction.[AS_Event].txt`: Alternative splicing (AS) events which were identified only after considering the RNA (as opposed to analyzing the GTF in isolation). Does not include events with an unannotated splice site.
+- `fromGTF.[AS_Event].txt`: All identified alternative splicing (AS) events derived from the GTF file and RNA-seq data.
+- `fromGTF.novelJunction.[AS_Event].txt`: AS events derived from novel combinations of splice sites annotated in the GTF file. Does not include events with an unannotated splice site.
 - `fromGTF.novelSpliceSite.[AS_Event].txt`: This file contains only events that include an unannotated splice site. Only relevant if `--novelSS` is enabled.
 - `JC.raw.input.[AS_Event].txt`: Event counts including only reads that span junctions defined by rMATS.
 - `JCEC.raw.input.[AS_Event].txt`: Event counts including both reads that span junctions defined by rMATS and reads that do not cross an exon boundary.
+- `individualCounts.[AS_Event].txt`: The breakdown of individual counts which contribute to the inclusion and skipping counts (only if run with `--individual-counts`)
 - Shared columns:
   * `ID`: rMATS event id
   * `GeneID`: Gene id
@@ -380,20 +393,20 @@ In rMATS-turbo, each alternative splicing pattern has a corresponding set of out
   * `IncLevel1`: Inclusion level for sample 1. Replicates are comma separated. Calculated from normalized counts
   * `IncLevel2`: Inclusion level for sample 2. Replicates are comma separated. Calculated from normalized counts
   * `IncLevelDifference`: average(IncLevel1) - average(IncLevel2)
-- Event specific columns (event coordinates):
-  * SE: `exonStart_0base` `exonEnd` `upstreamES` `upstreamEE` `downstreamES` `downstreamEE`
+- Event specific columns (event coordinates and counts):
+  * SE: `exonStart_0base` `exonEnd` `upstreamES` `upstreamEE` `downstreamES` `downstreamEE` `upstream_to_target_count` `target_to_downstream_count` `target_count` `upstream_to_downstream_count`
     + The inclusion form includes the target exon (`exonStart_0base`, `exonEnd`)
-  * MXE: `1stExonStart_0base` `1stExonEnd` `2ndExonStart_0base` `2ndExonEnd` `upstreamES` `upstreamEE` `downstreamES` `downstreamEE`
+  * MXE: `1stExonStart_0base` `1stExonEnd` `2ndExonStart_0base` `2ndExonEnd` `upstreamES` `upstreamEE` `downstreamES` `downstreamEE` `upstream_to_first_count` `first_to_downstream_count` `first_count` `upstream_to_second_count` `second_to_downstream_count` `second_count`
     + If the strand is `+`, then the inclusion form includes the 1st exon (`1stExonStart_0base`, `1stExonEnd`) and skips the 2nd exon
     + If the strand is `-`, then the inclusion form includes the 2nd exon (`2ndExonStart_0base`, `2ndExonEnd`) and skips the 1st exon
-  * A3SS, A5SS: `longExonStart_0base` `longExonEnd` `shortES` `shortEE` `flankingES` `flankingEE`
+  * A3SS, A5SS: `longExonStart_0base` `longExonEnd` `shortES` `shortEE` `flankingES` `flankingEE` `across_short_boundary_count` `long_to_flanking_count` `exclusive_to_long_count` `short_to_flanking_count`
     + The inclusion form includes the long exon (`longExonStart_0base`, `longExonEnd`) instead of the short exon (`shortES` `shortEE`)
-  * RI: `riExonStart_0base` `riExonEnd` `upstreamES` `upstreamEE` `downstreamES` `downstreamEE`
+  * RI: `riExonStart_0base` `riExonEnd` `upstreamES` `upstreamEE` `downstreamES` `downstreamEE` `upstream_to_intron_count` `intron_to_downstream_count` `intron_count` `upstream_to_downstream_count`
     + The inclusion form includes (retains) the intron (`upstreamEE`, `downstreamES`)
 - `summary.txt`: Brief summary of all alternative splicing event types. Includes the total event counts and significant event counts. By default, events are counted as significant if FDR <= 0.05. Summary can be regenerated with different criteria by running [rMATS_P/summary.py](rMATS_P/summary.py)
 
 `--tmp` contains the intermediate files generated by the prep step:
 
-- `[datetime]_[id].rmats`: Summary generated from processing a BAM
+- `[datetime]_[id].rmats`: Summary generated from processing a BAM file
 - `[datetime]_bam[sample_num]_[replicate_num]/Aligned.sortedByCoord.out.bam`: Result of mapping input FASTQ files
-- `[datetime]_read_outcomes_by_bam.txt`: Counts of the reads used from each BAM along with counts of the reasons that reads were not able to be used
+- `[datetime]_read_outcomes_by_bam.txt`: Counts of the reads used from each BAM file along with counts of the reasons that reads could not be used
