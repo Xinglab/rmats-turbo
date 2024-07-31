@@ -76,6 +76,50 @@ def prepare_stat_inputs(args):
                     create_count_file(old_counts_handle, new_counts_handle,
                                       group_1_indices, group_2_indices)
 
+        indiv_name = 'individualCounts.{}.txt'.format(event_type)
+        old_indiv = os.path.join(args.old_output_dir, indiv_name)
+        new_indiv = os.path.join(args.new_output_dir, indiv_name)
+        if not os.path.exists(old_indiv):
+            continue
+
+        print('creating {} based on {}'.format(new_indiv, old_indiv))
+        with open(old_indiv, 'rt') as old_indiv_handle:
+            with open(new_indiv, 'wt') as new_indiv_handle:
+                create_indiv_file(old_indiv_handle, new_indiv_handle,
+                                  group_1_indices, group_2_indices)
+
+
+def read_tsv_line(line):
+    return line.rstrip('\n').split('\t')
+
+
+def write_tsv_line(handle, columns):
+    handle.write('{}\n'.format('\t'.join(columns)))
+
+
+def create_indiv_file(old_indiv_handle, new_indiv_handle, group_1_indices,
+                      group_2_indices):
+    header = old_indiv_handle.readline()
+    header_columns = read_tsv_line(header)
+    if not header_columns or header_columns[0] != 'ID':
+        sys.exit('Unexpected header columns: {}. Expected ID to be the first'
+                 ' column'.format(header_columns))
+
+    new_indiv_handle.write(header)
+    for line in old_indiv_handle:
+        values = read_tsv_line(line)
+        id_val = values[0]
+        new_values = [id_val]
+        for value in values[1:]:
+            sub_values = value.split(',')
+            new_sub_values = list()
+            for i in group_1_indices + group_2_indices:
+                new_sub_values.append(sub_values[i])
+
+            new_values.append(','.join(new_sub_values))
+
+        write_tsv_line(new_indiv_handle, new_values)
+
 
 def split_and_combine(vals_1, vals_2):
     split_1 = vals_1.split(',')
@@ -88,7 +132,7 @@ def split_and_combine(vals_1, vals_2):
 def create_count_file(old_counts_handle, new_counts_handle, group_1_indices,
                       group_2_indices):
     header = old_counts_handle.readline()
-    header_columns = header.strip().split('\t')
+    header_columns = read_tsv_line(header)
     expected_header_columns = [
         'ID', 'IJC_SAMPLE_1', 'SJC_SAMPLE_1', 'IJC_SAMPLE_2', 'SJC_SAMPLE_2',
         'IncFormLen', 'SkipFormLen'
@@ -104,7 +148,7 @@ def create_count_file(old_counts_handle, new_counts_handle, group_1_indices,
     sjc_2_index = expected_header_columns.index('SJC_SAMPLE_2')
 
     for line in old_counts_handle:
-        values = line.strip().split('\t')
+        values = read_tsv_line(line)
         old_ijc_1 = values[ijc_1_index]
         old_sjc_1 = values[sjc_1_index]
         old_ijc_2 = values[ijc_2_index]
@@ -119,8 +163,7 @@ def create_count_file(old_counts_handle, new_counts_handle, group_1_indices,
         values[sjc_1_index] = ','.join(new_sjc_1)
         values[ijc_2_index] = ','.join(new_ijc_2)
         values[sjc_2_index] = ','.join(new_sjc_2)
-        new_line = '\t'.join(values)
-        new_counts_handle.write('{}\n'.format(new_line))
+        write_tsv_line(new_counts_handle, values)
 
 
 def main():

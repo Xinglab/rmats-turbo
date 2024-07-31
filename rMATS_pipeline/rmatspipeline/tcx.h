@@ -19,7 +19,7 @@ namespace rmats {
         std::string g_name;
         std::string chrom;
         char strand;
-        void set_info(std::string& iname, std::string& ichrom, std::string& istrand) {
+        void set_info(const std::string& iname, const std::string& ichrom, const std::string& istrand) {
             this->g_name = iname;
             this->chrom = ichrom;
             this->strand = istrand.c_str()[0];
@@ -307,40 +307,454 @@ namespace rmats {
         std::unordered_map<std::string,Transcript> trans;
     };
 
-    struct Read_count_table
+    struct Inc_skp_len
     {
-        std::vector<int> incv;
-        std::vector<int> skpv;
+        Inc_skp_len() : inc_len(0), skp_len(0) {}
         int inc_len;
         int skp_len;
+    };
+
+    struct Inc_skp_count
+    {
+        Inc_skp_count() : inc_count(0), skp_count(0) {}
+        int inc_count;
+        int skp_count;
+    };
+
+    // oss.str() needs to be stored in order to use the pointer  from .c_str()
+    struct String_and_stream
+    {
+        std::ostringstream oss;
+        std::string s;
+
+        void clear()
+        {
+            oss.str("");
+            s.clear();
+        }
+
+        const char* c_str()
+        {
+            s = oss.str();
+            return s.c_str();
+        }
+    };
+
+    struct SE_counts_for_event
+    {
+        SE_counts_for_event()
+            : upstream_to_target_count(0),
+              target_to_downstream_count(0),
+              target_count(0),
+              upstream_to_downstream_count(0) {}
+        Inc_skp_count jc_counts;
+        Inc_skp_count jcec_counts;
+        int upstream_to_target_count;
+        int target_to_downstream_count;
+        int target_count;
+        int upstream_to_downstream_count;
+    };
+
+    struct SE_joined_count_strings
+    {
+        String_and_stream jc_inc_1;
+        String_and_stream jc_skp_1;
+        String_and_stream jc_inc_2;
+        String_and_stream jc_skp_2;
+        String_and_stream jcec_inc_1;
+        String_and_stream jcec_skp_1;
+        String_and_stream jcec_inc_2;
+        String_and_stream jcec_skp_2;
+        String_and_stream upstream_to_target;
+        String_and_stream target_to_downstream;
+        String_and_stream target;
+        String_and_stream upstream_to_downstream;
+
+        void clear()
+        {
+            jc_inc_1.clear();
+            jc_skp_1.clear();
+            jc_inc_2.clear();
+            jc_skp_2.clear();
+            jcec_inc_1.clear();
+            jcec_skp_1.clear();
+            jcec_inc_2.clear();
+            jcec_skp_2.clear();
+            upstream_to_target.clear();
+            target_to_downstream.clear();
+            target.clear();
+            upstream_to_downstream.clear();
+        }
+    };
+
+    struct SE_counts_for_event_by_bam
+    {
         char strand;
+        Inc_skp_len jc_lengths;
+        Inc_skp_len jcec_lengths;
+        std::vector<SE_counts_for_event> counts;
+
+        void join_counts_across_bams(
+            int sam1len,
+            SE_joined_count_strings* joined_strings) const
+        {
+            joined_strings->clear();
+            std::string maybe_comma = "";
+            std::string sam2_maybe_comma = "";
+            for (int i = 0; i < counts.size(); ++i)
+            {
+                const SE_counts_for_event& for_event = counts[i];
+                if (i < sam1len)
+                {
+                    joined_strings->jc_inc_1.oss
+                        << maybe_comma << for_event.jc_counts.inc_count;
+                    joined_strings->jc_skp_1.oss
+                        << maybe_comma << for_event.jc_counts.skp_count;
+                    joined_strings->jcec_inc_1.oss
+                        << maybe_comma << for_event.jcec_counts.inc_count;
+                    joined_strings->jcec_skp_1.oss
+                        << maybe_comma << for_event.jcec_counts.skp_count;
+                }
+                else
+                {
+                    joined_strings->jc_inc_2.oss
+                        << sam2_maybe_comma << for_event.jc_counts.inc_count;
+                    joined_strings->jc_skp_2.oss
+                        << sam2_maybe_comma << for_event.jc_counts.skp_count;
+                    joined_strings->jcec_inc_2.oss
+                        << sam2_maybe_comma << for_event.jcec_counts.inc_count;
+                    joined_strings->jcec_skp_2.oss
+                        << sam2_maybe_comma << for_event.jcec_counts.skp_count;
+                    sam2_maybe_comma = ",";
+                }
+
+                joined_strings->upstream_to_target.oss
+                    << maybe_comma << for_event.upstream_to_target_count;
+                joined_strings->target_to_downstream.oss
+                    << maybe_comma << for_event.target_to_downstream_count;
+                joined_strings->target.oss
+                    << maybe_comma << for_event.target_count;
+                joined_strings->upstream_to_downstream.oss
+                    << maybe_comma << for_event.upstream_to_downstream_count;
+                maybe_comma = ",";
+            }
+        }
     };
 
-    struct Str_ptr
+    struct MXE_counts_for_event
     {
-        const std::string* p;
-        Str_ptr(const std::string& s): p(&s) {}
-        const std::string& get() const {
-            return *(this->p);
-        }
-        bool operator<(const Str_ptr& t) const {
-            return std::tie(*(this->p)) < std::tie(*(t.p));
-        }
-        bool operator<(const std::string& t) const {
-            return std::tie(*(this->p)) < std::tie(t);
+        MXE_counts_for_event()
+            : upstream_to_first_count(0),
+              first_to_downstream_count(0),
+              first_count(0),
+              upstream_to_second_count(0),
+              second_to_downstream_count(0),
+              second_count(0) {}
+        Inc_skp_count jc_counts;
+        Inc_skp_count jcec_counts;
+        int upstream_to_first_count;
+        int first_to_downstream_count;
+        int first_count;
+        int upstream_to_second_count;
+        int second_to_downstream_count;
+        int second_count;
+    };
+
+    struct MXE_joined_count_strings
+    {
+        String_and_stream jc_inc_1;
+        String_and_stream jc_skp_1;
+        String_and_stream jc_inc_2;
+        String_and_stream jc_skp_2;
+        String_and_stream jcec_inc_1;
+        String_and_stream jcec_skp_1;
+        String_and_stream jcec_inc_2;
+        String_and_stream jcec_skp_2;
+        String_and_stream upstream_to_first;
+        String_and_stream first_to_downstream;
+        String_and_stream first;
+        String_and_stream upstream_to_second;
+        String_and_stream second_to_downstream;
+        String_and_stream second;
+
+        void clear()
+        {
+            jc_inc_1.clear();
+            jc_skp_1.clear();
+            jc_inc_2.clear();
+            jc_skp_2.clear();
+            jcec_inc_1.clear();
+            jcec_skp_1.clear();
+            jcec_inc_2.clear();
+            jcec_skp_2.clear();
+            upstream_to_first.clear();
+            first_to_downstream.clear();
+            first.clear();
+            upstream_to_second.clear();
+            second_to_downstream.clear();
+            second.clear();
         }
     };
 
-    template <typename Iter>
-    std::string cjoin(Iter begin, Iter end, const char& separator)
+    struct MXE_counts_for_event_by_bam
     {
-        std::ostringstream result;
-        if (begin != end)
-            result << *begin++;
-        while (begin != end)
-            result << separator << *begin++;
-        return result.str();
-    }
+        char strand;
+        Inc_skp_len jc_lengths;
+        Inc_skp_len jcec_lengths;
+        std::vector<MXE_counts_for_event> counts;
+
+        void join_counts_across_bams(
+            int sam1len,
+            MXE_joined_count_strings* joined_strings) const
+        {
+            joined_strings->clear();
+            std::string maybe_comma = "";
+            std::string sam2_maybe_comma = "";
+            for (int i = 0; i < counts.size(); ++i)
+            {
+                const MXE_counts_for_event& for_event = counts[i];
+                if (i < sam1len)
+                {
+                    joined_strings->jc_inc_1.oss
+                        << maybe_comma << for_event.jc_counts.inc_count;
+                    joined_strings->jc_skp_1.oss
+                        << maybe_comma << for_event.jc_counts.skp_count;
+                    joined_strings->jcec_inc_1.oss
+                        << maybe_comma << for_event.jcec_counts.inc_count;
+                    joined_strings->jcec_skp_1.oss
+                        << maybe_comma << for_event.jcec_counts.skp_count;
+                }
+                else
+                {
+                    joined_strings->jc_inc_2.oss
+                        << sam2_maybe_comma << for_event.jc_counts.inc_count;
+                    joined_strings->jc_skp_2.oss
+                        << sam2_maybe_comma << for_event.jc_counts.skp_count;
+                    joined_strings->jcec_inc_2.oss
+                        << sam2_maybe_comma << for_event.jcec_counts.inc_count;
+                    joined_strings->jcec_skp_2.oss
+                        << sam2_maybe_comma << for_event.jcec_counts.skp_count;
+                    sam2_maybe_comma = ",";
+                }
+
+                joined_strings->upstream_to_first.oss
+                    << maybe_comma << for_event.upstream_to_first_count;
+                joined_strings->first_to_downstream.oss
+                    << maybe_comma << for_event.first_to_downstream_count;
+                joined_strings->first.oss
+                    << maybe_comma << for_event.first_count;
+                joined_strings->upstream_to_second.oss
+                    << maybe_comma << for_event.upstream_to_second_count;
+                joined_strings->second_to_downstream.oss
+                    << maybe_comma << for_event.second_to_downstream_count;
+                joined_strings->second.oss
+                    << maybe_comma << for_event.second_count;
+                maybe_comma = ",";
+            }
+        }
+    };
+
+    struct ALT35_counts_for_event
+    {
+        ALT35_counts_for_event()
+            : across_short_boundary_count(0),
+              long_to_flanking_count(0),
+              exclusive_to_long_count(0),
+              short_to_flanking_count(0) {}
+        Inc_skp_count jc_counts;
+        Inc_skp_count jcec_counts;
+        int across_short_boundary_count;
+        int long_to_flanking_count;
+        int exclusive_to_long_count;
+        int short_to_flanking_count;
+    };
+
+    struct ALT35_joined_count_strings
+    {
+        String_and_stream jc_inc_1;
+        String_and_stream jc_skp_1;
+        String_and_stream jc_inc_2;
+        String_and_stream jc_skp_2;
+        String_and_stream jcec_inc_1;
+        String_and_stream jcec_skp_1;
+        String_and_stream jcec_inc_2;
+        String_and_stream jcec_skp_2;
+        String_and_stream across_short_boundary;
+        String_and_stream long_to_flanking;
+        String_and_stream exclusive_to_long;
+        String_and_stream short_to_flanking;
+
+        void clear()
+        {
+            jc_inc_1.clear();
+            jc_skp_1.clear();
+            jc_inc_2.clear();
+            jc_skp_2.clear();
+            jcec_inc_1.clear();
+            jcec_skp_1.clear();
+            jcec_inc_2.clear();
+            jcec_skp_2.clear();
+            across_short_boundary.clear();
+            long_to_flanking.clear();
+            exclusive_to_long.clear();
+            short_to_flanking.clear();
+        }
+    };
+
+    struct ALT35_counts_for_event_by_bam
+    {
+        char strand;
+        Inc_skp_len jc_lengths;
+        Inc_skp_len jcec_lengths;
+        std::vector<ALT35_counts_for_event> counts;
+
+        void join_counts_across_bams(
+            int sam1len,
+            ALT35_joined_count_strings* joined_strings) const
+        {
+            joined_strings->clear();
+            std::string maybe_comma = "";
+            std::string sam2_maybe_comma = "";
+            for (int i = 0; i < counts.size(); ++i)
+            {
+                const ALT35_counts_for_event& for_event = counts[i];
+                if (i < sam1len)
+                {
+                    joined_strings->jc_inc_1.oss
+                        << maybe_comma << for_event.jc_counts.inc_count;
+                    joined_strings->jc_skp_1.oss
+                        << maybe_comma << for_event.jc_counts.skp_count;
+                    joined_strings->jcec_inc_1.oss
+                        << maybe_comma << for_event.jcec_counts.inc_count;
+                    joined_strings->jcec_skp_1.oss
+                        << maybe_comma << for_event.jcec_counts.skp_count;
+                }
+                else
+                {
+                    joined_strings->jc_inc_2.oss
+                        << sam2_maybe_comma << for_event.jc_counts.inc_count;
+                    joined_strings->jc_skp_2.oss
+                        << sam2_maybe_comma << for_event.jc_counts.skp_count;
+                    joined_strings->jcec_inc_2.oss
+                        << sam2_maybe_comma << for_event.jcec_counts.inc_count;
+                    joined_strings->jcec_skp_2.oss
+                        << sam2_maybe_comma << for_event.jcec_counts.skp_count;
+                    sam2_maybe_comma = ",";
+                }
+
+                joined_strings->across_short_boundary.oss
+                    << maybe_comma << for_event.across_short_boundary_count;
+                joined_strings->long_to_flanking.oss
+                    << maybe_comma << for_event.long_to_flanking_count;
+                joined_strings->exclusive_to_long.oss
+                    << maybe_comma << for_event.exclusive_to_long_count;
+                joined_strings->short_to_flanking.oss
+                    << maybe_comma << for_event.short_to_flanking_count;
+                maybe_comma = ",";
+            }
+        }
+    };
+
+    struct RI_counts_for_event
+    {
+        RI_counts_for_event()
+            : upstream_to_intron_count(0),
+              intron_to_downstream_count(0),
+              intron_count(0),
+              upstream_to_downstream_count(0) {}
+        Inc_skp_count jc_counts;
+        Inc_skp_count jcec_counts;
+        int upstream_to_intron_count;
+        int intron_to_downstream_count;
+        int intron_count;
+        int upstream_to_downstream_count;
+    };
+
+    struct RI_joined_count_strings
+    {
+        String_and_stream jc_inc_1;
+        String_and_stream jc_skp_1;
+        String_and_stream jc_inc_2;
+        String_and_stream jc_skp_2;
+        String_and_stream jcec_inc_1;
+        String_and_stream jcec_skp_1;
+        String_and_stream jcec_inc_2;
+        String_and_stream jcec_skp_2;
+        String_and_stream upstream_to_intron;
+        String_and_stream intron_to_downstream;
+        String_and_stream intron;
+        String_and_stream upstream_to_downstream;
+
+        void clear()
+        {
+            jc_inc_1.clear();
+            jc_skp_1.clear();
+            jc_inc_2.clear();
+            jc_skp_2.clear();
+            jcec_inc_1.clear();
+            jcec_skp_1.clear();
+            jcec_inc_2.clear();
+            jcec_skp_2.clear();
+            upstream_to_intron.clear();
+            intron_to_downstream.clear();
+            intron.clear();
+            upstream_to_downstream.clear();
+        }
+    };
+
+    struct RI_counts_for_event_by_bam
+    {
+        char strand;
+        Inc_skp_len jc_lengths;
+        Inc_skp_len jcec_lengths;
+        std::vector<RI_counts_for_event> counts;
+
+        void join_counts_across_bams(
+            int sam1len,
+            RI_joined_count_strings* joined_strings) const
+        {
+            joined_strings->clear();
+            std::string maybe_comma = "";
+            std::string sam2_maybe_comma = "";
+            for (int i = 0; i < counts.size(); ++i)
+            {
+                const RI_counts_for_event& for_event = counts[i];
+                if (i < sam1len)
+                {
+                    joined_strings->jc_inc_1.oss
+                        << maybe_comma << for_event.jc_counts.inc_count;
+                    joined_strings->jc_skp_1.oss
+                        << maybe_comma << for_event.jc_counts.skp_count;
+                    joined_strings->jcec_inc_1.oss
+                        << maybe_comma << for_event.jcec_counts.inc_count;
+                    joined_strings->jcec_skp_1.oss
+                        << maybe_comma << for_event.jcec_counts.skp_count;
+                }
+                else
+                {
+                    joined_strings->jc_inc_2.oss
+                        << sam2_maybe_comma << for_event.jc_counts.inc_count;
+                    joined_strings->jc_skp_2.oss
+                        << sam2_maybe_comma << for_event.jc_counts.skp_count;
+                    joined_strings->jcec_inc_2.oss
+                        << sam2_maybe_comma << for_event.jcec_counts.inc_count;
+                    joined_strings->jcec_skp_2.oss
+                        << sam2_maybe_comma << for_event.jcec_counts.skp_count;
+                    sam2_maybe_comma = ",";
+                }
+
+                joined_strings->upstream_to_intron.oss
+                    << maybe_comma << for_event.upstream_to_intron_count;
+                joined_strings->intron_to_downstream.oss
+                    << maybe_comma << for_event.intron_to_downstream_count;
+                joined_strings->intron.oss
+                    << maybe_comma << for_event.intron_count;
+                joined_strings->upstream_to_downstream.oss
+                    << maybe_comma << for_event.upstream_to_downstream_count;
+                maybe_comma = ",";
+            }
+        }
+    };
 
     char* join_pair(char* numstr, long left, long right, char& sep) {
         sprintf(numstr, "%ld%c%ld", left, sep, right);
