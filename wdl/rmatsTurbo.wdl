@@ -1,95 +1,101 @@
-## version 1.0
-## This workflow "rMATS_turbo" takes BAM files as input.
+version 1.0
 
 workflow rMATS_turbo {
-  Array[File] bam_g1
-  Array[File] bam_g2
-  File gtf
-  String pairedORsingle = "paired"
-  Int readLength
-  Int nthread = 1
-  String out_dir
-  String lib_type = "fr-unstranded"
-  Boolean variable_readLength = false
-  Int? anchorLength
-  Int tstat = 1
-  Float cstat = 0.0001
-  Boolean statoff = false
-  Boolean paired_stats = false
-  Boolean novelSS = false
-  Int mil = 50
-  Int mel = 500
-  Boolean allow_clipping = false
-
-  Int machine_mem_gb = 4
-  Int disk_space_gb = 20
-  Boolean use_ssd = false
-  String rmats_version = "v4.1.2"
+  input {
+    Array[File] bam_g1
+    Array[File] bam_g2
+    File gtf
+    Boolean is_single_end = false
+    Int readLength
+    Int nthread = 1
+    String out_dir
+    String lib_type = "fr-unstranded"
+    Boolean variable_read_length = false
+    Int? anchorLength
+    Int tstat = 1
+    String cstat = "0.0001"
+    Boolean statoff = false
+    Boolean paired_stats = false
+    Boolean darts_model = false
+    String darts_cutoff = "0.05"
+    Boolean novelSS = false
+    Int mil = 50
+    Int mel = 500
+    Boolean allow_clipping = false
+    Boolean individual_counts = false
+    Int machine_mem_gb = 4
+    Int disk_space_gb = 20
+    Boolean use_ssd = false
+    String rmats_version = "v4.3.0"
+  }
 
   scatter (i in range(length(bam_g1))) {
-    call rmats_pre as rmats_pre1 {
+    call rmats_prep as rmats_prep1 {
       input:
       bam = bam_g1[i],
       bam_id = "g1_"+i,
       gtf = gtf,
-      pairedORsingle = pairedORsingle,
+      is_single_end = is_single_end,
       readLength = readLength,
       out_dir = out_dir,
       lib_type = lib_type,
-      variable_readLength = variable_readLength,
+      variable_read_length = variable_read_length,
       anchorLength = anchorLength,
       novelSS = novelSS,
       mil = mil,
       mel = mel,
+      allow_clipping = allow_clipping,
       machine_mem_gb = machine_mem_gb,
       disk_space_gb = disk_space_gb,
       use_ssd = use_ssd,
-      rmats_version = rmats_version,
-      allow_clipping = allow_clipping
+      rmats_version = rmats_version
     }
   }
 
   scatter (i in range(length(bam_g2))) {
-    call rmats_pre as rmats_pre2 {
+    call rmats_prep as rmats_prep2 {
       input:
       bam = bam_g2[i],
       bam_id = "g2_"+i,
       gtf = gtf,
-      pairedORsingle = pairedORsingle,
+      is_single_end = is_single_end,
       readLength = readLength,
       out_dir = out_dir,
       lib_type = lib_type,
-      variable_readLength = variable_readLength,
+      variable_read_length = variable_read_length,
       anchorLength = anchorLength,
       novelSS = novelSS,
       mil = mil,
       mel = mel,
+      allow_clipping = allow_clipping,
       machine_mem_gb = machine_mem_gb,
       disk_space_gb = disk_space_gb,
       use_ssd = use_ssd,
-      rmats_version = rmats_version,
-      allow_clipping = allow_clipping
+      rmats_version = rmats_version
     }
   }
 
   call rmats_post {
     input:
-    bam_name_g1 = rmats_pre1.bam_name,
-    bam_name_g2 = rmats_pre2.bam_name,
+    bam_name_g1 = rmats_prep1.bam_name,
+    bam_name_g2 = rmats_prep2.bam_name,
     gtf = gtf,
     readLength = readLength,
     nthread = nthread,
     out_dir = out_dir,
-    input_rmats1 = rmats_pre1.out_rmats,
-    input_rmats2 = rmats_pre2.out_rmats,
+    input_rmats1 = rmats_prep1.out_rmats,
+    input_rmats2 = rmats_prep2.out_rmats,
     anchorLength = anchorLength,
     tstat = tstat,
     cstat = cstat,
     statoff = statoff,
     paired_stats = paired_stats,
+    darts_model = darts_model,
+    darts_cutoff = darts_cutoff,
     novelSS = novelSS,
     mil = mil,
     mel = mel,
+    individual_counts = individual_counts,
     machine_mem_gb = machine_mem_gb,
     disk_space_gb = disk_space_gb,
     use_ssd = use_ssd,
@@ -97,49 +103,52 @@ workflow rMATS_turbo {
   }
 
   output {
-    Array[File] read_outcomes = flatten([rmats_pre1.read_outcome, rmats_pre2.read_outcome])
+    Array[File] read_outcomes = flatten([rmats_prep1.read_outcome, rmats_prep2.read_outcome])
     File out_tar = rmats_post.out_tar
   }
 
   meta {
     author: "Qian Liu"
     email : "Qian.Liu@RoswellPark.org"
-    description: "WDL workflow on AnVIL for rMATS turbo v4.1.2 developed in Dr. Yi Xing's lab"
+    description: "WDL workflow on AnVIL for rMATS turbo v4.3.0 developed in Dr. Yi Xing's lab"
   }
 }
 
-task rmats_pre {
-  File bam
-  String bam_id
-  File gtf
-  String pairedORsingle
-  Int readLength
-  String out_dir
-  String lib_type
-  Boolean variable_readLength
-  Int? anchorLength
-  Boolean novelSS
-  Int mil
-  Int mel
-  Boolean allow_clipping
+task rmats_prep {
+  input {
+    File bam
+    String bam_id
+    File gtf
+    Boolean is_single_end
+    Int readLength
+    String out_dir
+    String lib_type
+    Boolean variable_read_length
+    Int? anchorLength
+    Boolean novelSS
+    Int mil
+    Int mel
+    Boolean allow_clipping
 
-  String variable_readLength_opt = if variable_readLength then "--variable-read-length" else ""
+    Int machine_mem_gb
+    Int disk_space_gb
+    Boolean use_ssd
+    String rmats_version
+  }
+
+  String read_type_value = if is_single_end then "single" else "paired"
+  String variable_read_length_opt = if variable_read_length then "--variable-read-length" else ""
   String anchorLength_opt = if defined(anchorLength) then "--anchorLength" else ""
   String novelSS_opt = if novelSS then "--novelSS" else ""
   String mil_opt = if novelSS then "--mil" else ""
-  String? mil_val = if novelSS then mil else ""
+  String mil_val = if novelSS then mil else ""
   String mel_opt = if novelSS then "--mel" else ""
-  String? mel_val = if novelSS then mel else ""
-  String allow_clipping_opt = if defined(allow_clipping) then "--allow-clipping" else ""
-
-  Int machine_mem_gb
-  Int disk_space_gb
-  Boolean use_ssd
-  String rmats_version
+  String mel_val = if novelSS then mel else ""
+  String allow_clipping_opt = if allow_clipping then "--allow-clipping" else ""
 
   command {
     echo ${bam} > prep.txt
-    python /rmats/rmats.py --b1 prep.txt --gtf ${gtf} -t ${pairedORsingle} --readLength ${readLength} --nthread 1 --od ${out_dir} --tmp tmp_output_prep_${bam_id} --task prep --libType ${lib_type} ${variable_readLength_opt} ${anchorLength_opt} ${anchorLength} ${novelSS_opt} ${mil_opt} ${mil_val} ${mel_opt} ${mel_val} ${allow_clipping_opt}
+    python /rmats/rmats.py --b1 prep.txt --gtf ${gtf} -t ${read_type_value} --readLength ${readLength} --nthread 1 --od ${out_dir} --tmp tmp_output_prep_${bam_id} --task prep --libType ${lib_type} ${variable_read_length_opt} ${anchorLength_opt} ${anchorLength} ${novelSS_opt} ${mil_opt} ${mil_val} ${mel_opt} ${mel_val} ${allow_clipping_opt}
     mkdir outfd
     python /rmats/cp_with_prefix.py prep_${bam_id}_ outfd tmp_output_prep_${bam_id}/*.rmats
     cp tmp_output_prep_${bam_id}/*read_outcomes_by_bam.txt prep_${bam_id}_read_outcomes_by_bam.txt
@@ -159,38 +168,48 @@ task rmats_pre {
 }
 
 task rmats_post {
-  Array[String] bam_name_g1
-  Array[String] bam_name_g2
-  File gtf
-  Int readLength
-  Int nthread
-  String out_dir
-  Array[Array[File]] input_rmats1
-  Array[Array[File]] input_rmats2
-  Int? anchorLength
-  Int tstat
-  Float cstat
-  Boolean statoff
-  Boolean paired_stats
-  Boolean novelSS
-  Int mil
-  Int mel
+  input {
+    Array[String] bam_name_g1
+    Array[String] bam_name_g2
+    File gtf
+    Int readLength
+    Int nthread
+    String out_dir
+    Array[Array[File]] input_rmats1
+    Array[Array[File]] input_rmats2
+    Int? anchorLength
+    Int tstat
+    String cstat
+    Boolean statoff
+    Boolean paired_stats
+    Boolean darts_model
+    String darts_cutoff
+    Boolean novelSS
+    Int mil
+    Int mel
+    Boolean individual_counts
+
+    Int machine_mem_gb
+    Int disk_space_gb
+    Boolean use_ssd
+    String rmats_version
+  }
 
   String anchorLength_opt = if defined(anchorLength) then "--anchorLength" else ""
-  String cstat_opt = if paired_stats then "" else "--cstat"
-  String cstat_val = if paired_stats then "" else cstat
+  Boolean is_default_stats = (!paired_stats) && (!darts_model)
+  String cstat_opt = if is_default_stats then "--cstat" else ""
+  String cstat_val = if is_default_stats then cstat else ""
   String statoff_opt = if statoff then "--statoff" else ""
   String paired_stats_opt = if paired_stats then "--paired-stats" else ""
+  String darts_model_opt = if darts_model then "--darts-model" else ""
+  String darts_cutoff_opt = if darts_model then "--darts-cutoff" else ""
+  String darts_cutoff_val = if darts_model then darts_cutoff else ""
   String novelSS_opt = if novelSS then "--novelSS" else ""
   String mil_opt = if novelSS then "--mil" else ""
-  String? mil_val = if novelSS then mil else ""
+  String mil_val = if novelSS then mil else ""
   String mel_opt = if novelSS then "--mel" else ""
-  String? mel_val = if novelSS then mel else ""
-
-  Int machine_mem_gb
-  Int disk_space_gb
-  Boolean use_ssd
-  String rmats_version
+  String mel_val = if novelSS then mel else ""
+  String individual_counts_opt = if individual_counts then "--individual-counts" else ""
 
   Array[File] rmats1 = flatten(input_rmats1)
   Array[File] rmats2 = flatten(input_rmats2)
@@ -201,7 +220,7 @@ task rmats_post {
     for file in ${sep=" " rmats}; do fn=`basename $file`; sed 's/.*\///g' $file > fd_rmats/$fn; done
     echo ${sep="," bam_name_g1} > bam_g1.txt
     echo ${sep="," bam_name_g2} > bam_g2.txt
-    python /rmats/rmats.py --b1 bam_g1.txt --b2 bam_g2.txt --gtf ${gtf} --readLength ${readLength} --nthread ${nthread} --od ${out_dir} --tmp fd_rmats --task post ${anchorLength_opt} ${anchorLength} --tstat ${tstat} ${cstat_opt} ${cstat_val} ${statoff_opt} ${paired_stats_opt} ${novelSS_opt} ${mil_opt} ${mil_val} ${mel_opt} ${mel_val}
+    python /rmats/rmats.py --b1 bam_g1.txt --b2 bam_g2.txt --gtf ${gtf} --readLength ${readLength} --nthread ${nthread} --od ${out_dir} --tmp fd_rmats --task post ${anchorLength_opt} ${anchorLength} --tstat ${tstat} ${cstat_opt} ${cstat_val} ${statoff_opt} ${paired_stats_opt} ${darts_model_opt} ${darts_cutoff_opt} ${darts_cutoff_val} ${novelSS_opt} ${mil_opt} ${mil_val} ${mel_opt} ${mel_val} ${individual_counts_opt}
     tar czf ${out_dir}.tar.gz ${out_dir}
   }
 
@@ -214,22 +233,5 @@ task rmats_post {
 
   output {
     File out_tar = "${out_dir}.tar.gz"
-  }
-
-  parameter_meta {
-    out_dir: "The directory for final output."
-    type: "Type of read used in the analysis: either 'paired' for paired-end data or 'single' for single-end data. (Default: paired)"
-    lib_type: "{fr-unstranded,fr-firststrand,fr-secondstrand} Library type. Use 'fr-firststrand' or 'fr-secondstrand' for strand-specific data. (Default: fr-unstranded)"
-    readLength: "The length of each read."
-    variable_readLength: "{true, false} Allow reads with lengths that differ from --readLength to be processed. --readLength will still    be used to determine IncFormLen and SkipFormLen. (Default: false)"
-    anchorLength: "The anchor length. (Default: 1)"
-    nthread: "The number of threads. The optimal number of threads should be equal to the number of CPU cores. (Default: 1)"
-    tstat: "The number of threads for the statistical model. (Default: 1)"
-    cstat: "The cutoff splicing difference. The cutoff used in the null hypothesis test for differential splicing. Valid: 0 <= cutoff < 1. Does not apply to the paired stats model. (Default: 0.0001 for 0.01% difference)"
-    statoff: "{true, false} If skip the statistical analysis. (Default: false)"
-    paired_stats: "{true, false} Use the paired stats model. (Default: false)"
-    novelSS: "{true, false} Enable detection of novel splice sites (unannotated splice sites). (Default: false)"
-    mil: "Minimum Intron Length. Only impacts --novelSS behavior. (Default: 50)"
-    mel: "Maximum Exon Length. Only impacts --novelSS behavior. (Default: 500)"
   }
 }
