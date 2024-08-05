@@ -1,0 +1,5 @@
+r-base=4.3.*
+r-doparallel=1.0.*
+r-foreach=1.5.*
+r-iterators=1.0.*
+r-nloptr=2.0.*

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #This script calculate FDR for the P values
 
-import sys,re,os,numpy
+import sys,re
 
 def myorder(p,reverse):
 	p_dict={};

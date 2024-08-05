@@ -58,6 +58,7 @@ s2.txt
 /rMATS_pipeline/rmatspipeline/rmatspipeline.cpp
 /rMATS_C/rMATSexe
 /PAIRADISE/
+/DARTS/
 
 # tests
 /tests/test_config.py
