@@ -17,7 +17,7 @@ conda install -c conda-forge -c bioconda --file ./conda_requirements.txt
 ```
 library('Rcwl')
 source('pl_rMATS_bam.R')
-writeCWL(workflow, prefix= "rMATS_bam", outdir = "rcwl_out")
+writeCWL(workflow, prefix = "rMATS_bam", outdir = "rcwl_out")
 ```
   + Exit R (ctrl-d)
   + Then on the command line
