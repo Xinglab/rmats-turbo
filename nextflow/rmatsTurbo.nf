@@ -14,7 +14,6 @@ process rmats_prep_g1 {
   output:
     path "outfd/*.rmats", emit: rmat
     path "prep_${bam_id}_read_outcomes_by_bam.txt", emit: rob
-    val "${bam_name}", emit: bam_name
 
   script:
     bam_id = "${group}_${bam_name}"
@@ -70,7 +69,6 @@ process rmats_prep_g2 {
   output:
     path "outfd/*.rmats", emit: rmat
     path "prep_${bam_id}_read_outcomes_by_bam.txt", emit: rob
-    val "${bam_name}", emit: bam_name
 
   script:
     bam_id = "${group}_${bam_name}"
@@ -172,7 +170,8 @@ process rmats_post {
     ${darts_model_opt} \
     ${novelSS_opt} \
     ${mil_opt} \
-    ${mel_opt}
+    ${mel_opt} \
+    ${individual_counts_opt}
 
     tar czf ${params.out_dir}.tar.gz ${params.out_dir}
 
@@ -182,46 +181,24 @@ process rmats_post {
 }
 
 workflow {
-  // TURBOPREP(bams, gtfs)
   bam_g1_ch = Channel
     .fromPath(params.bam_g1)
     .ifEmpty {exit 1, "No bam files found in ${params.bam_g1}"}
     .splitCsv(by:1, strip: true)
     .map {
-      // bam name, bam file
       row -> tuple(file(row[0].trim()).simpleName, file(row[0].trim()))
     }
-  // print view the variable
-  // bam_g1_ch.view()
-
-  // bam_g2 = Channel.fromPath(params.bam_g2)
   bam_g2_ch = Channel
     .fromPath(params.bam_g2)
     .ifEmpty {exit 1, "No bam files found in ${params.bam_g2}"}
     .splitCsv(by:1, strip: true)
     .map {
-      // bam name, bam file
       row -> tuple(file(row[0].trim()).simpleName, file(row[0].trim()))
     }
-
-  // print view the variable
-  // bam_g2_ch.view()
-
   gtf_ch = Channel.fromPath(params.gtf)
     .ifEmpty {exit 1, "No gtf file found in ${params.gtf}"}
-
-  // print view the variable
-  // gtf_ch.view()
-
-  // Start workflow
-  // rmats_prep
   rmats_prep_g1(bam_g1_ch, gtf_ch, "g1")
   rmats_prep_g2(bam_g2_ch, gtf_ch, "g2")
-
-  // rmats_prep_g1.out.rmat.view()
-  // rmats_prep_g1.out.rmat.collect().view()
-
-  // rmats_post
   rmats_post(
     bam_g1_ch.map {name, bam -> bam}.collect(),
     bam_g2_ch.map {name, bam -> bam}.collect(),
