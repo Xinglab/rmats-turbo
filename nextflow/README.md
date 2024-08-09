@@ -1,4 +1,4 @@
-# Workflow Description Language (Nextflow) for rMATS
+# Nextflow for rMATS
 
 * [rmatsTurbo.nf](rmatsTurbo.nf) is a Nextflow ([https://www.nextflow.io](https://www.nextflow.io)) implementation of the rMATS workflow with BAM files as input
 
