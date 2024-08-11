@@ -12,8 +12,6 @@
 
 ###  Run the workflow
 
-Modify the `nextflow.config` file to set the parameters for the workflow. See the example in the `example.config` file.
-
 ```bash
 nextflow run rmatsTurbo.nf --config nextflow.config -resume
 ```
