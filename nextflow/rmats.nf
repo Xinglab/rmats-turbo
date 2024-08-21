@@ -1,4 +1,3 @@
-
 process rmats_prep {
   tag "rmats_prep"
   label "mid_memory"

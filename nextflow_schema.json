@@ -1,0 +1,94 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "$id": "https://raw.githubusercontent.com//master/nextflow_schema.json",
+  "title": " pipeline parameters",
+  "description": "",
+  "type": "object",
+  "properties": {
+    "publishDir": {
+      "type": "string",
+      "default": "results",
+      "format": "directory-path"
+    },
+    "bam_g1": {
+      "type": "array"
+    },
+    "bam_g2": {
+      "type": "array"
+    },
+    "gtf": {
+      "type": "string",
+      "format": "file-path"
+    },
+    "is_single_end": {
+      "type": "boolean"
+    },
+    "readLength": {
+      "type": "integer"
+    },
+    "nthread": {
+      "type": "integer",
+      "default": 1
+    },
+    "out_dir": {
+      "type": "string"
+    },
+    "lib_type": {
+      "type": "string",
+      "default": "fr-unstranded"
+    },
+    "variable_read_length": {
+      "type": "boolean"
+    },
+    "anchorLength": {
+      "type": "integer"
+    },
+    "tstat": {
+      "type": "integer",
+      "default": 1
+    },
+    "cstat": {
+      "type": "number",
+      "default": 0.0001
+    },
+    "statoff": {
+      "type": "boolean"
+    },
+    "paired_stats": {
+      "type": "boolean"
+    },
+    "darts_model": {
+      "type": "boolean"
+    },
+    "darts_cutoff": {
+      "type": "number",
+      "default": 0.05
+    },
+    "novelSS": {
+      "type": "boolean"
+    },
+    "mil": {
+      "type": "integer",
+      "default": 50
+    },
+    "mel": {
+      "type": "integer",
+      "default": 500
+    },
+    "allow_clipping": {
+      "type": "boolean"
+    },
+    "individual_counts": {
+      "type": "boolean"
+    },
+    "machine_mem_gb": {
+      "type": "integer",
+      "default": 4
+    },
+    "rmats_version": {
+      "type": "string",
+      "default": "v4.3.0"
+    }
+  },
+  "required": ["publishDir", "bam_g1", "bam_g2", "gtf", "readLength", "out_dir"]
+}
