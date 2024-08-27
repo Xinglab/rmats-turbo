@@ -407,3 +407,4 @@ In rMATS-turbo, each alternative splicing pattern has a corresponding set of out
 - `[datetime]_[id].rmats`: Summary generated from processing a BAM file
 - `[datetime]_bam[sample_num]_[replicate_num]/Aligned.sortedByCoord.out.bam`: Result of mapping input FASTQ files
 - `[datetime]_read_outcomes_by_bam.txt`: Counts of the reads used from each BAM file along with counts of the reasons that reads could not be used
+
