@@ -1,0 +1,26 @@
+version: 1.2
+workflows:
+  - name: 'rmats-turbo-wdl'
+    subclass: 'WDL'
+    primaryDescriptorPath: '/wdl/rmatsTurbo.wdl'
+    readMePath: '/wdl/README.md'
+    authors:
+      - name: 'Qian Liu'
+        email: 'Qian.Liu@RoswellPark.org'
+    topic: 'rMATS-turbo WDL with BAM file inputs'
+  - name: 'rmats-turbo-cwl'
+    subclass: 'CWL'
+    primaryDescriptorPath: '/cwl/rMATS_bam_packed.cwl'
+    readMePath: '/cwl/README.md'
+    authors:
+      - name: 'Eric Kutschera'
+        email: 'kutscherae@chop.edu'
+    topic: 'rMATS-turbo CWL with BAM file inputs'
+  - name: 'rmats-turbo-nextflow'
+    subclass: 'NFL'
+    primaryDescriptorPath: '/nextflow.config'
+    readMePath: '/nextflow/README.md'
+    authors:
+      - name: 'Chunjie Liu'
+        email: 'chunjie.sam.liu@gmail.com'
+    topic: 'rMATS-turbo Nextflow with BAM file inputs'
