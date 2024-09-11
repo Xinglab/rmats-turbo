@@ -18,6 +18,15 @@ def parse_args():
     return parser.parse_args()
 
 
+# Rcwl doesn't seem to support []. Instead [null] is converted to [] here.
+def replace_singleton_null_default(workflow):
+    inputs = workflow['inputs']
+    for value in inputs.values():
+        default = value.get('default')
+        if default == [None]:
+            value['default'] = list()
+
+
 def convert_steps_to_list(steps):
     steps_list = list()
     for id_key, step_dict in steps.items():
@@ -107,6 +116,7 @@ def adapt_for_sbg(abs_cwl_path):
 
     replace_steps(loaded)
     replace_value_from(loaded)
+    replace_singleton_null_default(loaded)
     inline_other_cwl_files(loaded, base_path)
     return loaded
 

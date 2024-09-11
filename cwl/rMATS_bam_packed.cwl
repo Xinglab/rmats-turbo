@@ -1,5 +1,5 @@
 class: Workflow
-cwlVersion: v1.0
+cwlVersion: v1.2
 inputs:
   wf_allow_clipping:
     default: false
@@ -9,7 +9,8 @@ inputs:
   wf_bam_g1:
     type: File[]
   wf_bam_g2:
-    type: File[]
+    default: []
+    type: File[]?
   wf_cstat:
     default: '0.0001'
     type: string?
@@ -82,7 +83,7 @@ steps:
   - exp_file_to_loc_loc
   run:
     class: ExpressionTool
-    cwlVersion: v1.0
+    cwlVersion: v1.2
     expression: '${return({''exp_file_to_loc_loc'': inputs.exp_file_to_loc_file.location})}'
     inputs:
       exp_file_to_loc_file:
@@ -102,7 +103,7 @@ steps:
   - exp_file_to_loc_loc
   run:
     class: ExpressionTool
-    cwlVersion: v1.0
+    cwlVersion: v1.2
     expression: '${return({''exp_file_to_loc_loc'': inputs.exp_file_to_loc_file.location})}'
     inputs:
       exp_file_to_loc_file:
@@ -125,7 +126,7 @@ steps:
   - exp_bam_id_ids
   run:
     class: ExpressionTool
-    cwlVersion: v1.0
+    cwlVersion: v1.2
     expression: "${\nvar id_strings = new Array(inputs.exp_bam_id_bams.length)\nfor\
       \ (var i = 0; i < id_strings.length; i++) {\n  id_strings[i] = inputs.exp_bam_id_prefix\
       \ + i\n}\nreturn({'exp_bam_id_ids': id_strings})}"
@@ -149,7 +150,7 @@ steps:
   - exp_bam_id_ids
   run:
     class: ExpressionTool
-    cwlVersion: v1.0
+    cwlVersion: v1.2
     expression: "${\nvar id_strings = new Array(inputs.exp_bam_id_bams.length)\nfor\
       \ (var i = 0; i < id_strings.length; i++) {\n  id_strings[i] = inputs.exp_bam_id_prefix\
       \ + i\n}\nreturn({'exp_bam_id_ids': id_strings})}"
@@ -187,7 +188,7 @@ steps:
   run:
     baseCommand: bash script.sh
     class: CommandLineTool
-    cwlVersion: v1.0
+    cwlVersion: v1.2
     inputs:
       prep_allow_clipping:
         type: boolean
@@ -319,7 +320,7 @@ steps:
   run:
     baseCommand: bash script.sh
     class: CommandLineTool
-    cwlVersion: v1.0
+    cwlVersion: v1.2
     inputs:
       prep_allow_clipping:
         type: boolean
@@ -455,7 +456,7 @@ steps:
   run:
     baseCommand: bash script.sh
     class: CommandLineTool
-    cwlVersion: v1.0
+    cwlVersion: v1.2
     inputs:
       post_anchorLength:
         type: int?
@@ -518,9 +519,11 @@ steps:
     - class: InlineJavascriptRequirement
     - class: InitialWorkDirRequirement
       listing:
-      - entry: "${\nvar anchorLength_opt = inputs.post_anchorLength != null ? '--anchorLength'\
-          \ : ''\nvar anchorLength_string = inputs.post_anchorLength != null ? inputs.post_anchorLength\
-          \ : ''\nvar is_default_stats = (!inputs.post_paired_stats) && (!inputs.post_darts_model)\n\
+      - entry: "${\nvar has_g2 = inputs.post_bam_name_g2.length > 0\nvar b2_opt =\
+          \ has_g2 ? '--b2' : ''\nvar b2_val = has_g2 ? 'bam_g2.txt' : ''\nvar anchorLength_opt\
+          \ = inputs.post_anchorLength != null ? '--anchorLength' : ''\nvar anchorLength_string\
+          \ = inputs.post_anchorLength != null ? inputs.post_anchorLength : ''\nvar\
+          \ is_default_stats = (!inputs.post_paired_stats) && (!inputs.post_darts_model)\n\
           var cstat_opt = is_default_stats ? '--cstat' : ''\nvar cstat_val = is_default_stats\
           \ ? inputs.post_cstat : ''\nvar statoff_opt = inputs.post_statoff ? '--statoff'\
           \ : ''\nvar paired_stats_opt = inputs.post_paired_stats ? '--paired-stats'\
@@ -549,15 +552,16 @@ steps:
           \ += 'echo '\nfor (var i = 0; i < inputs.post_bam_name_g2.length; i++) {\n\
           \  script += inputs.post_bam_name_g2[i]\n  if (i != (inputs.post_bam_name_g2.length\
           \ - 1)) {\n    script += ','\n  }\n}\nscript += ' > bam_g2.txt\\n'\nscript\
-          \ += 'python /rmats/rmats.py --b1 bam_g1.txt --b2 bam_g2.txt --gtf ' + inputs.post_gtf.path\
-          \ + ' --readLength ' + inputs.post_readLength + ' --nthread ' + inputs.post_nthread\
-          \ + ' --od ' + inputs.post_out_dir + ' --tmp fd_rmats --task post ' + anchorLength_opt\
-          \ + ' ' + anchorLength_string + ' --tstat ' + inputs.post_tstat + ' ' +\
-          \ cstat_opt + ' ' + cstat_val + ' ' + statoff_opt + ' ' + paired_stats_opt\
-          \ + ' ' + darts_model_opt + ' ' + darts_cutoff_opt + ' ' + darts_cutoff_val\
-          \ + ' ' + novelSS_opt + ' ' + mil_opt + ' ' + mil_val + ' ' + mel_opt +\
-          \ ' ' + mel_val + ' ' + individual_counts_opt + '\\n'\nscript += 'tar czf\
-          \ ' + inputs.post_out_dir + '.tar.gz ' + inputs.post_out_dir + '\\n'\nreturn(script)}"
+          \ += 'python /rmats/rmats.py --b1 bam_g1.txt ' + b2_opt + ' ' + b2_val +\
+          \ ' --gtf ' + inputs.post_gtf.path + ' --readLength ' + inputs.post_readLength\
+          \ + ' --nthread ' + inputs.post_nthread + ' --od ' + inputs.post_out_dir\
+          \ + ' --tmp fd_rmats --task post ' + anchorLength_opt + ' ' + anchorLength_string\
+          \ + ' --tstat ' + inputs.post_tstat + ' ' + cstat_opt + ' ' + cstat_val\
+          \ + ' ' + statoff_opt + ' ' + paired_stats_opt + ' ' + darts_model_opt +\
+          \ ' ' + darts_cutoff_opt + ' ' + darts_cutoff_val + ' ' + novelSS_opt +\
+          \ ' ' + mil_opt + ' ' + mil_val + ' ' + mel_opt + ' ' + mel_val + ' ' +\
+          \ individual_counts_opt + '\\n'\nscript += 'tar czf ' + inputs.post_out_dir\
+          \ + '.tar.gz ' + inputs.post_out_dir + '\\n'\nreturn(script)}"
         entryname: script.sh
         writable: false
     - class: ResourceRequirement
@@ -572,7 +576,7 @@ steps:
   - exp_read_outcome_outcomes
   run:
     class: ExpressionTool
-    cwlVersion: v1.0
+    cwlVersion: v1.2
     expression: "${\nvar outcomes = new Array()\nfor (var i = 0; i < inputs.exp_read_outcome_prep_g1.length;\
       \ i++) {\n  outcomes.push(inputs.exp_read_outcome_prep_g1[i])\n}\nfor (var i\
       \ = 0; i < inputs.exp_read_outcome_prep_g2.length; i++) {\n  outcomes.push(inputs.exp_read_outcome_prep_g2[i])\n\

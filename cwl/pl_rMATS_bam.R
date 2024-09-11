@@ -1,4 +1,5 @@
 rmats_docker <- "xinglab/rmats:v4.3.0"
+cwl_version <- "v1.2"
 
 get_array_type <- function(item_type) {
     return(list(type = "array", items = item_type))
@@ -9,7 +10,9 @@ get_2d_array_type <- function(item_type) {
 
 ## Workflow inputs
 wf_bam_g1_input <- InputParam(id = "wf_bam_g1", type = "File[]", position = -1)
-wf_bam_g2_input <- InputParam(id = "wf_bam_g2", type = "File[]", position = -1)
+## Rcwl doesn't seem to support []. Convert [null] to [] later
+wf_bam_g2_input <- InputParam(id = "wf_bam_g2", type = "File[]?", default = list(NULL),
+                              position = -1)
 wf_gtf_input <- InputParam(id = "wf_gtf", type = "File", position = -1)
 wf_is_single_end_input <- InputParam(id = "wf_is_single_end", type = "boolean?", default = FALSE,
                                      position = -1)
@@ -90,19 +93,20 @@ prep_read_outcome_output <- OutputParam(id = "prep_read_outcome", type = "File",
                                         glob = "$('prep_' + inputs.prep_bam_id + '_read_outcomes_by_bam.txt')")
 prep_bam_name_output <- OutputParam(id = "prep_bam_name", type = "string",
                                     outputEval = "$(inputs.prep_bam.path.split('/').pop())")
-rmats_prep <- cwlProcess(baseCommand = "bash script.sh",
-                        requirements = list(prep_docker_req, prep_js_req, prep_init_work_dir_req,
-                                            prep_resource_req),
-                        inputs = InputParamList(prep_bam_input, prep_bam_id_input, prep_gtf_input,
-                                                prep_is_single_end_input, prep_readLength_input,
-                                                prep_out_dir_input, prep_lib_type_input,
-                                                prep_variable_read_length_input,
-                                                prep_anchorLength_input, prep_novelSS_input,
-                                                prep_mil_input, prep_mel_input,
-                                                prep_allow_clipping_input, prep_machine_mem_gb_input,
-                                                prep_disk_space_gb_input),
-                        outputs = OutputParamList(prep_out_rmats_output, prep_read_outcome_output,
-                                                  prep_bam_name_output))
+rmats_prep <- cwlProcess(cwlVersion = cwl_version,
+                         baseCommand = "bash script.sh",
+                         requirements = list(prep_docker_req, prep_js_req, prep_init_work_dir_req,
+                                             prep_resource_req),
+                         inputs = InputParamList(prep_bam_input, prep_bam_id_input, prep_gtf_input,
+                                                 prep_is_single_end_input, prep_readLength_input,
+                                                 prep_out_dir_input, prep_lib_type_input,
+                                                 prep_variable_read_length_input,
+                                                 prep_anchorLength_input, prep_novelSS_input,
+                                                 prep_mil_input, prep_mel_input,
+                                                 prep_allow_clipping_input, prep_machine_mem_gb_input,
+                                                 prep_disk_space_gb_input),
+                         outputs = OutputParamList(prep_out_rmats_output, prep_read_outcome_output,
+                                                   prep_bam_name_output))
 
 ## Expression tool steps to convert Files to locations.
 ## This avoids loading all the Files to the disk of a single worker machine.
@@ -112,7 +116,8 @@ exp_file_to_loc_file_input <- InputParam(id = "exp_file_to_loc_file", type = "Fi
 exp_file_to_loc_js_req <- requireJS()
 exp_file_to_loc_js <- "${return({'exp_file_to_loc_loc': inputs.exp_file_to_loc_file.location})}"
 exp_file_to_loc_loc_output <- OutputParam(id = "exp_file_to_loc_loc", type = "string")
-exp_file_to_loc <- cwlProcess(cwlClass = "ExpressionTool",
+exp_file_to_loc <- cwlProcess(cwlVersion = cwl_version,
+                              cwlClass = "ExpressionTool",
                               requirements = list(exp_file_to_loc_js_req),
                               inputs = InputParamList(exp_file_to_loc_file_input),
                               outputs = OutputParamList(exp_file_to_loc_loc_output),
@@ -142,7 +147,8 @@ exp_bam_id_ids_js <- paste(sep = "\n",
 "}",
 "return({'exp_bam_id_ids': id_strings})}")
 exp_bam_id_ids_output <- OutputParam(id = "exp_bam_id_ids", type = "string[]")
-exp_bam_id <- cwlProcess(cwlClass = "ExpressionTool",
+exp_bam_id <- cwlProcess(cwlVersion = cwl_version,
+                         cwlClass = "ExpressionTool",
                          requirements = list(exp_bam_id_js_req),
                          inputs = InputParamList(exp_bam_id_bams_input, exp_bam_id_prefix_input),
                          outputs = OutputParamList(exp_bam_id_ids_output),
@@ -225,6 +231,9 @@ post_disk_space_gb_input <- InputParam(id = "post_disk_space_gb", type = "int", 
 
 post_script_string <- paste(sep = "\n",
 "${",
+"var has_g2 = inputs.post_bam_name_g2.length > 0",
+"var b2_opt = has_g2 ? '--b2' : ''",
+"var b2_val = has_g2 ? 'bam_g2.txt' : ''",
 "var anchorLength_opt = inputs.post_anchorLength != null ? '--anchorLength' : ''",
 "var anchorLength_string = inputs.post_anchorLength != null ? inputs.post_anchorLength : ''",
 "var is_default_stats = (!inputs.post_paired_stats) && (!inputs.post_darts_model)",
@@ -287,7 +296,7 @@ post_script_string <- paste(sep = "\n",
 "  }",
 "}",
 "script += ' > bam_g2.txt\\n'",
-"script += 'python /rmats/rmats.py --b1 bam_g1.txt --b2 bam_g2.txt --gtf ' + inputs.post_gtf.path + ' --readLength ' + inputs.post_readLength + ' --nthread ' + inputs.post_nthread + ' --od ' + inputs.post_out_dir + ' --tmp fd_rmats --task post ' + anchorLength_opt + ' ' + anchorLength_string + ' --tstat ' + inputs.post_tstat + ' ' + cstat_opt + ' ' + cstat_val + ' ' + statoff_opt + ' ' + paired_stats_opt + ' ' + darts_model_opt + ' ' + darts_cutoff_opt + ' ' + darts_cutoff_val + ' ' + novelSS_opt + ' ' + mil_opt + ' ' + mil_val + ' ' + mel_opt + ' ' + mel_val + ' ' + individual_counts_opt + '\\n'",
+"script += 'python /rmats/rmats.py --b1 bam_g1.txt ' + b2_opt + ' ' + b2_val + ' --gtf ' + inputs.post_gtf.path + ' --readLength ' + inputs.post_readLength + ' --nthread ' + inputs.post_nthread + ' --od ' + inputs.post_out_dir + ' --tmp fd_rmats --task post ' + anchorLength_opt + ' ' + anchorLength_string + ' --tstat ' + inputs.post_tstat + ' ' + cstat_opt + ' ' + cstat_val + ' ' + statoff_opt + ' ' + paired_stats_opt + ' ' + darts_model_opt + ' ' + darts_cutoff_opt + ' ' + darts_cutoff_val + ' ' + novelSS_opt + ' ' + mil_opt + ' ' + mil_val + ' ' + mel_opt + ' ' + mel_val + ' ' + individual_counts_opt + '\\n'",
 "script += 'tar czf ' + inputs.post_out_dir + '.tar.gz ' + inputs.post_out_dir + '\\n'",
 "return(script)}")
 
@@ -300,7 +309,8 @@ post_resource_req <- requireResource(coresMin = "$(inputs.post_nthread)",
                                      outdirMin = "$(inputs.post_disk_space_gb * 1024)")
 post_out_tar_output <- OutputParam(id = "post_out_tar", type = "File",
                                    glob = "$(inputs.post_out_dir + '.tar.gz')")
-rmats_post <- cwlProcess(baseCommand = "bash script.sh",
+rmats_post <- cwlProcess(cwlVersion = cwl_version,
+                         baseCommand = "bash script.sh",
                          requirements = list(post_docker_req, post_js_req, post_init_work_dir_req,
                                              post_resource_req),
                          inputs = InputParamList(post_bam_name_g1_input, post_bam_name_g2_input,
@@ -360,7 +370,8 @@ exp_read_outcome_outcomes_js <- paste(sep = "\n",
 "}",
 "return({'exp_read_outcome_outcomes': outcomes})}")
 exp_read_outcome_outcomes_output <- OutputParam(id = "exp_read_outcome_outcomes", type = "File[]")
-exp_read_outcome <- cwlProcess(cwlClass = "ExpressionTool",
+exp_read_outcome <- cwlProcess(cwlVersion = cwl_version,
+                               cwlClass = "ExpressionTool",
                                requirements = list(exp_read_outcome_js_req),
                                inputs = InputParamList(exp_read_outcome_prep_g1_input,
                                                        exp_read_outcome_prep_g2_input),
@@ -378,7 +389,7 @@ wf_out_tar_output <- OutputParam(id = "wf_out_tar", type = "File",
                                  outputSource = "step_post/post_out_tar")
 wf_scatter_req <- requireScatter()
 wf_step_input_exp_req <- requireStepInputExpression()
-workflow <- cwlWorkflow(cwlVersion = "v1.0",
+workflow <- cwlWorkflow(cwlVersion = cwl_version,
                         requirements = list(wf_scatter_req, wf_step_input_exp_req),
                         inputs = InputParamList(wf_bam_g1_input, wf_bam_g2_input, wf_gtf_input,
                                                 wf_is_single_end_input, wf_readLength_input,
