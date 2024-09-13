@@ -90,5 +90,5 @@
       "default": "v4.3.0"
     }
   },
-  "required": ["publishDir", "bam_g1", "bam_g2", "gtf", "readLength", "out_dir"]
+  "required": ["publishDir", "bam_g1", "gtf", "readLength", "out_dir"]
 }
