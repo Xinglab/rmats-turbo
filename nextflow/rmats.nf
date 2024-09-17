@@ -5,15 +5,18 @@ process rmats_prep {
 
   input:
     path bam
-    val bam_id
+    val bam_i
     path gtf
+    val group_id
 
   output:
-    path "outfd/*.rmats", emit: rmats
-    path "prep_${bam_id}_read_outcomes_by_bam.txt"
-    val bam_name, emit: bam_name
+    tuple val(bam_i),
+          path("outfd/*.rmats"),
+          path("prep_${group_id}_${bam_i}_read_outcomes_by_bam.txt"),
+          val(bam_name)
 
   script:
+    bam_id = "${group_id}_${bam_i}"
     bam_name = bam.getName()
     read_type_value = params.is_single_end ? "single" : "paired"
     variable_read_length_opt = params.variable_read_length ? "--variable-read-length" : ""
