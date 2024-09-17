@@ -157,9 +157,20 @@ exp_bam_id <- cwlProcess(cwlVersion = cwl_version,
 step_exp_prep_g1 <- cwlStep(id = "step_exp_prep_g1", run = exp_bam_id,
                             In = list(exp_bam_id_bams = "step_exp_file_to_loc_g1/exp_file_to_loc_loc",
                                       exp_bam_id_prefix = list(valueFrom = "g1_")))
+
+## The 'when' expression will cause this step to be skipped if
+## there are no group 2 bams.
+## Cavatica would otherwise hang waiting for this step to complete.
+## According to the CWL specification it seems like it should be fine to
+## run this anyway and get an empty list.
+## If it is skipped then the output will be null.
+## That should not be an issue for step_prep_g2 since it scatters on
+## "prep_bam" and "prep_bam_id" and if any scatter param evaluates to []
+## then the step is skipped and produces [] as output.
 step_exp_prep_g2 <- cwlStep(id = "step_exp_prep_g2", run = exp_bam_id,
                             In = list(exp_bam_id_bams = "step_exp_file_to_loc_g2/exp_file_to_loc_loc",
-                                      exp_bam_id_prefix = list(valueFrom = "g2_")))
+                                      exp_bam_id_prefix = list(valueFrom = "g2_")),
+                            when = "$(inputs.exp_bam_id_bams.length > 0)")
 
 ## Prep step scatter over bam_g1
 step_prep_g1 <- cwlStep(id = "step_prep_g1",

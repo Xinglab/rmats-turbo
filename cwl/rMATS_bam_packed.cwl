@@ -164,6 +164,7 @@ steps:
         type: string[]
     requirements:
     - class: InlineJavascriptRequirement
+  when: $(inputs.exp_bam_id_bams.length > 0)
 - id: step_prep_g1
   in:
     prep_allow_clipping: wf_allow_clipping
