@@ -3,7 +3,7 @@ version 1.0
 workflow rMATS_turbo {
   input {
     Array[File] bam_g1
-    Array[File] bam_g2
+    Array[File] bam_g2 = []
     File gtf
     Boolean is_single_end = false
     Int readLength
@@ -195,6 +195,10 @@ task rmats_post {
     String rmats_version
   }
 
+  Boolean has_g2 = length(bam_name_g2) > 0
+  String b2_opt = if has_g2 then "--b2" else ""
+  String b2_val = if has_g2 then "bam_g2.txt" else ""
+
   String anchorLength_opt = if defined(anchorLength) then "--anchorLength" else ""
   Boolean is_default_stats = (!paired_stats) && (!darts_model)
   String cstat_opt = if is_default_stats then "--cstat" else ""
@@ -220,7 +224,7 @@ task rmats_post {
     for file in ${sep=" " rmats}; do fn=`basename $file`; sed 's/.*\///g' $file > fd_rmats/$fn; done
     echo ${sep="," bam_name_g1} > bam_g1.txt
     echo ${sep="," bam_name_g2} > bam_g2.txt
-    python /rmats/rmats.py --b1 bam_g1.txt --b2 bam_g2.txt --gtf ${gtf} --readLength ${readLength} --nthread ${nthread} --od ${out_dir} --tmp fd_rmats --task post ${anchorLength_opt} ${anchorLength} --tstat ${tstat} ${cstat_opt} ${cstat_val} ${statoff_opt} ${paired_stats_opt} ${darts_model_opt} ${darts_cutoff_opt} ${darts_cutoff_val} ${novelSS_opt} ${mil_opt} ${mil_val} ${mel_opt} ${mel_val} ${individual_counts_opt}
+    python /rmats/rmats.py --b1 bam_g1.txt ${b2_opt} ${b2_val} --gtf ${gtf} --readLength ${readLength} --nthread ${nthread} --od ${out_dir} --tmp fd_rmats --task post ${anchorLength_opt} ${anchorLength} --tstat ${tstat} ${cstat_opt} ${cstat_val} ${statoff_opt} ${paired_stats_opt} ${darts_model_opt} ${darts_cutoff_opt} ${darts_cutoff_val} ${novelSS_opt} ${mil_opt} ${mil_val} ${mel_opt} ${mel_val} ${individual_counts_opt}
     tar czf ${out_dir}.tar.gz ${out_dir}
   }
 

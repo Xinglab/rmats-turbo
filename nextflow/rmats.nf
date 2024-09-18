@@ -4,25 +4,27 @@ process rmats_prep {
   publishDir path: "${params.publishDir}/read_outcomes", mode: 'copy', pattern: "prep_*_read_outcomes_by_bam.txt"
 
   input:
-    tuple val(bam_name), file(bam)
-    each file(gtf)
-    val(group)
+    path bam
+    val bam_i
+    path gtf
+    val group_id
 
   output:
-    path "outfd/*.rmats", emit: rmat
-    path "prep_${bam_id}_read_outcomes_by_bam.txt", emit: rob
+    tuple val(bam_i),
+          path("outfd/*.rmats"),
+          path("prep_${group_id}_${bam_i}_read_outcomes_by_bam.txt"),
+          val(bam_name)
 
   script:
-    bam_id = "${group}_${bam_name}"
-
+    bam_id = "${group_id}_${bam_i}"
+    bam_name = bam.getName()
     read_type_value = params.is_single_end ? "single" : "paired"
     variable_read_length_opt = params.variable_read_length ? "--variable-read-length" : ""
     anchorLength_opt = params.anchorLength ? "--anchorLength ${params.anchorLength}" : ""
     novelSS_opt = params.novelSS ? "--novelSS" : ""
-    mil_opt = params.novelSS ? params.mil ? "--mil ${params.mil}" : "" : ""
-    mel_opt = params.novelSS ? params.mel ? "--mel ${params.mel}" : "" : ""
+    mil_opt = (params.novelSS && params.mil) ? "--mil ${params.mil}" : ""
+    mel_opt = (params.novelSS && params.mel) ? "--mel ${params.mel}" : ""
     allow_clipping_opt = params.allow_clipping ? "--allow-clipping" : ""
-
 
   """
   echo ${bam} > prep.txt
@@ -47,9 +49,8 @@ process rmats_prep {
 
     python /rmats/cp_with_prefix.py prep_${bam_id}_ outfd tmp_output_prep_${bam_id}/*.rmats
 
-    cp tmp_output_prep_${bam_id}/*_read_outcomes_by_bam.txt prep_${bam_id}_read_outcomes_by_bam.txt
+    cp tmp_output_prep_${bam_id}/*read_outcomes_by_bam.txt prep_${bam_id}_read_outcomes_by_bam.txt
   """
-
 }
 
 process rmats_post {
@@ -58,15 +59,19 @@ process rmats_post {
   publishDir "${params.publishDir}", mode: 'copy'
 
   input:
-    file(bams_g1)
-    file(bams_g2)
-    file(rmats_g1)
-    file(rmats_g2)
-    each file(gtf)
+    val bams_g1
+    val bams_g2
+    path rmats_g1
+    path rmats_g2
+    path gtf
   output:
     path "${params.out_dir}.tar.gz"
 
   script:
+  has_g2 = bams_g2.size() > 0
+  b2_opt = has_g2 ? "--b2" : ""
+  b2_val = has_g2 ? "bam_g2.txt" : ""
+
   anchorLength_opt = params.anchorLength ? "--anchorLength ${params.anchorLength}" : ""
   is_default_stats = (!params.paired_stats) && (!params.darts_model)
   cstat_opt = is_default_stats ? "--cstat ${params.cstat}" : ""
@@ -75,8 +80,8 @@ process rmats_post {
   darts_model_opt = params.darts_model ? "--darts-model" : ""
   darts_cutoff_opt = params.darts_model ? "--darts-cutoff ${params.darts_cutoff}" : ""
   novelSS_opt = params.novelSS ? "--novelSS" : ""
-  mil_opt = params.novelSS ? params.mil ? "--mil ${params.mil}" : "" : ""
-  mel_opt = params.novelSS ? params.mel ? "--mel ${params.mel}" : "" : ""
+  mil_opt = (params.novelSS && params.mil) ? "--mil ${params.mil}" : ""
+  mel_opt = (params.novelSS && params.mel) ? "--mel ${params.mel}" : ""
   individual_counts_opt = params.individual_counts ? "--individual-counts" : ""
 
   rmats1 = rmats_g1.flatten()
@@ -97,7 +102,7 @@ process rmats_post {
 
   python /rmats/rmats.py \
     --b1 bam_g1.txt \
-    --b2 bam_g2.txt \
+    ${b2_opt} ${b2_val} \
     --gtf ${gtf} \
     --readLength ${params.readLength} \
     --nthread ${params.nthread} \
@@ -117,8 +122,5 @@ process rmats_post {
     ${individual_counts_opt}
 
     tar czf ${params.out_dir}.tar.gz ${params.out_dir}
-
   """
-
-
 }
