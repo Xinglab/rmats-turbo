@@ -88,7 +88,7 @@ def doSTARMapping(args): ## do STAR mapping
 
 
 def get_args():
-    """Supplies all the neccessary arguments to the argparse package, along with appropriate help, defaults, destinations, and choices.
+    """Supplies all the necessary arguments to the argparse package, along with appropriate help, defaults, destinations, and choices.
     The function itself takes no arguments.
     Unless rMATS is called in stat mode, exits with appropriate errors if any of: sequence files, gtf, or readlength arguments are missing.
     If an output directory and/or a temporary directory aren't supplied, exits with appropriate errors.
