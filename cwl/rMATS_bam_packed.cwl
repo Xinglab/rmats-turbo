@@ -75,6 +75,7 @@ outputs:
 requirements:
 - class: ScatterFeatureRequirement
 - class: StepInputExpressionRequirement
+- class: InlineJavascriptRequirement
 steps:
 - id: step_exp_file_to_loc_g1
   in:
@@ -187,7 +188,9 @@ steps:
   - prep_read_outcome
   - prep_bam_name
   run:
-    baseCommand: bash script.sh
+    baseCommand:
+    - bash
+    - script.sh
     class: CommandLineTool
     cwlVersion: v1.2
     inputs:
@@ -319,7 +322,9 @@ steps:
   - prep_read_outcome
   - prep_bam_name
   run:
-    baseCommand: bash script.sh
+    baseCommand:
+    - bash
+    - script.sh
     class: CommandLineTool
     cwlVersion: v1.2
     inputs:
@@ -455,7 +460,9 @@ steps:
   out:
   - post_out_tar
   run:
-    baseCommand: bash script.sh
+    baseCommand:
+    - bash
+    - script.sh
     class: CommandLineTool
     cwlVersion: v1.2
     inputs:
