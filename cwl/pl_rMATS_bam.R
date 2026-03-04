@@ -94,7 +94,7 @@ prep_read_outcome_output <- OutputParam(id = "prep_read_outcome", type = "File",
 prep_bam_name_output <- OutputParam(id = "prep_bam_name", type = "string",
                                     outputEval = "$(inputs.prep_bam.path.split('/').pop())")
 rmats_prep <- cwlProcess(cwlVersion = cwl_version,
-                         baseCommand = "bash script.sh",
+                         baseCommand = list("bash", "script.sh"),
                          requirements = list(prep_docker_req, prep_js_req, prep_init_work_dir_req,
                                              prep_resource_req),
                          inputs = InputParamList(prep_bam_input, prep_bam_id_input, prep_gtf_input,
@@ -321,7 +321,7 @@ post_resource_req <- requireResource(coresMin = "$(inputs.post_nthread)",
 post_out_tar_output <- OutputParam(id = "post_out_tar", type = "File",
                                    glob = "$(inputs.post_out_dir + '.tar.gz')")
 rmats_post <- cwlProcess(cwlVersion = cwl_version,
-                         baseCommand = "bash script.sh",
+                         baseCommand = list("bash", "script.sh"),
                          requirements = list(post_docker_req, post_js_req, post_init_work_dir_req,
                                              post_resource_req),
                          inputs = InputParamList(post_bam_name_g1_input, post_bam_name_g2_input,
@@ -400,8 +400,9 @@ wf_out_tar_output <- OutputParam(id = "wf_out_tar", type = "File",
                                  outputSource = "step_post/post_out_tar")
 wf_scatter_req <- requireScatter()
 wf_step_input_exp_req <- requireStepInputExpression()
+wf_js_req <- requireJS()
 workflow <- cwlWorkflow(cwlVersion = cwl_version,
-                        requirements = list(wf_scatter_req, wf_step_input_exp_req),
+                        requirements = list(wf_scatter_req, wf_step_input_exp_req, wf_js_req),
                         inputs = InputParamList(wf_bam_g1_input, wf_bam_g2_input, wf_gtf_input,
                                                 wf_is_single_end_input, wf_readLength_input,
                                                 wf_nthread_input, wf_out_dir_input,
