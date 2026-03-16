@@ -105,12 +105,18 @@ class BaseTest(unittest.TestCase):
                                             paired_read_coords,
                                             clip_length=None,
                                             is_reversed_1=False,
-                                            is_reversed_2=True):
+                                            is_reversed_2=True,
+                                            multimapping=list()):
         bam = tests.bam.BAM()
         bam.path = bam_path
 
         bam_reads = list()
         for i, coord_pair in enumerate(paired_read_coords):
+            if multimapping:
+                num_mappings = multimapping[i]
+            else:
+                num_mappings = 1
+
             read_1_coords, read_2_coords = coord_pair
             paired_read_1 = tests.bam.Read()
             paired_read_1.ref_seq_name = '1'  # chromosome
@@ -125,7 +131,8 @@ class BaseTest(unittest.TestCase):
                 read_length,
                 clip_length=clip_length,
                 is_reversed_1=is_reversed_1,
-                is_reversed_2=is_reversed_2)
+                is_reversed_2=is_reversed_2,
+                num_mappings=num_mappings)
             self.assertFalse(error)
             bam_reads.extend([paired_read_1, paired_read_2])
 

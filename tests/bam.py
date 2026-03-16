@@ -135,7 +135,8 @@ def set_read_pair_from_intervals(read_1,
                                  read_length,
                                  clip_length=None,
                                  is_reversed_1=False,
-                                 is_reversed_2=True):
+                                 is_reversed_2=True,
+                                 num_mappings=1):
     cigar_1 = list()
     remaining_length = read_length
     prev_end = None
@@ -206,6 +207,8 @@ def set_read_pair_from_intervals(read_1,
     read_1.template_len = (read_2_end - read_1_start) + 1
     read_1.is_reversed = is_reversed_1
     read_2.is_reversed = is_reversed_2
+    read_1.number_of_alignments = num_mappings
+    read_2.number_of_alignments = num_mappings
     make_read_pair(read_1, read_2)
     return None
 
