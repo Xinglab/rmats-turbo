@@ -475,7 +475,7 @@ double likelihood_test(gsl_vector *i1, gsl_vector *i2, gsl_vector *s1, gsl_vecto
             mle_result mle_constrain;
             MLE_marginal_iteration_constrain(i1, i2, s1, s2, inclu_len, skip_len, &mle_constrain);
             printf("3 return from: %s\n", id);
-            return 1 - gsl_cdf_chisq_P(2 * (fabs(mle_constrain.sum - mle.sum)), 1);
+            return gsl_cdf_chisq_Q(2 * (fabs(mle_constrain.sum - mle.sum)), 1);
         }
     }
 }
