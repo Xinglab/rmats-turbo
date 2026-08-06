@@ -5,11 +5,11 @@
 # top-level
 # ==========================
 
+# Cmake requirements
+cmake_minimum_required( VERSION 3.5 )
+
 # set project name
 project( BamTools )
-
-# Cmake requirements
-cmake_minimum_required( VERSION 2.6.4 )
 
 # Force the build directory to be different from source directory
 macro( ENSURE_OUT_OF_SOURCE_BUILD MSG )

@@ -1,6 +1,6 @@
-r-base=4.3.*
+r-base=4.5.*
 r-dosnow=1.0.*
 r-getopt=1.20.*
-r-ggplot2=3.4.*
+r-ggplot2=4.0.*
 r-mixtools=2.0.*
-r-rcpp=1.0.*
+r-rcpp=1.1.*
