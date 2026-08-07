@@ -33,19 +33,20 @@ rMATS turbo is the C/Cython version of rMATS (refer to http://rnaseq-mats.source
 
 ## Dependencies
 
-Tested on Ubuntu (20.04 LTS)
-
-- Python (3.6.12 or 2.7.15)
-  * Cython (0.29.21 or 0.29.15 for Python 2)
+- Python (3.14.6)
+  * Cython (3.1.8)
+  * Setuptools (78.1.1)
 - BLAS, LAPACK
-- GNU Scientific Library (GSL 2.5)
-- GCC (>=5.4.0)
-- gfortran (Fortran 77)
-- CMake (3.15.4)
+- GNU Scientific Library (GSL 2.7)
+- GCC (15.3.0)
+- gfortran (15.3.0)
+- CMake (4.2.3)
 - [PAIRADISE](https://github.com/Xinglab/PAIRADISE) (optional)
 - [DARTS](https://github.com/Xinglab/DARTS) (optional)
 - Samtools (optional)
 - STAR (optional)
+
+Those versions were used during testing. Other versions may also be compatible
 
 ## Build
 
@@ -78,8 +79,6 @@ If rMATS was built with `./build_rmats --conda` then it should be run with:
 ```
 ./run_rmats {arguments}
 ```
-
-It takes about 30 minutes to install dependencies and build rMATS (as tested on an Ubuntu VM with 2 CPUs and 4 GB of memory)
 
 ## Test
 
