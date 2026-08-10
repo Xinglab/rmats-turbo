@@ -1,4 +1,4 @@
-FROM debian:bullseye
+FROM debian:trixie
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -15,6 +15,7 @@ RUN apt-get update \
        make \
        python-is-python3 \
        python3-dev \
+       python3-setuptools \
        r-base \
        r-cran-doparallel \
        r-cran-dosnow \
