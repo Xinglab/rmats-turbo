@@ -6,4 +6,5 @@ gsl=2.7
 gxx=15.*
 liblapack=3.11.*
 python=3.14.*
+setuptools=78.1.*
 zlib=1.3.*
