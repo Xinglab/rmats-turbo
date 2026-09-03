@@ -10,7 +10,7 @@ FC := gfortran
 endif
 
 LDFLAGS := -lm -lgfortran -lgsl -lgslcblas -lgomp -lblas -llapack
-CFLAGS := -Wall -O2 -msse2 -funroll-loops -fopenmp
+CFLAGS := -Wall -O2  -funroll-loops -fopenmp
 
 # Allow gsl flags to be set by environment variable
 ifdef GSL_LDFLAGS
