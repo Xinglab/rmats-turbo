@@ -62,3 +62,8 @@ s2.txt
 
 # tests
 /tests/test_config.py
+gtf/
+*.tgz
+*.bam
+bam_test/
+temp_output_rmats/
